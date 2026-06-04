@@ -207,6 +207,7 @@ window.submitReassign=async function(){
   const reason=document.getElementById('reassign-reason').value.trim();
   if(!toId){alert('Select an employee.');return;}
   const j=jobs.find(x=>x.id===id);if(!j)return;
+  if(!canManageJob(j)){showToastMsg('Not authorized.');return;}
   const fromName=users.find(u=>u.id===j.owner)?.name||j.owner;
   const toName=users.find(u=>u.id===toId)?.name||toId;
   await updateJob(id,{owner:toId,reassignedBy:me.name,reassignedAt:Date.now()});
@@ -1585,12 +1586,15 @@ window.assignJob=async function(){
 };
 
 window.startJob=async function(id){
+  const j=jobs.find(x=>x.id===id);if(!j)return;
+  if(!canManageJob(j)){showToastMsg('Not authorized.');return;}
   await updateJob(id,{status:'ongoing',started:Date.now(),pausedAt:null});
   await addEvent(id,'started',`${me.name} started the job`,'blue');
 };
 window.pauseJob=async function(id){
   const j=jobs.find(x=>x.id===id);
   if(!j||j.status!=='ongoing'){showToastMsg('Only ongoing jobs can be paused.');return;}
+  if(!canManageJob(j)){showToastMsg('Not authorized.');return;}
   await updateJob(id,{status:'paused',pausedAt:Date.now()});
   await addEvent(id,'paused',`${me.name} paused the job`,'yellow');
   showToastMsg('⏸ Job paused');
@@ -1598,6 +1602,7 @@ window.pauseJob=async function(id){
 window.resumeJob=async function(id){
   const j=jobs.find(x=>x.id===id);
   if(!j||j.status!=='paused')return;
+  if(!canManageJob(j)){showToastMsg('Not authorized.');return;}
   const pauseMs=j.pausedAt?Date.now()-toMillis(j.pausedAt):0;
   const totalPausedMs=(j.totalPausedMs||0)+pauseMs;
   await updateJob(id,{status:'ongoing',pausedAt:null,totalPausedMs});
@@ -1617,7 +1622,8 @@ async function updateJob(id,data){
 
 window.delJob=async function(id){
   const j=jobs.find(x=>x.id===id);
-  if(j?.managerAssigned&&me.role!=='manager'){showToastMsg('Cannot delete manager-assigned tasks.');return;}
+  if(!j||!canManageJob(j)){showToastMsg('Not authorized.');return;}
+  if(j.managerAssigned&&me.role!=='manager'){showToastMsg('Cannot delete manager-assigned tasks.');return;}
   showConfirm('Delete Job','This job will be deleted. You can undo within 15 seconds.',async()=>{
     lastDel=j;
     await addEvent(id,'deleted',`Job deleted by ${me.name}`,'red');
@@ -1627,6 +1633,7 @@ window.delJob=async function(id){
 };
 window.undoDel=async function(){
   if(!lastDel)return;
+  if(!canManageJob(lastDel)){showToastMsg('Not authorized.');return;}
   await jRestore(lastDel);
   await addEvent(lastDel.id,'restored',`Job restored by ${me.name}`,'green');
   lastDel=null;document.getElementById('toast').style.display='none';
@@ -1634,6 +1641,7 @@ window.undoDel=async function(){
 
 window.editJob=function(id){
   const j=jobs.find(x=>x.id===id);if(!j)return;
+  if(!canManageJob(j)){showToastMsg('Not authorized.');return;}
   document.getElementById('eid').value=j.id;
   document.getElementById('ec').value=j.client;
   document.getElementById('en').value=j.jobNum;
@@ -3276,6 +3284,7 @@ function showToastMsg(msg){
 }
 window.undoDel=async function(){
   if(!lastDel)return;
+  if(!canManageJob(lastDel)){showToastMsg('Not authorized.');return;}
   await jRestore(lastDel);
   await addEvent(lastDel.id,'restored',`Job restored by ${me.name}`,'green');
   lastDel=null;document.getElementById('toast').style.display='none';
