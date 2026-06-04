@@ -1,0 +1,590 @@
+﻿
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RMI Job Allocator v1.7.2</title>
+<link rel="icon" type="image/png" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_32,h_32,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
+<link rel="apple-touch-icon" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_180,h_180,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
+<meta name="theme-color" content="#07080c"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="load-inner">
+    <img class="logo-lg" src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/>
+    <h2>RMI Job Allocator</h2>
+    <p id="lsub">Starting up...</p>
+    <div class="spin"></div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="login">
+  <div class="login-card">
+    <div class="login-logo"><img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/></div>
+    <h2 class="login-card-title">Welcome back</h2>
+    <p id="login-subtitle" class="login-card-sub">Sign in to continue</p>
+
+    <div id="login-firebase">
+      <div class="login-tabs" data-tab="signin">
+        <span class="tab-indicator"></span>
+        <button type="button" id="tab-signin" class="on" onclick="showLoginTab('signin')">Sign in</button>
+        <button type="button" id="tab-activate" onclick="showLoginTab('activate')">First-time setup</button>
+      </div>
+      <div id="panel-signin">
+        <div class="lf-field"><input type="email" id="li-email" class="lf-input" placeholder=" " autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()"/><label>Work email</label></div>
+        <div class="lf-field"><input type="password" id="li-password" class="lf-input" placeholder=" " autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/><label>Password</label><button type="button" class="pw-eye" onclick="togglePw('li-password',this)" tabindex="-1">👁</button></div>
+        <div id="login-err" class="lf-msg lf-err"></div>
+        <div id="login-ok" class="lf-msg lf-ok"></div>
+        <button type="button" id="signin-btn" class="lf-submit" onclick="doLogin()">Sign In</button>
+        <button type="button" class="login-link" onclick="doForgotPassword()">Forgot password?</button>
+      </div>
+      <div id="panel-activate" style="display:none;">
+        <p class="lf-note">First time here? Use the name + temporary password from your manager, then pick your email and a new password.</p>
+        <div class="lf-field"><input type="text" id="act-name" class="lf-input" placeholder=" "/><label>Name (as in the app)</label></div>
+        <div class="lf-field"><input type="password" id="act-oldpw" class="lf-input" placeholder=" "/><label>Temporary password</label><button type="button" class="pw-eye" onclick="togglePw('act-oldpw',this)" tabindex="-1">👁</button></div>
+        <div class="lf-field"><input type="email" id="act-email" class="lf-input" placeholder=" " autocomplete="email"/><label>Work email</label></div>
+        <div class="lf-field"><input type="password" id="act-newpw" class="lf-input" placeholder=" " autocomplete="new-password"/><label>New password</label><button type="button" class="pw-eye" onclick="togglePw('act-newpw',this)" tabindex="-1">👁</button></div>
+        <div class="lf-field"><input type="password" id="act-newpw2" class="lf-input" placeholder=" " onkeydown="if(event.key==='Enter')doActivate()"/><label>Confirm password</label></div>
+        <div id="login-err-act" class="lf-msg lf-err"></div>
+        <button type="button" id="activate-btn" class="lf-submit" onclick="doActivate()">Complete setup</button>
+      </div>
+    </div>
+
+    <div id="login-legacy" style="display:none;">
+      <div class="lf-field"><input type="text" id="lu" class="lf-input" placeholder=" " onkeydown="if(event.key==='Enter')doLogin()"/><label>Your Name</label></div>
+      <div class="lf-field"><input type="password" id="lp" class="lf-input" placeholder=" " onkeydown="if(event.key==='Enter')doLogin()"/><label>Password</label><button type="button" class="pw-eye" onclick="togglePw('lp',this)" tabindex="-1">👁</button></div>
+      <div id="login-err-legacy" class="lf-msg lf-err" style="display:none;">Incorrect name or password.</div>
+      <button type="button" class="lf-submit" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <p class="login-help">New here? Ask your manager to add you, then use <strong>First-time setup</strong>.</p>
+    <div class="login-foot">v1.7.2 · Powered by Abdullah Al Sayed</div>
+  </div>
+</div>
+
+<!-- PAGE TRANSITION OVERLAY -->
+<div id="page-transition"><img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt=""/></div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="hl">
+      <button id="sb-toggle" class="sb-toggle-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+      <img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/>
+      <div><div class="hl-title">RMI Job Allocator v1.7.2</div><div id="clock"></div></div>
+    </div>
+    <div class="hr">
+      <span id="synced"></span>
+      <div class="bell-wrap" onclick="toggleNotifPanel()">
+        <button class="bell-btn" title="Notifications">🔔</button>
+        <div id="notif-badge"></div>
+      </div>
+      <span id="ubadge">—</span>
+      <button class="hbtn" onclick="doLogout()">Sign Out</button>
+      <button class="hbtn" onclick="toggleTheme()">🌙</button>
+    </div>
+  </header>
+
+  <!-- NOTIF PANEL -->
+  <div id="notif-panel">
+    <h4>Notifications <span class="notif-actions"><button onclick="markAllRead()">Mark all read</button><button onclick="clearAllNotifs()">Clear all</button></span></h4>
+    <div id="notif-list"></div>
+  </div>
+
+  <div id="app-body">
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <button class="sb-collapse-btn" onclick="toggleSidebarCollapse()" title="Toggle sidebar" id="sb-collapse-btn">◀</button>
+      <nav class="sb-nav">
+        <a class="sb-item sb-lead" data-sb="dashboard" href="#" style="display:none;">🏠 <span>Dashboard</span></a>
+
+        <!-- Team group -->
+        <div class="sb-group sb-team" id="sbg-team" style="display:none;">
+          <div class="sb-group-hd" onclick="toggleSbGroup('sbg-team')">
+            <span class="sb-group-icon">👥</span><span class="sb-group-label">Team</span>
+            <span class="sb-group-chevron">›</span>
+          </div>
+          <div class="sb-group-items">
+            <a class="sb-item sb-sub" data-sb="board" href="#">Board</a>
+            <a class="sb-item sb-sub" data-sb="cal" href="#">Calendar</a>
+            <a class="sb-item sb-sub sb-assign" data-sb="assign" href="#" style="display:none;">Assign Task</a>
+          </div>
+        </div>
+
+        <a class="sb-item sb-ext" data-sb="extensions-review" href="#" style="display:none;">📬 <span>Extensions</span><span id="sb-ext-badge" class="sb-badge" style="display:none;"></span></a>
+        <a class="sb-item sb-lead" data-sb="analytics" href="#" style="display:none;">📊 <span>Analytics</span></a>
+        <a class="sb-item sb-manager" data-sb="adv-search" href="#" style="display:none;">🔍 <span>Search</span></a>
+        <div class="sb-divider"></div>
+        <a class="sb-item on" data-sb="my-jobs" href="#">📋 <span>My Jobs</span></a>
+        <div class="sb-divider"></div>
+        <a class="sb-item" data-sb="broadcast" href="#">📢 <span>Messages</span><span id="sb-msg-badge" class="sb-badge" style="display:none;"></span></a>
+        <div class="sb-divider"></div>
+
+        <!-- Account group -->
+        <div class="sb-group" id="sbg-account">
+          <div class="sb-group-hd" onclick="toggleSbGroup('sbg-account')">
+            <span class="sb-group-icon">👤</span><span class="sb-group-label">Account</span>
+            <span class="sb-group-chevron">›</span>
+          </div>
+          <div class="sb-group-items">
+            <a class="sb-item sb-sub" data-sb="account" href="#">Profile & Prefs</a>
+            <a class="sb-item sb-sub sb-admin" data-sb="users" href="#" style="display:none;">Manage Users</a>
+            <a class="sb-item sb-sub sb-admin" data-sb="login-log" href="#" style="display:none;">Activity Log</a>
+          </div>
+        </div>
+      </nav>
+    </div>
+
+    <!-- SIDEBAR OVERLAY (mobile) -->
+    <div id="sb-overlay" onclick="closeSidebar()"></div>
+
+    <!-- CONTENT AREA -->
+    <div id="content-area">
+      <!-- DEADLINE BANNER -->
+      <div id="dl-banner"></div>
+
+      <!-- BULK BAR -->
+      <div id="bulk-bar">
+        <span id="bulk-count">0 selected</span>
+        <select id="bulk-status"><option value="">Change status...</option><option value="pending">Pending</option><option value="ongoing">Ongoing</option><option value="paused">Paused</option><option value="completed">Completed</option></select>
+        <button onclick="bulkChangeStatus()">Apply Status</button>
+        <select id="bulk-reassign"><option value="">Reassign to...</option></select>
+        <button onclick="bulkReassign()">Reassign</button>
+        <button class="bdr" onclick="bulkDelete()">🗑 Delete Selected</button>
+        <button onclick="clearSelection()">✕ Clear</button>
+      </div>
+
+      <div class="topbar">
+        <input id="srch" type="text" placeholder="🔍 Search jobs..." oninput="renderAll()"/>
+        <div id="summary"></div>
+      </div>
+
+  <!-- MANAGER DASHBOARD -->
+  <section id="dashboard">
+    <div id="dash-root"></div>
+  </section>
+
+  <!-- MY JOBS -->
+  <section id="extensions-review">
+    <h2>📬 Extension requests</h2>
+    <p style="color:var(--text2);font-size:0.82rem;margin-bottom:1rem;">Approve or reject deadline extension requests.</p>
+    <div id="ext-review-list"></div>
+  </section>
+
+  <section id="my-jobs" class="on">
+    <div class="jobs-head"><h2>My Jobs</h2><button type="button" class="bp" onclick="openNewJob()">+ New job</button></div>
+    <div class="jobs-toolbar" id="jobs-toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.65rem;">
+      <span id="jobs-scope-wrap" style="display:none;"><label style="font-size:0.75rem;color:var(--text2);">Show</label>
+        <select id="jobs-scope" onchange="setManagerJobsScope(this.value)" style="margin-left:0.25rem;padding:0.25rem 0.5rem;background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.78rem;">
+          <option value="all">All team jobs</option><option value="mine">My jobs only</option></select></span>
+      <label style="font-size:0.75rem;color:var(--text2);">Sort</label>
+      <select id="jobs-sort" onchange="setJobsSort(this.value)" style="padding:0.25rem 0.5rem;background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.78rem;">
+        <option value="created">Newest</option><option value="deadline">Deadline</option><option value="priority">Priority</option><option value="client">Client</option></select>
+    </div>
+    <div id="jobs-list"></div>
+    <div id="jobs-pager-bar" style="display:flex;gap:0.5rem;justify-content:center;margin-top:0.75rem;"></div>
+  </section>
+
+  <!-- ADD JOB -->
+  <section id="add-job">
+    <h2>Add New Job</h2>
+    <div class="fg">
+      <label>Client Name<input id="jc" placeholder="Client name"/></label>
+      <label>Job #<input id="jn" placeholder="Job number"/></label>
+      <label>Type<select id="jtype"><option>Panels Release</option><option>Flashings Release</option><option>Accessories Release</option><option>Purlins Release</option><option>Panels + Flashings Release</option><option>Panels + Accessories Release</option><option>Flashings + Accessories Release</option><option>Panels + Flashings + Accessories Release</option><option>Full Job Release</option><option>Shop Drawing</option><option>Editing Internally</option><option>Editing Revision</option><option>Erection Drawing</option><option>Civil Defense</option><option>BOM</option><option>Other</option></select></label>
+      <label>Priority<select id="jp"><option>Low</option><option>Medium</option><option>High</option></select></label>
+      <label>Deadline (optional)<input type="datetime-local" id="jdl"/></label>
+      <label>Tags (press Enter to add)<div class="tags-wrap" id="jtags-wrap"><input id="jtag-input" placeholder="e.g. urgent, waiting on client" onkeydown="handleTagInput(event,'jtags','jtag-input','jtags-wrap')"/></div></label>
+      <label>Notes<textarea id="jnotes" placeholder="Use @Name to notify a supervisor"></textarea></label>
+      <button class="bp" onclick="addJob()">Add Job</button>
+    </div>
+    <hr class="div"/>
+    <div id="editarea" style="display:none;">
+      <h3>✏️ Edit Job</h3>
+      <div class="fg">
+        <input type="hidden" id="eid"/>
+        <label>Client Name<input id="ec"/></label>
+        <label>Job #<input id="en"/></label>
+      <label>Type<select id="etype"><option>Panels Release</option><option>Flashings Release</option><option>Accessories Release</option><option>Purlins Release</option><option>Panels + Flashings Release</option><option>Panels + Accessories Release</option><option>Flashings + Accessories Release</option><option>Panels + Flashings + Accessories Release</option><option>Full Job Release</option><option>Shop Drawing</option><option>Editing Internally</option><option>Editing Revision</option><option>Erection Drawing</option><option>Civil Defense</option><option>BOM</option><option>Other</option></select></label>
+        <label>Priority<select id="epri"><option>Low</option><option>Medium</option><option>High</option></select></label>
+        <label>Status<select id="est"><option>pending</option><option>ongoing</option><option>paused</option><option>completed</option></select></label>
+        <label>Deadline<input type="datetime-local" id="edl"/></label>
+        <label>Tags<div class="tags-wrap" id="etags-wrap"><input id="etag-input" placeholder="Add tag..." onkeydown="handleTagInput(event,'etags','etag-input','etags-wrap')"/></div></label>
+        <label>Notes<textarea id="enotes" placeholder="Use @Name to notify"></textarea></label>
+        <label>Attachments<input type="file" id="job-attach-input" multiple accept="image/*,.pdf,.doc,.docx" onchange="uploadJobAttachments()"/></label>
+        <div id="job-attach-list" class="job-attachments"></div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button class="bp" onclick="saveEdit()">💾 Save</button>
+          <button class="bp sec" onclick="document.getElementById('editarea').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ASSIGN -->
+  <section id="assign">
+    <!-- hidden select kept for JS compat -->
+    <select id="mat" style="display:none;"><option value="">-- Select employee --</option></select>
+
+    <div class="assign-layout">
+      <!-- LEFT: employee picker -->
+      <div class="assign-left">
+        <div class="assign-panel-head">
+          <span class="assign-panel-title">Assign To</span>
+          <button type="button" class="assign-self-btn" onclick="assignToMe()">+ Assign to myself</button>
+        </div>
+        <div class="assign-emp-grid" id="assign-emp-grid"></div>
+        <div class="assign-emp-preview" id="assign-emp-preview" style="display:none;">
+          <div class="assign-preview-name" id="assign-preview-name"></div>
+          <div class="assign-preview-jobs" id="assign-preview-jobs"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: job details -->
+      <div class="assign-right">
+        <div class="assign-panel-head">
+          <span class="assign-panel-title">Job Details</span>
+        </div>
+        <div class="assign-form">
+          <div class="assign-row-2">
+            <label class="af-label">Client Name <span class="af-req">*</span><input id="mc" class="af-input" placeholder="e.g. Al-Rajhi Tower"/></label>
+            <label class="af-label">Job # <span class="af-req">*</span><input id="mn" class="af-input" placeholder="e.g. 2405-001"/></label>
+          </div>
+          <label class="af-label">Type
+            <select id="mtype" class="af-input">
+              <option>Panels Release</option><option>Flashings Release</option><option>Accessories Release</option><option>Purlins Release</option>
+              <option>Panels + Flashings Release</option><option>Panels + Accessories Release</option><option>Flashings + Accessories Release</option>
+              <option>Panels + Flashings + Accessories Release</option><option>Full Job Release</option>
+              <option>Shop Drawing</option><option>Editing Internally</option><option>Editing Revision</option>
+              <option>Erection Drawing</option><option>Civil Defense</option><option>BOM</option><option>Other</option>
+            </select>
+          </label>
+          <div class="assign-row-2">
+            <label class="af-label">Priority
+              <select id="mpri" class="af-input">
+                <option value="Low">🟢 Low</option>
+                <option value="Medium">🟡 Medium</option>
+                <option value="High">🔴 High</option>
+              </select>
+            </label>
+            <label class="af-label">Deadline <span class="af-opt">optional</span><input type="datetime-local" id="mdl" class="af-input"/></label>
+          </div>
+          <label class="af-label">Tags
+            <div class="tags-wrap" id="mtags-wrap"><input id="mtag-input" placeholder="Type and press Enter..." onkeydown="handleTagInput(event,'mtags','mtag-input','mtags-wrap')"/></div>
+          </label>
+          <label class="af-label">Notes <span class="af-opt">visible to employee</span>
+            <textarea id="mnotes" class="af-input" placeholder="Instructions, context, @mentions..."></textarea>
+          </label>
+          <label class="af-label">Private Note <span class="af-opt">manager only</span>
+            <textarea id="mpnote" class="af-input" placeholder="Internal notes the employee won't see..."></textarea>
+          </label>
+          <div class="assign-foot">
+            <button class="bp" onclick="assignJob()">Assign Task</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TEAM BOARD -->
+  <section id="board">
+    <h2>👥 Team Board</h2>
+    <div class="ibox"><strong>Load:</strong> 🟢 1–2 = OK | 🟡 3–4 = Busy | 🔴 5+ = Overloaded | <strong style="color:var(--red);">⚠</strong> = employee has overdue job(s)</div>
+    <div class="sgrid" id="tstats"></div>
+    <div class="board-split">
+      <div class="board-col">
+        <h3>Weekly Load</h3>
+        <div id="wload"></div>
+      </div>
+      <div class="board-col board-col-wide">
+        <h3>Jobs by Employee</h3>
+        <div id="tboard"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CALENDAR -->
+  <section id="cal">
+    <div class="cal-header">
+      <h2 style="margin:0;">📅 Calendar</h2>
+      <div class="cal-emp-pills" id="cal-emp-pills"></div>
+      <div class="cal-mode-pills">
+        <button class="cal-mode-pill on" data-mode="all" onclick="setCalMode('all',this)">All</button>
+        <button class="cal-mode-pill" data-mode="deadline" onclick="setCalMode('deadline',this)">Deadlines</button>
+        <button class="cal-mode-pill" data-mode="activity" onclick="setCalMode('activity',this)">Activity</button>
+      </div>
+      <div class="cal-nav-btns">
+        <button class="cal-nav-pill" onclick="calGoToday()">Today</button>
+        <button class="cal-nav-pill" onclick="calNav(-1)">◀</button>
+        <button class="cal-nav-pill" onclick="calNav(1)">▶</button>
+      </div>
+    </div>
+    <div class="cal-legend">
+      <span><i style="background:#ffaaaa;"></i> Deadline</span>
+      <span><i style="background:var(--red);"></i> Overdue</span>
+      <span><i style="background:#7dc4f7;"></i> Started</span>
+      <span><i style="background:#4caf7d;"></i> Completed</span>
+    </div>
+    <div class="cal-body">
+      <div class="calwrap" id="calwrap"></div>
+      <div class="cal-upcoming" id="cal-upcoming"></div>
+    </div>
+  </section>
+
+  <!-- ANALYTICS -->
+  <section id="analytics">
+    <div class="an-header">
+      <h2 style="margin:0;">📊 Analytics</h2>
+      <div class="an-controls">
+        <div class="an-range" id="an-range">
+          <button class="an-range-btn" data-r="week" onclick="setAnalyticsRange('week',this)">Week</button>
+          <button class="an-range-btn on" data-r="month" onclick="setAnalyticsRange('month',this)">Month</button>
+          <button class="an-range-btn" data-r="quarter" onclick="setAnalyticsRange('quarter',this)">Quarter</button>
+          <button class="an-range-btn" data-r="all" onclick="setAnalyticsRange('all',this)">All Time</button>
+        </div>
+        <select id="an-emp" class="an-emp-select" onchange="setAnalyticsEmp(this.value)"></select>
+        <button type="button" class="bp sec an-export" onclick="exportWeeklyReport()">📥 Export</button>
+      </div>
+    </div>
+    <div id="analytics-content"></div>
+  </section>
+
+  <!-- ADVANCED SEARCH -->
+  <section id="adv-search">
+    <h2>🔍 Advanced Search</h2>
+    <div class="search-panel">
+      <h4>Filters</h4>
+      <div class="search-grid">
+        <select id="sf-emp"><option value="">All Employees</option></select>
+        <select id="sf-status"><option value="">All Statuses</option><option value="pending">Pending</option><option value="ongoing">Ongoing</option><option value="paused">Paused</option><option value="completed">Completed</option></select>
+        <select id="sf-priority"><option value="">All Priorities</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select>
+        <select id="sf-type"><option value="">All Types</option><option>Panels Release</option><option>Flashings Release</option><option>Accessories Release</option><option>Purlins Release</option><option>Panels + Flashings Release</option><option>Panels + Accessories Release</option><option>Flashings + Accessories Release</option><option>Panels + Flashings + Accessories Release</option><option>Full Job Release</option><option>Shop Drawing</option><option>Editing Internally</option><option>Editing Revision</option><option>Erection Drawing</option><option>Civil Defense</option><option>BOM</option><option>Other</option></select>
+        <input id="sf-tag" placeholder="Tag..."/>
+        <select id="sf-assigned"><option value="">All Sources</option><option value="manager">Manager Assigned</option><option value="self">Self Added</option></select>
+        <input type="date" id="sf-from" title="From date"/>
+        <input type="date" id="sf-to" title="To date"/>
+        <select id="sf-overdue"><option value="">Include All</option><option value="yes">Overdue Only</option></select>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
+        <button class="bp" onclick="runAdvSearch()">🔍 Search</button>
+        <button class="bp sec" onclick="clearAdvSearch()">Clear</button>
+        <button class="bp sec" onclick="exportAdvSearchCSV()">📥 Export CSV</button>
+      </div>
+    </div>
+    <div id="adv-results"></div>
+  </section>
+
+  <!-- BROADCAST / MESSAGES -->
+  <section id="broadcast">
+    <h2 id="broadcast-title" style="margin-bottom:1.1rem;">📢 Messages</h2>
+    <p id="broadcast-hint" style="color:var(--text2);font-size:0.82rem;margin-bottom:1rem;display:none;">Announcements from management appear here.</p>
+    <div id="bcast-compose" class="msg-compose" style="display:none;">
+      <div class="msg-compose-hd">New Announcement</div>
+      <div class="msg-audience">
+        <span class="msg-audience-lbl">Send to:</span>
+        <button class="msg-aud-pill on" data-to="all" onclick="setBcastAudience('all',this)">👥 Everyone</button>
+        <button class="msg-aud-pill" data-to="employees" onclick="setBcastAudience('employees',this)">👤 Employees</button>
+        <button class="msg-aud-pill" data-to="supervisors" onclick="setBcastAudience('supervisors',this)">🔰 Supervisors</button>
+      </div>
+      <select id="bcast-to" style="display:none;"><option value="all"></option><option value="employees"></option><option value="supervisors"></option></select>
+      <textarea id="bcast-msg" class="msg-textarea" placeholder="Write an announcement to your team..."></textarea>
+      <div class="msg-compose-foot">
+        <span id="bcast-charcount" class="msg-charcount"></span>
+        <button class="bp" onclick="sendBroadcast()">Send Announcement</button>
+      </div>
+    </div>
+    <div id="bcast-list"></div>
+  </section>
+
+  <!-- USERS -->
+  <section id="users">
+    <div class="an-header">
+      <h2 style="margin:0;">⚙️ Team</h2>
+      <div class="an-controls">
+        <input id="user-search" class="log-search" type="text" placeholder="🔍 Search users..." oninput="renderUList()"/>
+        <button class="bp" onclick="openAddUserModal()">+ Add User</button>
+      </div>
+    </div>
+    <div id="user-summary" class="user-summary"></div>
+    <div id="ulist"></div>
+  </section>
+
+  <!-- ACTIVITY LOG -->
+  <section id="login-log">
+    <div class="an-header">
+      <h2 style="margin:0;">📋 Activity</h2>
+      <div class="an-controls">
+        <input id="alf-q" class="log-search" type="text" placeholder="🔍 Search activity..." oninput="renderActivityLog()"/>
+        <select id="alf-user" class="an-emp-select" onchange="renderActivityLog()"><option value="">All users</option></select>
+        <input id="alf-from" type="date" class="log-date" title="From" onchange="renderActivityLog()"/>
+        <input id="alf-to" type="date" class="log-date" title="To" onchange="renderActivityLog()"/>
+        <button class="bp sec an-export" onclick="exportActivityLogCSV()">📥 Export</button>
+      </div>
+    </div>
+    <!-- category chips -->
+    <div class="log-cat-chips" id="log-cat-chips">
+      <button class="log-cat on" data-cat="" onclick="setLogCat('',this)">All</button>
+      <button class="log-cat" data-cat="job" onclick="setLogCat('job',this)">📋 Jobs</button>
+      <button class="log-cat" data-cat="auth" onclick="setLogCat('auth',this)">🔑 Auth</button>
+      <button class="log-cat" data-cat="user" onclick="setLogCat('user',this)">👤 Users</button>
+      <button class="log-cat" data-cat="broadcast" onclick="setLogCat('broadcast',this)">📢 Broadcasts</button>
+      <button class="log-cat" data-cat="system" onclick="setLogCat('system',this)">⚙️ System</button>
+      <span class="log-count" id="alf-count"></span>
+    </div>
+    <!-- hidden select kept for filter compatibility -->
+    <select id="alf-category" style="display:none;"><option value=""></option><option value="auth"></option><option value="job"></option><option value="user"></option><option value="broadcast"></option><option value="system"></option></select>
+    <div id="log-summary" class="log-summary"></div>
+    <div id="login-log-list"></div>
+  </section>
+
+  <!-- ACCOUNT -->
+  <section id="account">
+    <h2>👤 Account</h2>
+    <div class="acct-tabs">
+      <button class="acct-tab on" onclick="setAccountTab('profile')">Profile</button>
+      <button class="acct-tab" onclick="setAccountTab('preferences')">Preferences</button>
+    </div>
+    <div id="account-pane-profile"></div>
+    <div id="account-pane-prefs" style="display:none;"></div>
+    <div style="display:flex;gap:0.5rem;margin-top:1rem;flex-wrap:wrap;">
+      <button class="bp" onclick="saveSettingsFromUI()">💾 Save preferences</button>
+      <button class="bp sec" onclick="resetUserSettings()">↩ Reset preferences</button>
+    </div>
+  </section>
+    </div><!-- /content-area -->
+  </div><!-- /app-body -->
+
+<!-- TOAST -->
+<div id="toast">Job deleted. <button onclick="undoDel()">Undo</button></div>
+<div id="notif-toast-stack" aria-live="polite" aria-label="Notifications"></div>
+<div id="chart-tooltip" class="chart-tooltip"></div>
+
+<!-- CALENDAR POPUP -->
+<div id="overlay" class="overlay" style="display:none;" onclick="closePopup()"></div>
+<div id="popup" class="popup"></div>
+
+<!-- CONFIRM MODAL -->
+<div id="confirm-modal" class="modal-overlay">
+  <div class="modal">
+    <h4 id="confirm-title">Are you sure?</h4>
+    <p id="confirm-msg" style="font-size:0.85rem;color:var(--text2);"></p>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeConfirm()">Cancel</button>
+      <button id="confirm-ok" class="btn-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMPLETION NOTE MODAL -->
+<div id="complete-modal" class="modal-overlay">
+  <div class="modal">
+    <h4>✅ Mark as Complete</h4>
+    <p style="font-size:0.82rem;color:var(--text2);margin-bottom:0.75rem;">Add a completion note (optional)</p>
+    <div class="fg">
+      <label>Completion Note<textarea id="complete-note" placeholder="e.g. Done, waiting on sign-off / Completed with minor issues..." style="min-height:70px;"></textarea></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeCompleteModal()">Cancel</button>
+      <button class="btn-confirm green" onclick="submitComplete()">✅ Mark Complete</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXTENSION REQUEST MODAL -->
+<div id="ext-modal" class="modal-overlay">
+  <div class="modal">
+    <h4>📅 Request Deadline Extension</h4>
+    <input type="hidden" id="ext-job-id"/>
+    <div class="fg">
+      <label>New Requested Deadline<input type="datetime-local" id="ext-new-dl"/></label>
+      <label>Reason<textarea id="ext-reason" placeholder="Why do you need more time?" style="min-height:70px;"></textarea></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeExtModal()">Cancel</button>
+      <button class="btn-confirm" onclick="submitExtRequest()">Send Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT USER MODAL -->
+<div id="edit-user-modal" class="modal-overlay">
+  <div class="modal">
+    <h4>✏️ Edit User</h4>
+    <input type="hidden" id="edit-user-id"/>
+    <div class="fg">
+      <label>Name<input id="edit-uname" placeholder="Full name"/></label>
+      <label>Email<input id="edit-uemail" type="email" placeholder="email@example.com"/></label>
+      <label>New Password <span style="color:var(--text2);font-weight:400;text-transform:none;">(leave blank to keep current)</span><input id="edit-upw" type="password" placeholder="••••••••"/></label>
+      <label>Role<select id="edit-urole" onchange="onRoleChange('edit')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option></select></label>
+      <label id="edit-teamlead-wrap">Team Leader<select id="edit-uteamlead"><option value="">— None —</option></select></label>
+      <label>Can view all jobs?<select id="edit-uviewall"><option value="no">No — own jobs only</option><option value="yes">Yes — all jobs</option></select></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeEditUserModal()">Cancel</button>
+      <button class="btn-confirm green" onclick="saveEditUser()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD USER MODAL -->
+<div id="add-user-modal" class="modal-overlay" onclick="if(event.target===this)closeAddUserModal()">
+  <div class="modal">
+    <h4>➕ Add Team Member</h4>
+    <div class="fg">
+      <label>Name<input id="uname" placeholder="e.g. Ahmed"/></label>
+      <label>Work email<input id="uemail" type="email" placeholder="employee@example.com"/></label>
+      <label>Temporary password<input id="upw" type="password" placeholder="For first-time setup"/></label>
+      <label>Role<select id="urole" onchange="onRoleChange('add')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option></select></label>
+      <label id="add-teamlead-wrap">Team Leader<select id="u-teamlead"><option value="">— None —</option></select></label>
+      <label>Can view all jobs?<select id="uviewall"><option value="no">No — own jobs only</option><option value="yes">Yes — all jobs</option></select></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeAddUserModal()">Cancel</button>
+      <button class="btn-confirm green" onclick="addUser()">Add User</button>
+    </div>
+  </div>
+</div>
+
+<!-- REASSIGN MODAL -->
+<div id="reassign-modal" class="modal-overlay">
+  <div class="modal">
+    <h4>🔄 Reassign Job</h4>
+    <input type="hidden" id="reassign-job-id"/>
+    <div class="fg">
+      <label>Reassign To<select id="reassign-to"><option value="">-- Select employee --</option></select></label>
+      <label>Reason (optional)<input id="reassign-reason" placeholder="Reason for reassignment..."/></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeReassignModal()">Cancel</button>
+      <button class="btn-confirm" onclick="submitReassign()">Reassign</button>
+    </div>
+  </div>
+</div>
+
+<div id="section-loader" class="section-loader" style="display:none;" aria-hidden="true"><div class="spin"></div><span>Loading…</span></div>
+<div id="cal-day-modal" class="modal-overlay" onclick="if(event.target===this)closeCalDayModal()">
+  <div class="modal" style="max-width:520px;">
+    <h3 id="cal-day-title">Day</h3>
+    <div id="cal-day-body" style="max-height:50vh;overflow:auto;margin:1rem 0;"></div>
+    <div class="modal-foot"><button class="btn-cancel" type="button" onclick="closeCalDayModal()">Close</button></div>
+  </div>
+</div>
+
+<!-- JOB DETAIL MODAL (Board view) -->
+<div id="job-detail-modal" class="modal-overlay" onclick="if(event.target===this)closeJobDetail()">
+  <div class="modal" style="max-width:540px;">
+    <h4 id="jobdetail-title" style="margin-bottom:1rem;">Job</h4>
+    <div id="jobdetail-body"></div>
+    <div class="modal-foot"><button class="btn-cancel" type="button" onclick="closeJobDetail()">Close</button></div>
+  </div>
+</div>
+<script type="module" src="script.js"></script>
+</body>
+</html>
