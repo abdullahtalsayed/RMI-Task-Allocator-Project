@@ -1,4 +1,4 @@
-name: Auto Version + Release
+name: Smart Versioning
 
 on:
   push:
@@ -13,8 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -30,15 +29,26 @@ jobs:
 
           echo "latest=$latest" >> $GITHUB_OUTPUT
 
-      - name: Bump version
+      - name: Analyze commit message
         id: bump
         run: |
+          msg=$(git log -1 --pretty=%B)
+
           version=${{ steps.get_tag.outputs.latest }}
           version=${version#v}
 
           IFS='.' read -r major minor patch <<< "$version"
 
-          patch=$((patch + 1))
+          if [[ "$msg" == *"BREAKING"* ]]; then
+            major=$((major + 1))
+            minor=0
+            patch=0
+          elif [[ "$msg" == feat:* ]]; then
+            minor=$((minor + 1))
+            patch=0
+          else
+            patch=$((patch + 1))
+          fi
 
           new_version="v$major.$minor.$patch"
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
