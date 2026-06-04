@@ -1,0 +1,56 @@
+name: Auto Version + Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          git fetch --tags
+          latest=$(git tag --sort=-v:refname | head -n 1)
+
+          if [ -z "$latest" ]; then
+            latest="v1.0.0"
+          fi
+
+          echo "latest=$latest" >> $GITHUB_OUTPUT
+
+      - name: Bump version
+        id: bump
+        run: |
+          version=${{ steps.get_tag.outputs.latest }}
+          version=${version#v}
+
+          IFS='.' read -r major minor patch <<< "$version"
+
+          patch=$((patch + 1))
+
+          new_version="v$major.$minor.$patch"
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+
+      - name: Create tag
+        run: |
+          git tag ${{ steps.bump.outputs.new_version }}
+          git push origin ${{ steps.bump.outputs.new_version }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bump.outputs.new_version }}
+          name: Release ${{ steps.bump.outputs.new_version }}
+          generate_release_notes: true
