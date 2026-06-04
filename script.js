@@ -570,7 +570,7 @@ function renderAssignEmpGrid(){
     const overdue=jobs.filter(j=>j.owner===u.id&&isOverdue(j)).length;
     const loadCls=overdue>0?'load-red':active>=5?'load-red':active>=3?'load-yellow':'load-green';
     const loadLbl=overdue>0?`⚠ ${overdue} overdue`:active>=5?'Overloaded':active>=3?'Busy':'Available';
-    const roleIcon=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':'👤';
+    const roleIcon=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':u.role==='team_leader'?'🧭':'👤';
     const isSel=u.id===selected;
     return`<div class="emp-card${isSel?' emp-card-sel':''}" onclick="selectAssignEmp('${u.id}')">
       <div class="emp-card-top">
@@ -618,7 +618,7 @@ function populateReassignDrops(){
   // Bulk reassign
   const s=document.getElementById('bulk-reassign');
   s.innerHTML='<option value="">Reassign to...</option>';
-  const pool=me?.role==='manager'?users:users.filter(u=>u.role!=='manager');
+  const pool=assignableUsers();
   pool.forEach(u=>{const o=document.createElement('option');o.value=u.id;o.textContent=u.name+(u.role==='manager'?' (Manager)':'');s.appendChild(o);});
   // adv search emp filter
   const sf=document.getElementById('sf-emp');
@@ -717,14 +717,14 @@ function loginAs(u){
   document.getElementById('app').style.display='block';
   document.getElementById('app').classList.add('app-reveal');
   setTimeout(()=>document.getElementById('app')?.classList.remove('app-reveal'),1200);
-  const ico=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':'👤';
+  const ico=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':u.role==='team_leader'?'🧭':'👤';
   document.getElementById('ubadge').textContent=ico+' '+u.name;
   localStorage.setItem('rmi_session',u.id);
   userSettings=loadUserSettings();
   attachFirebaseListeners();
   refreshUsersRemote();
   applyMainNav();
-  if(u.role==='manager'||u.role==='team_leader')goHub('insights','overview');
+  if(['manager','supervisor','team_leader'].includes(u.role))goHub('insights','overview');
   else goHub('jobs','my-jobs');
   showDeadlineBanner();
   seedNotifTracking();
@@ -793,7 +793,7 @@ window.resetUserSettings=function(){
 };
 function renderAccountProfile(){
   const el=document.getElementById('account-pane-profile');if(!el||!me)return;
-  const bdg=me.role==='manager'?'m':me.role==='supervisor'?'sup':'l';
+  const bdg=roleMeta(me.role).bdg;
   const initial=(me.name||'?').trim().charAt(0).toUpperCase();
   const myActive=jobs.filter(j=>j.owner===me.id&&j.status!=='completed').length;
   const myDone=jobs.filter(j=>j.owner===me.id&&j.status==='completed').length;
@@ -801,7 +801,7 @@ function renderAccountProfile(){
   <div class="acct-profile">
     <div class="acct-avatar acct-av-${bdg}">${escapeHtml(initial)}</div>
     <div class="acct-profile-info">
-      <div class="acct-name">${escapeHtml(me.name)} <span class="bdg bdg-${bdg}">${me.role}</span></div>
+      <div class="acct-name">${escapeHtml(me.name)} <span class="bdg bdg-${bdg}">${roleMeta(me.role).label}</span></div>
       <div class="acct-email">${escapeHtml(me.email||'No email on file')}</div>
       ${me.viewAll==='yes'?'<div class="acct-viewall">👁 Can view all team jobs</div>':''}
     </div>
@@ -1001,6 +1001,10 @@ function jobLabel(j){return j?`${j.client} (#${j.jobNum})`:'a job';}
 function notifyManagersAndSupervisors(title,body,exceptIds=[]){
   users.filter(u=>['manager','supervisor'].includes(u.role)&&!exceptIds.includes(u.id)).forEach(u=>pushNotif(u.id,title,body));
 }
+function notifyTeamLeaderOf(ownerId,title,body,exceptIds=[]){
+  const tl=users.find(u=>u.role==='team_leader'&&users.filter(x=>x.teamLeaderId===u.id).some(x=>x.id===ownerId));
+  if(tl&&!exceptIds.includes(tl.id))pushNotif(tl.id,title,body);
+}
 function notifyJobOwner(j,title,body,exceptIds=[]){
   if(j?.owner)pushNotifExcept(exceptIds,j.owner,title,body);
 }
@@ -1025,35 +1029,46 @@ function notifyForJobEvent(jobId,type,desc){
       if(j?.managerAssigned){
         notifyJobOwner(j,'📋 New Job Assigned',`${me.name} assigned you: ${label}`,ex);
         notifyManagersAndSupervisors('📋 Job Assigned',`${me.name} assigned ${label} to ${owner}`,ex);
-      }else notifyManagersAndSupervisors('➕ New Job Created',`${me.name} created ${label}`,ex);
+        notifyTeamLeaderOf(j?.owner,'📋 Job Assigned',`${me.name} assigned ${label} to ${owner}`,ex);
+      }else{
+        notifyManagersAndSupervisors('➕ New Job Created',`${me.name} created ${label}`,ex);
+        notifyTeamLeaderOf(j?.owner,'➕ New Job Created',`${me.name} created ${label}`,ex);
+      }
       break;
     case 'started':
       notifyJobOwner(j,'▶ Job Started',`${me.name} started ${label}`,ex);
       notifyManagersAndSupervisors('▶ Job Started',`${me.name} started ${label}`,ex);
+      notifyTeamLeaderOf(j?.owner,'▶ Job Started',`${me.name} started ${label}`,ex);
       break;
     case 'paused':
       notifyJobOwner(j,'⏸ Job Paused',`${me.name} paused ${label}`,ex);
       notifyManagersAndSupervisors('⏸ Job Paused',`${me.name} paused ${label}`,ex);
+      notifyTeamLeaderOf(j?.owner,'⏸ Job Paused',`${me.name} paused ${label}`,ex);
       break;
     case 'resumed':
       notifyJobOwner(j,'▶ Job Resumed',`${me.name} resumed ${label}`,ex);
       notifyManagersAndSupervisors('▶ Job Resumed',`${me.name} resumed ${label}`,ex);
+      notifyTeamLeaderOf(j?.owner,'▶ Job Resumed',`${me.name} resumed ${label}`,ex);
       break;
     case 'completed':
       notifyJobOwner(j,'✅ Job Completed',`${me.name} completed ${label}`,ex);
       notifyManagersAndSupervisors('✅ Job Completed',`${me.name} completed ${label}`,ex);
+      notifyTeamLeaderOf(j?.owner,'✅ Job Completed',`${me.name} completed ${label}`,ex);
       break;
     case 'edited':
       notifyJobOwner(j,'✏️ Job Edited',`${me.name} edited ${label}`,ex);
       notifyManagersAndSupervisors('✏️ Job Edited',short,ex);
+      notifyTeamLeaderOf(j?.owner,'✏️ Job Edited',short,ex);
       break;
     case 'deleted':
       notifyJobOwner(j,'🗑 Job Deleted',`${me.name} deleted ${label}`,ex);
       notifyManagersAndSupervisors('🗑 Job Deleted',`${me.name} deleted ${label}`,ex);
+      notifyTeamLeaderOf(j?.owner,'🗑 Job Deleted',`${me.name} deleted ${label}`,ex);
       break;
     case 'restored':
       notifyJobOwner(j,'↩ Job Restored',`${me.name} restored ${label}`,ex);
       notifyManagersAndSupervisors('↩ Job Restored',`${me.name} restored ${label}`,ex);
+      notifyTeamLeaderOf(j?.owner,'↩ Job Restored',`${me.name} restored ${label}`,ex);
       break;
     case 'pinned':{
       const pinTitle=desc.includes('unpinned')?'📌 Job Unpinned':'📌 Job Pinned';
@@ -1065,10 +1080,12 @@ function notifyForJobEvent(jobId,type,desc){
       const txt=desc.replace(/^💬\s*[^:]+\s*:\s*/,'').slice(0,100);
       notifyJobOwner(j,'💬 New Comment',`${me.name} on ${label}: ${txt}`,ex);
       notifyManagersAndSupervisors('💬 New Comment',`${me.name} commented on ${label}`,ex);
+      notifyTeamLeaderOf(j?.owner,'💬 New Comment',`${me.name} commented on ${label}`,ex);
       break;
     }
     case 'extension_request':
       pushNotifToManagers('📅 Extension Request',`${me.name} requested an extension for ${label}`,ex);
+      notifyTeamLeaderOf(j?.owner,'📅 Extension Request',`${me.name} requested an extension for ${label}`,ex);
       break;
     case 'ext_approved':
       notifyManagersAndSupervisors('✅ Extension Approved',short,ex);
@@ -1526,7 +1543,7 @@ function populateCalEmpDrop(){
 }
 function populateCalEmpPills(){
   const wrap=document.getElementById('cal-emp-pills');if(!wrap)return;
-  const pool=teamUsersForView().filter(u=>u.role!=='manager'||users.length<=3);
+  const pool=teamUsersForView().filter(u=>u.role!=='manager');
   wrap.innerHTML=`<button class="cal-emp-pill${!calFilterEmp?' cep-on':''}" onclick="setCalFilter('')">All</button>`
     +pool.map(u=>`<button class="cal-emp-pill${calFilterEmp===u.id?' cep-on':''}" onclick="setCalFilter('${u.id}')">${escapeHtml(u.name.split(' ')[0])}</button>`).join('');
 }
@@ -1554,6 +1571,7 @@ window.addJob=async function(){
 window.assignJob=async function(){
   const oid=document.getElementById('mat').value,c=document.getElementById('mc').value.trim(),n=document.getElementById('mn').value.trim();
   if(!oid||!c||!n){alert('Fill all required fields.');return;}
+  if(!assignableUsers().some(u=>u.id===oid)){showToastMsg('You cannot assign to that user.');return;}
   const dlv=document.getElementById('mdl').value;
   const id=await jAdd({client:c,jobNum:n,type:document.getElementById('mtype').value,priority:document.getElementById('mpri').value,notes:document.getElementById('mnotes').value,managerNote:document.getElementById('mpnote').value,tags:tagStores.mtags,owner:oid,assignedBy:'👔 '+me.name,status:'pending',created:Date.now(),started:null,completed:null,deadline:dlv?new Date(dlv).getTime():null,managerAssigned:true,pinned:false,...jobPauseDefaults()});
   const toName=users.find(u=>u.id===oid)?.name||oid;
@@ -1641,6 +1659,7 @@ window.saveEdit=async function(){
     patch.pausedAt=null;
   }
   if(newSt!=='paused'&&newSt!=='ongoing')patch.pausedAt=null;
+  if(oldSt==='completed'&&newSt!=='completed')patch.completionNote=null;
   if(newSt==='completed'&&j){
     let totalPausedMs=j.totalPausedMs||0;
     if(j.status==='paused'&&j.pausedAt)totalPausedMs+=Date.now()-toMillis(j.pausedAt);
@@ -1684,8 +1703,17 @@ window.expTXT=function(id){
 window.approveExt=async function(eid){
   const req=extRequests.find(x=>x.id===eid);if(!req)return;
   if(!me||!canManageJob(jobs.find(x=>x.id===req.jobId)||{owner:req.requestedBy}))return;
-  await extUpdate(eid,{status:'approved',reviewedBy:me.name,reviewedAt:Date.now()});
-  await jUpdate(req.jobId,{deadline:req.newDeadline});
+  if(USE_FIREBASE&&db&&extCol){
+    const batch=writeBatch(db);
+    batch.update(doc(extCol,eid),{status:'approved',reviewedBy:me.name,reviewedAt:Date.now()});
+    batch.update(doc(db,'jobs',req.jobId),{deadline:req.newDeadline});
+    await batch.commit();
+    const e=extRequests.find(x=>x.id===eid);if(e){e.status='approved';e.reviewedBy=me.name;e.reviewedAt=Date.now();}
+    const j=jobs.find(x=>x.id===req.jobId);if(j)j.deadline=req.newDeadline;
+  }else{
+    await extUpdate(eid,{status:'approved',reviewedBy:me.name,reviewedAt:Date.now()});
+    await jUpdate(req.jobId,{deadline:req.newDeadline});
+  }
   await addEvent(req.jobId,'ext_approved',`${me.name} approved deadline extension requested by ${req.requestedByName}`,'green');
   pushNotif(req.requestedBy,'✅ Extension Approved',`Your deadline extension for ${req.client} (#${req.jobNum}) was approved.`);
   renderDashExtensions();
@@ -1830,12 +1858,14 @@ window.addUser=async function(){
   const name=document.getElementById('uname').value.trim(),pw=document.getElementById('upw').value.trim(),role=document.getElementById('urole').value,email=document.getElementById('uemail').value.trim().toLowerCase();
   let viewAll=document.getElementById('uviewall').value;
   if(role==='manager')viewAll='yes';
+  const rawTlId=role==='employee'?(document.getElementById('u-teamlead')?.value||null):null;
+  const teamLeaderId=rawTlId&&users.find(u=>u.id===rawTlId&&u.role==='team_leader')?rawTlId:null;
   if(!name||!pw){alert('Name and password required.');return;}
   if(USE_AUTH&&!email){alert('Email is required so the employee can activate their account.');return;}
   const id=name.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now();
   const data=USE_AUTH
-    ?{id,name,role,email,viewAll,needsActivation:true,tempPassword:pw}
-    :{id,name,role,password:pw,email,viewAll};
+    ?{id,name,role,email,viewAll,teamLeaderId,needsActivation:true,tempPassword:pw}
+    :{id,name,role,password:pw,email,viewAll,teamLeaderId};
   await uAdd(id,data);
   await logActivity({type:'user_added',category:'user',desc:`${me.name} added user ${name} (${role})`,userId:me.id,userName:me.name,role:me.role});
   pushNotif(id,'👤 Account Created',USE_AUTH
@@ -1854,10 +1884,33 @@ window.removeUser=async function(id){
     if(id!==me.id)pushNotif(id,'👤 Account Removed',`Your account was removed by ${me.name}`);
   },'Remove',true);
 };
+// role display meta
+function roleMeta(role){
+  if(role==='manager')return{icon:'👔',bdg:'m',label:'Manager'};
+  if(role==='supervisor')return{icon:'🔰',bdg:'sup',label:'Supervisor'};
+  if(role==='team_leader')return{icon:'🧭',bdg:'tl',label:'Team Leader'};
+  return{icon:'👤',bdg:'l',label:'Employee'};
+}
+// fill a <select> with team_leader users; keep current value if given
+function populateTeamLeadSelect(selId,current){
+  const sel=document.getElementById(selId);if(!sel)return;
+  const tls=users.filter(u=>u.role==='team_leader');
+  sel.innerHTML='<option value="">— None —</option>'+tls.map(u=>`<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
+  sel.value=current||'';
+}
+// show/hide team-leader picker based on selected role (only employees get a leader)
+window.onRoleChange=function(ctx){
+  const roleSel=document.getElementById(ctx==='edit'?'edit-urole':'urole');
+  const wrap=document.getElementById(ctx==='edit'?'edit-teamlead-wrap':'add-teamlead-wrap');
+  if(!roleSel||!wrap)return;
+  wrap.style.display=roleSel.value==='employee'?'block':'none';
+};
 window.openAddUserModal=function(){
   ['uname','uemail','upw'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const r=document.getElementById('urole');if(r)r.value='employee';
   const v=document.getElementById('uviewall');if(v)v.value='no';
+  populateTeamLeadSelect('u-teamlead','');
+  onRoleChange('add');
   document.getElementById('add-user-modal').classList.add('open');
 };
 window.closeAddUserModal=function(){document.getElementById('add-user-modal').classList.remove('open');};
@@ -1869,31 +1922,37 @@ function renderUList(){
   if(sumEl){
     const mgr=users.filter(u=>u.role==='manager').length;
     const sup=users.filter(u=>u.role==='supervisor').length;
+    const tl=users.filter(u=>u.role==='team_leader').length;
     const emp=users.filter(u=>u.role==='employee').length;
     const pending=users.filter(u=>!u.authUid&&u.needsActivation).length;
     sumEl.innerHTML=`
       <div class="ext-sum-card"><div class="ext-sum-n">${users.length}</div><div class="ext-sum-l">Total</div></div>
       <div class="ext-sum-card"><div class="ext-sum-n" style="color:var(--purple)">${mgr}</div><div class="ext-sum-l">Managers</div></div>
       <div class="ext-sum-card"><div class="ext-sum-n" style="color:var(--yellow)">${sup}</div><div class="ext-sum-l">Supervisors</div></div>
+      ${tl?`<div class="ext-sum-card"><div class="ext-sum-n" style="color:var(--green)">${tl}</div><div class="ext-sum-l">Team Leaders</div></div>`:''}
       <div class="ext-sum-card"><div class="ext-sum-n" style="color:var(--blue)">${emp}</div><div class="ext-sum-l">Employees</div></div>
       ${pending?`<div class="ext-sum-card"><div class="ext-sum-n" style="color:var(--orange)">${pending}</div><div class="ext-sum-l">Pending setup</div></div>`:''}`;
   }
-  const order={manager:0,supervisor:1,employee:2};
+  const order={manager:0,supervisor:1,team_leader:2,employee:3};
   let list=[...users].sort((a,b)=>(order[a.role]??9)-(order[b.role]??9)||(a.name||'').localeCompare(b.name||''));
   if(q)list=list.filter(u=>(u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q));
   if(!list.length){el.innerHTML='<div class="empty" style="padding:2rem;">No users match.</div>';return;}
   el.innerHTML=`<div class="user-list">${list.map(u=>{
-    const icon=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':'👤';
-    const bdg=u.role==='manager'?'m':u.role==='supervisor'?'sup':'l';
+    const rmeta=roleMeta(u.role);
+    const bdg=rmeta.bdg;
     const initial=(u.name||'?').trim().charAt(0).toUpperCase();
     const active=jobs.filter(j=>j.owner===u.id&&j.status!=='completed').length;
     const status=u.authUid?'<span class="user-status us-active">● Active</span>':(u.needsActivation?'<span class="user-status us-pending">● Setup pending</span>':'<span class="user-status us-active">● Active</span>');
     const rm=u.id!==me?.id?`<button class="user-act user-act-danger" onclick="removeUser('${u.id}')" title="Remove">Remove</button>`:'';
+    // extra meta: employee → their team leader; team_leader → member count
+    let teamMeta='';
+    if(u.role==='employee'&&u.teamLeaderId){const tl=users.find(x=>x.id===u.teamLeaderId);if(tl)teamMeta=` · 🧭 ${escapeHtml(tl.name)}`;}
+    else if(u.role==='team_leader'){const n=users.filter(x=>x.teamLeaderId===u.id).length;teamMeta=` · 👥 ${n} member${n!==1?'s':''}`;}
     return`<div class="user-row">
       <div class="user-avatar user-av-${bdg}">${escapeHtml(initial)}</div>
       <div class="user-info">
-        <div class="user-name-row">${escapeHtml(u.name)} <span class="bdg bdg-${bdg}">${u.role}</span></div>
-        <div class="user-meta">${u.email?`✉️ ${escapeHtml(u.email)}`:'<span class="tc-muted">no email</span>'} · ${u.viewAll==='yes'?'All jobs':'Own only'}</div>
+        <div class="user-name-row">${escapeHtml(u.name)} <span class="bdg bdg-${bdg}">${rmeta.label}</span></div>
+        <div class="user-meta">${u.email?`✉️ ${escapeHtml(u.email)}`:'<span class="tc-muted">no email</span>'} · ${u.viewAll==='yes'?'All jobs':'Own only'}${teamMeta}</div>
       </div>
       <div class="user-stat"><span class="user-stat-n">${active}</span><span class="user-stat-l">active</span></div>
       ${status}
@@ -1912,6 +1971,8 @@ window.openEditUserModal=function(id){
   document.getElementById('edit-upw').value='';
   document.getElementById('edit-urole').value=u.role||'employee';
   document.getElementById('edit-uviewall').value=u.viewAll==='yes'?'yes':'no';
+  populateTeamLeadSelect('edit-uteamlead',u.teamLeaderId||'');
+  onRoleChange('edit');
   document.getElementById('edit-user-modal').classList.add('open');
 };
 window.closeEditUserModal=function(){document.getElementById('edit-user-modal').classList.remove('open');};
@@ -1924,8 +1985,10 @@ window.saveEditUser=async function(){
   const role=document.getElementById('edit-urole').value;
   let viewAll=document.getElementById('edit-uviewall').value;
   if(role==='manager')viewAll='yes';
+  const rawEditTlId=role==='employee'?(document.getElementById('edit-uteamlead')?.value||null):null;
+  const teamLeaderId=rawEditTlId&&users.find(u=>u.id===rawEditTlId&&u.role==='team_leader')?rawEditTlId:null;
   if(!name){alert('Name is required.');return;}
-  const patch={name,email,role,viewAll};
+  const patch={name,email,role,viewAll,teamLeaderId};
   if(pw)patch.password=pw;
   await uUpdate(id,patch);
   await logActivity({type:'user_edited',category:'user',desc:`${me.name} updated user ${name} (${role})`,userId:me.id,userName:me.name,role:me.role});
@@ -1983,6 +2046,7 @@ window.toggleCompleted=function(btn){
 // ── TABLE VIEW ────────────────────────────────────────────────────────────────
 function jobsFilterBar(){
   const f=myFilter||'all';
+  const q=(document.getElementById('srch')?.value||'').trim();
   const list=[
     {id:'all',label:'All'},
     {id:'pending',label:'🟡 Pending'},
@@ -1994,8 +2058,9 @@ function jobsFilterBar(){
     {id:'pinned',label:'📌 Pinned'},
   ];
   const tabs=list.map(x=>`<button onclick="setF('${x.id}')" id="f-${x.id}" class="jtab-btn${f===x.id?' jtab-on':''}">${x.label}</button>`).join('');
+  const searchChip=q?`<span class="jobs-search-chip">🔍 "${escapeHtml(q)}" <button onclick="document.getElementById('srch').value='';renderAll()" title="Clear search">×</button></span>`:'';
   return`<div class="jobs-integrated-bar">
-    <div class="jtab-left">${tabs}</div>
+    <div class="jtab-left">${tabs}${searchChip}</div>
     <div class="jtab-right" id="jobs-pager"></div>
   </div>`;
 }
@@ -2023,6 +2088,7 @@ function jobDetailHTML(j){
     }
   }
   const dlInfo=j.deadline?(()=>{const diff=j.deadline-now;const c=diff<0?'tc-red':diff<86400000?'tc-yellow':'';return`<span class="${c}">${fmt(j.deadline)}</span>`;})():'—';
+  const pendingExt=typeof extRequests!=='undefined'?extRequests.find(r=>r.jobId===j.id&&r.status==='pending'):null;
   const stChip=od?'<span class="st-chip st-overdue">Overdue</span>':
     j.status==='ongoing'?'<span class="st-chip st-ongoing">Ongoing</span>':
     j.status==='paused'?'<span class="st-chip st-paused">Paused</span>':
@@ -2037,7 +2103,10 @@ function jobDetailHTML(j){
     actions+=`<button class="jd-btn" onclick="editJob('${j.id}')">✏️ Edit</button>`;
     actions+=`<button class="jd-btn" onclick="pinJob('${j.id}')">${j.pinned?'📌 Unpin':'📌 Pin'}</button>`;
     if(canSup)actions+=`<button class="jd-btn" onclick="openReassignModal('${j.id}')">🔄 Reassign</button>`;
-    if(j.deadline&&j.status!=='completed')actions+=`<button class="jd-btn" onclick="openExtModal('${j.id}')">📅 Extend</button>`;
+    if(j.deadline&&j.status!=='completed'){
+      if(pendingExt)actions+=`<button class="jd-btn" disabled style="opacity:0.55;" title="Extension pending — awaiting review">📅 Extension Pending</button>`;
+      else actions+=`<button class="jd-btn" onclick="openExtModal('${j.id}')">📅 Extend</button>`;
+    }
     actions+=`<button class="jd-btn" onclick="expTXT('${j.id}')">📄 TXT</button>`;
     actions+=`<button class="jd-btn jd-tl-btn" onclick="toggleTimeline('${j.id}')">🕐 Timeline</button>`;
     if(canDelete)actions+=`<button class="jd-btn jd-btn-danger" onclick="delJob('${j.id}')">🗑 Delete</button>`;
@@ -2193,6 +2262,13 @@ function isOverdue(j){
   if(j.status==='pending'&&now-j.created>172800000)return true;
   if(j.status==='ongoing'&&j.started&&now-j.started>259200000)return true;
   return false;
+}
+function computeSlaStats(scope){
+  const done=scope.filter(j=>j.completed&&j.deadline);
+  const onTime=done.filter(j=>toMillis(j.completed)<=toMillis(j.deadline));
+  const open=scope.filter(j=>j.status!=='completed'&&j.deadline);
+  const overdueOpen=open.filter(j=>isOverdue(j));
+  return{onTimePct:done.length?Math.round(onTime.length/done.length*100):0,doneWithDl:done.length,overdueOpen:overdueOpen.length,openWithDl:open.length};
 }
 
 function card(j,acts){
@@ -2412,7 +2488,7 @@ function renderBoard(){
     const active=ej.filter(j=>j.status!=='completed').length;
     const done=ej.filter(j=>j.status==='completed').length;
     const avgMs=ej.filter(j=>j.completed&&j.created).reduce((a,j,_,arr)=>a+(j.completed-j.created)/arr.length,0);
-    const headIcon=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':'👤';
+    const headIcon=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':u.role==='team_leader'?'🧭':'👤';
     const loadDot=odJobs.length?'dot-red':active>=5?'dot-red':active>=3?'dot-yellow':'dot-green';
     const tableHtml=empJobTable(ej,odJobs);
     return`<div class="empblock${odJobs.length?' has-overdue':''}" data-emp-name="${escapeHtml(u.name.toLowerCase())}">
@@ -2429,6 +2505,8 @@ function renderBoard(){
       el.style.display=el.dataset.empName?.includes(q.toLowerCase())?'':'none';
     });
   };
+  // restore expand state
+  try{const s=JSON.parse(localStorage.getItem('rmi_board_expand')||'{}');Object.keys(s).forEach(id=>{if(s[id]){const el=document.getElementById(id);if(el){el.classList.add('open');el.closest('.empblock')?.classList.add('emp-open');}}});}catch(e){}
 }
 function empJobTable(ej,odJobs){
   if(!ej.length)return'<div class="empty" style="padding:1rem;">No jobs assigned.</div>';
@@ -2480,9 +2558,15 @@ function empJobTable(ej,odJobs){
     </table>
   </div>`;
 }
-window.toggleEmp=id=>{const el=document.getElementById(id);if(!el)return;const open=el.classList.toggle('open');el.closest('.empblock')?.classList.toggle('emp-open',open);};
+window.toggleEmp=function(id){
+  const el=document.getElementById(id);if(!el)return;
+  const open=el.classList.toggle('open');
+  el.closest('.empblock')?.classList.toggle('emp-open',open);
+  try{const s=JSON.parse(localStorage.getItem('rmi_board_expand')||'{}');s[id]=open;localStorage.setItem('rmi_board_expand',JSON.stringify(s));}catch(e){}
+};
 window.boardExpandAll=function(open){
   document.querySelectorAll('#tboard .empb').forEach(el=>{el.classList.toggle('open',open);el.closest('.empblock')?.classList.toggle('emp-open',open);});
+  try{const s={};document.querySelectorAll('#tboard .empb').forEach(el=>{if(el.id)s[el.id]=open;});localStorage.setItem('rmi_board_expand',JSON.stringify(s));}catch(e){}
 };
 
 // ── CALENDAR ──────────────────────────────────────────────────────────────────
@@ -2710,6 +2794,7 @@ function renderAnalytics(){renderAnalyticsContent();}
 function analyticsJobs(){
   if(!me)return[];
   if(canSeeAllJobs())return jobs;
+  if(isTeamLeader()){const ids=new Set(myTeamIds());return jobs.filter(j=>ids.has(j.owner));}
   return jobs.filter(j=>j.owner===me.id);
 }
 function allJobTypesForAnalytics(scope){
@@ -2892,7 +2977,10 @@ function exportCSV(data,filename){
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`RMI_${filename}_${new Date().toISOString().slice(0,10)}.csv`;a.click();
 }
 window.exportAllCSV=function(){exportCSV(jobs,'all_jobs');};
-window.exportEmployeeCSV=function(uid){exportCSV(jobs.filter(j=>j.owner===uid),users.find(u=>u.id===uid)?.name||uid);};
+window.exportEmployeeCSV=function(uid){
+  const scope=isTeamLeader()?visibleJobs():jobs;
+  exportCSV(scope.filter(j=>j.owner===uid),users.find(u=>u.id===uid)?.name||uid);
+};
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard(){
@@ -2936,11 +3024,13 @@ function renderDashboard(){
     :weekDelta<0?`<span class="kpi-trend down">▼ ${Math.abs(weekDelta)} vs last wk</span>`
     :`<span class="kpi-trend">— same as last wk</span>`;
 
+  const slaStats=computeSlaStats(dj);
   const kpis=[
     {icon:'📋',label:'Active Jobs',value:active.length,sub:`${pending} pending · ${ongoing} ongoing`,accent:'var(--blue)',filter:null},
     {icon:'⚠️',label:'Overdue',value:overdueJobs.length,sub:overdueJobs.length?'needs attention':'all on track',accent:overdueJobs.length?'var(--red)':'var(--text3)',filter:'overdue'},
     {icon:'📅',label:'Due This Week',value:dueToday.length+dueWeek.length,sub:`${dueToday.length} today · ${dueWeek.length} upcoming`,accent:'var(--orange)',filter:null},
     {icon:'✅',label:'Done This Week',value:doneThisWeek.length,sub:trendStr,accent:'var(--green)',filter:null},
+    {icon:'🎯',label:'On-Time Rate',value:slaStats.onTimePct+'%',sub:`${slaStats.doneWithDl} completed with deadlines`,accent:slaStats.onTimePct>=70?'var(--green)':slaStats.onTimePct>=40?'var(--yellow)':'var(--red)',filter:null},
   ];
 
   // status donut
@@ -3006,7 +3096,7 @@ function renderDashboard(){
         ${workload.length?workload.map(w=>{
           const col=w.od>0?'var(--red)':w.a>=5?'var(--red)':w.a>=3?'var(--yellow)':'var(--green)';
           const pct=Math.min(100,Math.round(w.a/6*100));
-          return`<div class="dash-load-row">
+          return`<div class="dash-load-row" style="cursor:pointer;" onclick="goHub('insights','reports');setTimeout(()=>setAnalyticsEmp('${w.u.id}'),200)" title="View ${escapeHtml(w.u.name)}'s analytics">
             <span class="dash-load-name">${escapeHtml(w.u.name)}</span>
             <div class="dash-load-bar"><div class="dash-load-fill" style="width:${pct}%;background:${col}"></div></div>
             <span class="dash-load-meta">${w.a}${w.od?` <span class="tc-red">⚠${w.od}</span>`:''}</span>
@@ -3117,7 +3207,7 @@ function renderExtensionsPage(){
         ${pri?`<span class="bdg bdg-${pri==='High'?'h':pri==='Medium'?'med':'l'}">${pri}</span>`:''}
         ${od?'<span class="ext-od-flag">⚠ Overdue</span>':''}
       </div>
-      <div class="ext-requester">Requested by <strong>${escapeHtml(r.requestedByName)}</strong> · ${dashRelTime(r.created)}</div>
+      <div class="ext-requester">Requested by <strong>${escapeHtml(r.requestedByName)}</strong>${j&&users.find(u=>u.id===j.owner)?.name!==r.requestedByName?` for <strong>${escapeHtml(users.find(u=>u.id===j?.owner)?.name||'')}</strong>`:''}${j?.type?` · ${escapeHtml(j.type)}`:''} · ${dashRelTime(r.created)}</div>
       <div class="ext-dl-change">
         <div class="ext-dl-box"><span class="ext-dl-lbl">Current</span><span class="ext-dl-val">${oldDl?fmt(oldDl):'—'}</span></div>
         <span class="ext-dl-arrow">→</span>
@@ -3167,14 +3257,16 @@ const HUB_DEFAULTS={jobs:'my-jobs',team:'board',insights:'overview',messages:'br
 const SUB_TO_SECTION={
   'my-jobs':'my-jobs','add-job':'add-job',board:'board',cal:'cal',assign:'assign',
   overview:'dashboard',reports:'analytics',search:'adv-search',extensions:'extensions-review',activity:'login-log',
-  broadcast:'broadcast',profile:'account',preferences:'account',users:'users','activity-log':'login-log'
+  broadcast:'broadcast',profile:'account',preferences:'account',users:'users','activity-log':'login-log',
+  teams:'teams-overview'
 };
 const SECTION_TO_SB={
   'my-jobs':'my-jobs','add-job':'my-jobs',
   board:'board',cal:'cal',assign:'assign',
   dashboard:'dashboard','extensions-review':'extensions-review',
   analytics:'analytics','adv-search':'adv-search',
-  broadcast:'broadcast',account:'account',users:'users','login-log':'login-log'
+  broadcast:'broadcast',account:'account',users:'users','login-log':'login-log',
+  'teams-overview':'teams-overview'
 };
 const SB_TO_HUB={
   'my-jobs':['jobs','my-jobs'],assign:['team','assign'],
@@ -3182,13 +3274,14 @@ const SB_TO_HUB={
   dashboard:['insights','overview'],'extensions-review':['insights','extensions'],
   analytics:['insights','reports'],'adv-search':['insights','search'],
   broadcast:['messages','broadcast'],account:['account','profile'],
-  users:['account','users'],'login-log':['account','activity-log']
+  users:['account','users'],'login-log':['account','activity-log'],
+  'teams-overview':['insights','teams']
 };
 function applyMainNav(){
   const r=me?.role||'';
   const isManager=r==='manager';
   const isTeam=['manager','supervisor','team_leader'].includes(r);
-  const isLeadNav=isManager||r==='team_leader';
+  const isLeadNav=['manager','supervisor','team_leader'].includes(r);
   document.querySelectorAll('.sb-assign').forEach(el=>el.style.display=isTeam?'flex':'none');
   document.querySelectorAll('.sb-team').forEach(el=>el.style.display=isTeam?'block':'none');
   document.querySelectorAll('.sb-ext').forEach(el=>el.style.display=isTeam?'flex':'none');
@@ -3252,6 +3345,7 @@ function runHubSideEffects(id){
     else{refreshExtensionsRemote();renderDashboard();}
   }
   if(id==='extensions-review'){refreshExtensionsRemote();renderDashExtensions();}
+  if(id==='teams-overview'){refreshUsersRemote();renderTeamsOverview();}
   if(id==='adv-search'){refreshUsersRemote();populateReassignDrops();}
   if(id==='users')refreshUsersRemote();
   if(id==='login-log')refreshActivityLogsRemote();
@@ -3285,7 +3379,7 @@ function goTab(id){
     'my-jobs':['jobs','my-jobs'],'add-job':['jobs','add-job'],
     board:['team','board'],cal:['team','cal'],assign:['team','assign'],
     dashboard:['insights','overview'],analytics:['insights','reports'],'adv-search':['insights','search'],
-    'login-log':['insights','activity'],'extensions-review':['insights','extensions'],
+    'login-log':['insights','activity'],'extensions-review':['insights','extensions'],'teams-overview':['insights','teams'],
     broadcast:['messages','broadcast'],settings:['account','profile'],account:['account','profile'],
     users:['account','users'],'activity-log':['account','activity-log']
   };
@@ -3317,8 +3411,8 @@ window.closeSidebar=function(){
 window.renderAll=function(){
   if(!me)return;
   renderJobs();updateSummary();renderAnalyticsContent();showDeadlineBanner();
-  if(me.role==='manager'){
-    renderDashboard();
+  if(['manager','supervisor','team_leader'].includes(me.role)){
+    if(document.getElementById('dashboard')?.classList.contains('on'))renderDashboard();
     if(document.getElementById('login-log')?.classList.contains('on'))renderActivityLog();
   }
 };
@@ -3512,19 +3606,7 @@ window.openCalDayModal=function(ds){
 };
 window.closeCalDayModal=function(){document.getElementById('cal-day-modal')?.classList.remove('open');};
 
-// SLA
-function computeSlaStats(scope){
-  const done=scope.filter(j=>j.completed&&j.deadline);
-  const onTime=done.filter(j=>toMillis(j.completed)<=toMillis(j.deadline));
-  const open=scope.filter(j=>j.status!=='completed'&&j.deadline);
-  const overdueOpen=open.filter(j=>isOverdue(j));
-  return{
-    onTimePct:done.length?Math.round(onTime.length/done.length*100):0,
-    doneWithDl:done.length,
-    overdueOpen:overdueOpen.length,
-    openWithDl:open.length,
-  };
-}
+// SLA — computeSlaStats defined at module scope (above IIFE)
 
 // Weekly CSV export
 function buildWeeklyCsv(){
@@ -3805,15 +3887,15 @@ renderAnalyticsContent=function(){
   const scopeForTrend=canSeeAllJobs()?(analyticsEmp?jobs.filter(j=>j.owner===analyticsEmp):jobs):jobs.filter(j=>j.owner===me.id);
   const trendPts=buckets.map(b=>({label:b.label,value:scopeForTrend.filter(j=>j.completed&&toMillis(j.completed)>=b.start&&toMillis(j.completed)<b.end).length}));
 
-  // throughput by employee (managers, all-team view)
+  // throughput by employee (leads with team view)
   let throughputHtml='';
   if(isMgr&&!analyticsEmp){
-    const emps=users.filter(u=>u.role!=='manager');
+    const emps=teamUsersForView().filter(u=>u.role!=='manager');
     const rows=emps.map(u=>{
       const ej=scope.filter(j=>j.owner===u.id);
       return{label:u.name,value:ej.length,sub:`${ej.filter(j=>j.status==='completed').length} done`,color:'var(--purple)'};
     }).filter(r=>r.value>0).sort((a,b)=>b.value-a.value);
-    throughputHtml=`<div class="an-widget"><div class="an-widget-hd">Throughput by Employee</div>${anBars(rows)}</div>`;
+    if(rows.length)throughputHtml=`<div class="an-widget"><div class="an-widget-hd">Throughput by Employee</div>${anBars(rows)}</div>`;
   }
 
   // turnaround by type (avg completion time)
@@ -3830,12 +3912,12 @@ renderAnalyticsContent=function(){
   }
   /* note: renderAnalyticsContent is assigned (not declared) so it overrides the module-level binding */
 
-  // performance leaderboard (managers, all-team)
+  // performance leaderboard (leads, team-scoped)
   let perfHtml='';
   if(isMgr&&!analyticsEmp){
-    const emps=users.filter(u=>u.role!=='manager');
+    const emps=teamUsersForView().filter(u=>u.role!=='manager');
     const cards=emps.map(u=>{
-      const ej=jobs.filter(j=>j.owner===u.id);
+      const ej=visibleJobs().filter(j=>j.owner===u.id);
       const done=ej.filter(j=>j.completed&&j.created);
       const avg=done.length?done.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/done.length:0;
       const od=ej.filter(j=>isOverdue(j)).length;
@@ -3845,7 +3927,7 @@ renderAnalyticsContent=function(){
     }).filter(c=>c.total>0).sort((a,b)=>b.done-a.done);
     if(cards.length)perfHtml=`<div class="an-widget"><div class="an-widget-hd">Performance Leaderboard</div>
       <div class="an-perf-grid">${cards.map(c=>`<div class="an-perf-card">
-        <div class="an-perf-name">${c.u.role==='supervisor'?'🔰':'👤'} ${escapeHtml(c.u.name)}</div>
+        <div class="an-perf-name">${c.u.role==='supervisor'?'🔰':c.u.role==='team_leader'?'🧭':'👤'} ${escapeHtml(c.u.name)}</div>
         <div class="an-perf-stats">
           <div><span class="ap-n">${c.done}</span><span class="ap-l">done</span></div>
           <div><span class="ap-n">${c.active}</span><span class="ap-l">active</span></div>
@@ -3905,6 +3987,15 @@ window.assignJob=async function(){
   if(notes)await notifyMentions(notes,null,'new assignment');
 };
 
+// Patch submitComment for mention notifications
+const _submitComment=window.submitComment;
+window.submitComment=async function(jobId){
+  const inp=document.getElementById('ci-'+jobId);
+  const text=inp?.value?.trim()||'';
+  await _submitComment(jobId);
+  if(text){const j=jobs.find(x=>x.id===jobId);if(j)await notifyMentions(text,j,text);}
+};
+
 // removeUser permission
 const _removeUser=window.removeUser;
 window.removeUser=function(id){
@@ -3925,6 +4016,61 @@ renderCal=function(){
     cell.onclick=()=>openCalDayModal(ds);
   });
 };
+
+// ── TEAMS OVERVIEW (manager-only) ─────────────────────────────────────────────
+function renderTeamsOverview(){
+  const root=document.getElementById('teams-overview-root');if(!root)return;
+  if(!me||me.role!=='manager'){root.innerHTML='<div class="empty" style="padding:2rem;">Manager access only.</div>';return;}
+  const tls=users.filter(u=>u.role==='team_leader');
+  if(!tls.length){root.innerHTML='<div class="empty" style="padding:2rem;">No team leaders yet. Add team leaders in Manage Users.</div>';return;}
+  const now=new Date(),ws=new Date(now);ws.setDate(now.getDate()-now.getDay());ws.setHours(0,0,0,0);
+  root.innerHTML=`<div class="tov-grid">${tls.map(tl=>{
+    const memberIds=new Set(users.filter(u=>u.teamLeaderId===tl.id).map(u=>u.id));
+    const members=users.filter(u=>u.teamLeaderId===tl.id);
+    const teamJobs=jobs.filter(j=>memberIds.has(j.owner)||j.owner===tl.id);
+    const active=teamJobs.filter(j=>j.status!=='completed');
+    const overdue=teamJobs.filter(j=>isOverdue(j));
+    const doneWk=teamJobs.filter(j=>j.completed&&new Date(j.completed)>=ws);
+    const pending=teamJobs.filter(j=>j.status==='pending').length;
+    const ongoing=teamJobs.filter(j=>j.status==='ongoing').length;
+    const paused=teamJobs.filter(j=>j.status==='paused').length;
+    const pendExt=extRequests.filter(r=>r.status==='pending'&&(memberIds.has((jobs.find(x=>x.id===r.jobId)||{}).owner)||r.requestedBy===tl.id));
+    const sla=computeSlaStats(teamJobs);
+    const initial=tl.name.trim().charAt(0).toUpperCase();
+    return`<div class="tov-card">
+      <div class="tov-header">
+        <div class="user-avatar user-av-tl" style="width:40px;height:40px;font-size:1.1rem;">${escapeHtml(initial)}</div>
+        <div>
+          <div class="tov-name">${escapeHtml(tl.name)} <span class="bdg bdg-tl">Team Leader</span></div>
+          <div class="tov-meta">${members.length} member${members.length!==1?'s':''} · ${tl.email?escapeHtml(tl.email):'no email'}</div>
+        </div>
+      </div>
+      <div class="tov-stats">
+        <div class="tov-stat"><span class="tov-n" style="color:var(--blue)">${active.length}</span><span class="tov-l">Active</span></div>
+        <div class="tov-stat"><span class="tov-n" style="color:${overdue.length?'var(--red)':'var(--green)'}">${overdue.length}</span><span class="tov-l">Overdue</span></div>
+        <div class="tov-stat"><span class="tov-n" style="color:var(--green)">${doneWk.length}</span><span class="tov-l">Done Wk</span></div>
+        <div class="tov-stat"><span class="tov-n" style="color:${sla.onTimePct>=70?'var(--green)':'var(--yellow)'}">${sla.onTimePct}%</span><span class="tov-l">On-Time</span></div>
+        <div class="tov-stat"><span class="tov-n" style="color:var(--yellow)">${pending}</span><span class="tov-l">Pending</span></div>
+        <div class="tov-stat"><span class="tov-n" style="color:var(--blue)">${ongoing}</span><span class="tov-l">Ongoing</span></div>
+        ${pendExt.length?`<div class="tov-stat"><span class="tov-n" style="color:var(--orange)">${pendExt.length}</span><span class="tov-l">Ext. Req</span></div>`:''}
+      </div>
+      ${members.length?`<div class="tov-members">
+        ${members.map(m=>{
+          const mJobs=jobs.filter(j=>j.owner===m.id&&j.status!=='completed');
+          const mOd=jobs.filter(j=>j.owner===m.id&&isOverdue(j)).length;
+          const col=mOd>0?'var(--red)':mJobs.length>=5?'var(--red)':mJobs.length>=3?'var(--yellow)':'var(--green)';
+          const pct=Math.min(100,Math.round(mJobs.length/6*100));
+          return`<div class="tov-member-row" style="cursor:pointer;" onclick="goHub('insights','reports');setTimeout(()=>setAnalyticsEmp('${m.id}'),200)" title="View ${escapeHtml(m.name)} analytics">
+            <span class="tov-member-name">${escapeHtml(m.name)}</span>
+            <div class="tov-load-bar"><div style="width:${Math.max(pct,2)}%;background:${col};height:100%;border-radius:2px;"></div></div>
+            <span class="tov-member-load" style="color:${col}">${mJobs.length} active${mOd?` ⚠${mOd}`:''}</span>
+          </div>`;
+        }).join('')}
+      </div>`:'<div class="tov-no-members">No team members assigned yet.</div>'}
+    </div>`;
+  }).join('')}</div>`;
+}
+window.renderTeamsOverview=renderTeamsOverview;
 
 init();
 

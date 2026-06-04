@@ -1,4 +1,4 @@
-# RMI Job Allocator v1.4 — Release Bundle TEST123
+# RMI Job Allocator v1.4 — Release Bundle
 
 This folder is intended to be a **clean, standalone “release” bundle** of your app for deploying to **Cloudflare Pages** (static hosting) while using **Firebase Authentication + Firestore** (and optionally Firebase Storage for attachments).
 

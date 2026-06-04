@@ -120,6 +120,7 @@
 
         <a class="sb-item sb-ext" data-sb="extensions-review" href="#" style="display:none;">📬 <span>Extensions</span><span id="sb-ext-badge" class="sb-badge" style="display:none;"></span></a>
         <a class="sb-item sb-lead" data-sb="analytics" href="#" style="display:none;">📊 <span>Analytics</span></a>
+        <a class="sb-item sb-manager" data-sb="teams-overview" href="#" style="display:none;">👥 <span>Teams</span></a>
         <a class="sb-item sb-manager" data-sb="adv-search" href="#" style="display:none;">🔍 <span>Search</span></a>
         <div class="sb-divider"></div>
         <a class="sb-item on" data-sb="my-jobs" href="#">📋 <span>My Jobs</span></a>
@@ -165,6 +166,14 @@
         <input id="srch" type="text" placeholder="🔍 Search jobs..." oninput="renderAll()"/>
         <div id="summary"></div>
       </div>
+
+  <!-- TEAMS OVERVIEW -->
+  <section id="teams-overview">
+    <div class="an-header">
+      <h2 style="margin:0;">👥 Teams Overview</h2>
+    </div>
+    <div id="teams-overview-root"></div>
+  </section>
 
   <!-- MANAGER DASHBOARD -->
   <section id="dashboard">
@@ -423,6 +432,7 @@
       <div class="an-controls">
         <input id="alf-q" class="log-search" type="text" placeholder="🔍 Search activity..." oninput="renderActivityLog()"/>
         <select id="alf-user" class="an-emp-select" onchange="renderActivityLog()"><option value="">All users</option></select>
+        <input id="alf-job" type="text" class="log-date" placeholder="Job #" style="width:80px;" oninput="renderActivityLog()"/>
         <input id="alf-from" type="date" class="log-date" title="From" onchange="renderActivityLog()"/>
         <input id="alf-to" type="date" class="log-date" title="To" onchange="renderActivityLog()"/>
         <button class="bp sec an-export" onclick="exportActivityLogCSV()">📥 Export</button>
