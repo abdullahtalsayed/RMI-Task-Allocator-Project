@@ -455,8 +455,9 @@ function myTeamIds(){return me?teamMemberIds(me.id):[];}
 // central visibility: which jobs current user may see
 function visibleJobs(){
   if(!me)return[];
-  if(canSeeAllJobs())return jobs;
+  // TL scope takes priority — viewAll='yes' on a TL should not expose all jobs
   if(isTeamLeader()){const ids=new Set(myTeamIds());return jobs.filter(j=>ids.has(j.owner));}
+  if(canSeeAllJobs())return jobs;
   return jobs.filter(j=>j.owner===me.id);
 }
 // can current user manage (edit/assign/reassign/extend) this job?
@@ -1515,7 +1516,7 @@ async function uDelete(id){
   if(USE_FIREBASE){await deleteDoc(doc(uCol,id));}
   else{users=users.filter(u=>u.id!==id);localSave();populateADrop();renderUList();populateCalEmpDrop();}
 }
-function empOverdueJobs(uid){return jobs.filter(j=>j.owner===uid&&isOverdue(j));}
+function empOverdueJobs(uid){return visibleJobs().filter(j=>j.owner===uid&&isOverdue(j));}
 function dateKey(ts){const ms=toMillis(ts);if(!ms)return'';const d=new Date(ms);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function jobDateEntries(j){
   const evs=[];
@@ -1526,7 +1527,7 @@ function jobDateEntries(j){
 }
 function jobsForCalendarDay(ds){
   const out=[];
-  jobs.forEach(j=>{
+  visibleJobs().forEach(j=>{
     if(calFilterEmp&&j.owner!==calFilterEmp)return;
     jobDateEntries(j).forEach(ev=>{
       if(dateKey(ev.ts)!==ds)return;
@@ -1731,27 +1732,37 @@ window.rejectExt=async function(eid){
 // ── BROADCAST ─────────────────────────────────────────────────────────────────
 window.sendBroadcast=async function(){
   const msg=document.getElementById('bcast-msg').value.trim();
-  const to=document.getElementById('bcast-to').value;
+  let to=document.getElementById('bcast-to').value;
   if(!msg){alert('Message cannot be empty.');return;}
+  // TL sends to their team — store as team:${leaderId}
+  if(to==='team'&&isTeamLeader())to=`team:${me.id}`;
   const bcast={msg,to,by:me.name,byId:me.id,created:Date.now()};
   if(USE_FIREBASE){await addDoc(bcastCol,bcast);await refreshBroadcastsRemote();}
   else{bcast.id=uid();broadcasts.unshift(bcast);localSave();renderBroadcasts();}
-  await logActivity({type:'broadcast',category:'broadcast',desc:`${me.name} sent broadcast to ${to==='all'?'everyone':to}: ${msg.slice(0,120)}${msg.length>120?'…':''}`,userId:me.id,userName:me.name,role:me.role});
+  const toLabel=to==='all'?'everyone':to==='employees'?'employees':to==='supervisors'?'supervisors':to.startsWith('team:')?'my team':to;
+  await logActivity({type:'broadcast',category:'broadcast',desc:`${me.name} sent message to ${toLabel}: ${msg.slice(0,120)}${msg.length>120?'…':''}`,userId:me.id,userName:me.name,role:me.role});
   // Push notifications
   let targets=users;
-  if(to==='employees')targets=users.filter(u=>u.role==='employee');
-  if(to==='supervisors')targets=users.filter(u=>u.role==='supervisor');
-  targets.filter(u=>u.id!==me.id).forEach(u=>pushNotif(u.id,'📢 Broadcast from '+me.name,msg));
+  if(to==='employees')targets=users.filter(u=>u.role==='employee'||u.role==='team_leader');
+  else if(to==='supervisors')targets=users.filter(u=>u.role==='supervisor');
+  else if(to.startsWith('team:')){const lid=to.slice(5);targets=users.filter(u=>u.teamLeaderId===lid||u.id===lid);}
+  targets.filter(u=>u.id!==me.id).forEach(u=>pushNotif(u.id,'📢 Message from '+me.name,msg));
   document.getElementById('bcast-msg').value='';
-  showToastMsg('Broadcast sent!');
+  showToastMsg('Message sent!');
 };
 function broadcastsForUser(u){
   if(!u)return[];
   if(u.role==='manager')return broadcasts;
   return broadcasts.filter(b=>{
     if(b.to==='all')return true;
-    if(b.to==='employees'&&u.role==='employee')return true;
+    if(b.to==='employees'&&(u.role==='employee'||u.role==='team_leader'))return true;
     if(b.to==='supervisors'&&u.role==='supervisor')return true;
+    // team-scoped: team:${leaderId}
+    if(b.to&&b.to.startsWith('team:')){
+      const leaderId=b.to.slice(5);
+      if(u.id===leaderId)return true;
+      if(u.teamLeaderId===leaderId)return true;
+    }
     return false;
   });
 }
@@ -1780,10 +1791,30 @@ function updateMsgBadge(){
 function updateBroadcastUI(){
   if(!me)return;
   const isMgr=me.role==='manager';
+  const isTL=isTeamLeader();
+  const canCompose=isMgr||isTL;
   const compose=document.getElementById('bcast-compose');
-  if(compose)compose.style.display=isMgr?'block':'none';
+  if(compose){
+    compose.style.display=canCompose?'block':'none';
+    // show team audience pill for TL, hide global audience pills
+    const allPill=document.querySelector('.msg-aud-pill[data-to="all"]');
+    const empPill=document.querySelector('.msg-aud-pill[data-to="employees"]');
+    const supPill=document.querySelector('.msg-aud-pill[data-to="supervisors"]');
+    const teamPill=document.querySelector('.msg-aud-pill[data-to="team"]');
+    if(isTL&&!isMgr){
+      if(allPill)allPill.style.display='none';
+      if(empPill)empPill.style.display='none';
+      if(supPill)supPill.style.display='none';
+      if(teamPill){teamPill.style.display='';teamPill.classList.add('on');const sel=document.getElementById('bcast-to');if(sel)sel.value='team';}
+    }else{
+      if(allPill)allPill.style.display='';
+      if(empPill)empPill.style.display='';
+      if(supPill)supPill.style.display='';
+      if(teamPill)teamPill.style.display=isMgr?'none':'';
+    }
+  }
   const hint=document.getElementById('broadcast-hint');
-  if(hint)hint.style.display=isMgr?'none':'block';
+  if(hint)hint.style.display=canCompose?'none':'block';
   const msg=document.getElementById('bcast-msg');
   if(msg&&!msg._bound){msg._bound=true;msg.addEventListener('input',()=>{const c=document.getElementById('bcast-charcount');if(c)c.textContent=msg.value.length?msg.value.length+' chars':'';});}
   updateMsgBadge();
@@ -2483,7 +2514,7 @@ function renderBoard(){
     <button class="tbl-btn" onclick="boardExpandAll(true)">Expand All</button>
     <button class="tbl-btn" onclick="boardExpandAll(false)">Collapse All</button>
   </div>`+(sorted.length?sorted.map(u=>{
-    const ej=jobs.filter(j=>j.owner===u.id);
+    const ej=bj.filter(j=>j.owner===u.id);
     const odJobs=empOverdueJobs(u.id);
     const active=ej.filter(j=>j.status!=='completed').length;
     const done=ej.filter(j=>j.status==='completed').length;
@@ -3786,6 +3817,18 @@ window.setAnalyticsRange=function(r,btn){
   renderAnalyticsContent();
 };
 window.setAnalyticsEmp=function(e){analyticsEmp=e;renderAnalyticsContent();};
+
+let analyticsView='report';
+window.setAnalyticsView=function(v,btn){
+  analyticsView=v;
+  document.querySelectorAll('.an-tab-btn').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
+  // hide range/emp controls when teams tab active (uses all-time data)
+  const rangeSel=document.getElementById('an-range');
+  const empSel=document.getElementById('an-emp');
+  if(rangeSel)rangeSel.style.display=v==='teams'?'none':'';
+  if(empSel)empSel.style.display=v==='teams'?'none':'';
+  renderAnalyticsContent();
+};
 function anPopulateEmp(){
   const sel=document.getElementById('an-emp');if(!sel)return;
   if(!canSeeAllJobs()&&!isTeamLeader()){sel.style.display='none';return;}
@@ -3816,7 +3859,6 @@ function anBars(rows,opts={}){
   }).join('')}</div>`;
 }
 function anTrendChart(points){
-  // points: [{label, value}]
   if(!points.length)return'<div class="empty" style="padding:1rem;">No completions yet.</div>';
   const max=Math.max(...points.map(p=>p.value),1);
   const W=Math.max(points.length*60,240),H=120,pad=20;
@@ -3824,15 +3866,136 @@ function anTrendChart(points){
   const xy=points.map((p,i)=>({x:pad+i*stepX,y:H-pad-(p.value/max)*(H-pad*2),...p}));
   const line=xy.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const area=`M${xy[0].x},${H-pad} `+xy.map(p=>`L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+` L${xy[xy.length-1].x},${H-pad} Z`;
-  return`<div class="an-trend"><svg viewBox="0 0 ${W} ${H+18}" width="100%" height="${H+18}" preserveAspectRatio="none" style="overflow:visible;">
+  return`<div class="an-trend"><svg viewBox="0 0 ${W} ${H+18}" width="${W}" height="${H+18}" preserveAspectRatio="xMidYMid meet" style="overflow:visible;max-width:100%;display:block;">
     <path d="${area}" fill="rgba(50,215,75,0.12)"/>
     <path d="${line}" fill="none" stroke="var(--green)" stroke-width="2" stroke-linejoin="round"/>
     ${xy.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="var(--green)"><title>${escapeHtml(p.label)}: ${p.value}</title></circle>`).join('')}
     ${xy.map(p=>`<text x="${p.x.toFixed(1)}" y="${H+10}" text-anchor="middle" class="an-trend-lbl">${escapeHtml(p.label)}</text>`).join('')}
   </svg></div>`;
 }
+function anDualLineChart(seriesA,seriesB,labelA,labelB,colorA,colorB){
+  if(!seriesA.length)return'<div class="empty" style="padding:1rem;">No data.</div>';
+  const allVals=[...seriesA,...seriesB].map(p=>p.value);
+  const max=Math.max(...allVals,1);
+  const W=Math.max(seriesA.length*60,240),H=120,pad=20;
+  const stepX=seriesA.length>1?(W-pad*2)/(seriesA.length-1):0;
+  const pts=s=>s.map((p,i)=>({x:pad+i*stepX,y:H-pad-(p.value/max)*(H-pad*2),...p}));
+  const xyA=pts(seriesA),xyB=pts(seriesB);
+  const mkLine=(xy,col)=>`<path d="${xy.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>`;
+  const mkDots=(xy,col)=>xy.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="${col}"><title>${escapeHtml(p.label)}: ${p.value}</title></circle>`).join('');
+  const legend=(col,lbl)=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;color:var(--text2);"><span style="display:inline-block;width:14px;height:2px;background:${col};border-radius:1px;"></span>${lbl}</span>`;
+  return`<div class="an-trend">
+    <div style="display:flex;gap:1rem;margin-bottom:0.4rem;">${legend(colorA,labelA)}${legend(colorB,labelB)}</div>
+    <svg viewBox="0 0 ${W} ${H+18}" width="${W}" height="${H+18}" preserveAspectRatio="xMidYMid meet" style="overflow:visible;max-width:100%;display:block;">
+      ${mkLine(xyA,colorA)}${mkLine(xyB,colorB)}
+      ${mkDots(xyA,colorA)}${mkDots(xyB,colorB)}
+      ${xyA.map(p=>`<text x="${p.x.toFixed(1)}" y="${H+10}" text-anchor="middle" class="an-trend-lbl">${escapeHtml(p.label)}</text>`).join('')}
+    </svg>
+  </div>`;
+}
+function renderTeamsAnalytics(el){
+  if(!el)return;
+  const tls=users.filter(u=>u.role==='team_leader');
+  if(!tls.length){el.innerHTML='<div class="empty" style="padding:2rem;">No team leaders yet.</div>';return;}
+  const now=new Date(),ws=new Date(now);ws.setDate(now.getDate()-now.getDay());ws.setHours(0,0,0,0);
+
+  const teamData=tls.map(tl=>{
+    const members=users.filter(u=>u.teamLeaderId===tl.id);
+    const memberIds=new Set([tl.id,...members.map(u=>u.id)]);
+    const tj=jobs.filter(j=>memberIds.has(j.owner));
+    const active=tj.filter(j=>j.status!=='completed').length;
+    const overdue=tj.filter(j=>isOverdue(j)).length;
+    const completed=tj.filter(j=>j.status==='completed').length;
+    const doneWk=tj.filter(j=>j.completed&&new Date(j.completed)>=ws).length;
+    const sla=computeSlaStats(tj);
+    const doneWithTime=tj.filter(j=>j.completed&&j.created);
+    const avgMs=doneWithTime.length?doneWithTime.reduce((s,j)=>s+(toMillis(j.completed)-toMillis(j.created)),0)/doneWithTime.length:0;
+    return{tl,members,memberIds,tj,active,overdue,completed,doneWk,sla,avgMs};
+  });
+
+  const barRow=(name,val,max,col)=>`<div class="an-bar-row"><span class="an-bar-label">${escapeHtml(name)}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(Math.round(val/max*100),val?2:0)}%;background:${col}"></div></div><span class="an-bar-val">${val}</span></div>`;
+  const maxActive=Math.max(...teamData.map(t=>t.active),1);
+  const maxDoneWk=Math.max(...teamData.map(t=>t.doneWk),1);
+  const maxCompleted=Math.max(...teamData.map(t=>t.completed),1);
+
+  // per-team member breakdown widgets
+  const teamWidgets=teamData.map(t=>{
+    const slaCol=t.sla.onTimePct>=70?'var(--green)':t.sla.onTimePct>=40?'var(--yellow)':'var(--red)';
+    const memberHtml=t.members.map(m=>{
+      const mj=jobs.filter(j=>j.owner===m.id);
+      const ma=mj.filter(j=>j.status!=='completed').length;
+      const mo=mj.filter(j=>isOverdue(j)).length;
+      const md=mj.filter(j=>j.status==='completed').length;
+      const col=mo>0?'var(--red)':ma>=5?'var(--red)':ma>=3?'var(--yellow)':'var(--green)';
+      const pct=Math.min(100,Math.round(ma/6*100));
+      return`<div class="tov-member-row" style="cursor:pointer;" onclick="setAnalyticsView('report',document.querySelector('.an-tab-btn[data-view=report]'));setTimeout(()=>setAnalyticsEmp('${m.id}'),120)" title="View ${escapeHtml(m.name)}'s report">
+        <span class="tov-member-name">${escapeHtml(m.name)}</span>
+        <div class="tov-load-bar"><div style="width:${Math.max(pct,ma?2:0)}%;background:${col};height:100%;border-radius:2px;"></div></div>
+        <span class="tov-member-load" style="color:${col}">${ma} active${mo?` ⚠${mo}`:''} · ${md} done</span>
+      </div>`;
+    }).join('');
+    return`<div class="an-widget">
+      <div class="an-widget-hd" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+        <span>🧭 ${escapeHtml(t.tl.name)}<span class="tc-muted" style="font-size:0.75rem;margin-left:0.4rem;">${t.members.length} member${t.members.length!==1?'s':''}</span></span>
+        <div style="display:flex;gap:0.6rem;font-size:0.78rem;flex-wrap:wrap;">
+          <span style="color:var(--blue)">${t.active} active</span>
+          ${t.overdue?`<span style="color:var(--red)">⚠${t.overdue} overdue</span>`:'<span style="color:var(--green)">✓ clear</span>'}
+          <span style="color:var(--green)">${t.doneWk} done wk</span>
+          <span style="color:${slaCol}">${t.sla.onTimePct}% on-time</span>
+          ${t.avgMs?`<span style="color:var(--text2)">⏱${tdiff(0,t.avgMs)} avg</span>`:''}
+        </div>
+      </div>
+      ${t.members.length
+        ?`<div class="tov-members">${memberHtml}</div>`
+        :'<div class="tov-no-members">No team members assigned.</div>'}
+    </div>`;
+  }).join('');
+
+  el.innerHTML=`
+    <div class="an-kpis">
+      ${teamData.map(t=>`<div class="an-kpi">
+        <div class="an-kpi-label">🧭 ${escapeHtml(t.tl.name)}</div>
+        <div class="an-kpi-value" style="color:var(--blue)">${t.tj.length}</div>
+        <div class="an-kpi-sub">${t.members.length} members · ${t.active} active${t.overdue?` · <span style="color:var(--red)">⚠${t.overdue}</span>`:''}</div>
+      </div>`).join('')}
+    </div>
+    <div class="an-row-2">
+      <div class="an-widget">
+        <div class="an-widget-hd">Active Jobs per Team</div>
+        <div class="an-bars">${teamData.map(t=>barRow(t.tl.name,t.active,maxActive,t.overdue>0?'var(--red)':t.active>=5?'var(--yellow)':'var(--blue)')).join('')}</div>
+      </div>
+      <div class="an-widget">
+        <div class="an-widget-hd">Overdue per Team</div>
+        <div class="an-bars">${teamData.map(t=>barRow(t.tl.name,t.overdue,Math.max(...teamData.map(x=>x.overdue),1),t.overdue>0?'var(--red)':'var(--green)')).join('')}</div>
+      </div>
+    </div>
+    <div class="an-row-2">
+      <div class="an-widget">
+        <div class="an-widget-hd">Done This Week per Team</div>
+        <div class="an-bars">${teamData.map(t=>barRow(t.tl.name,t.doneWk,maxDoneWk,'var(--green)')).join('')}</div>
+      </div>
+      <div class="an-widget">
+        <div class="an-widget-hd">On-Time Rate per Team</div>
+        <div class="an-bars">${teamData.map(t=>{
+          const col=t.sla.onTimePct>=70?'var(--green)':t.sla.onTimePct>=40?'var(--yellow)':'var(--red)';
+          return`<div class="an-bar-row"><span class="an-bar-label">${escapeHtml(t.tl.name)}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(t.sla.onTimePct,t.sla.doneWithDl?2:0)}%;background:${col}"></div></div><span class="an-bar-val">${t.sla.onTimePct}%</span></div>`;
+        }).join('')}</div>
+      </div>
+    </div>
+    <div class="an-widget">
+      <div class="an-widget-hd">Total Completed per Team</div>
+      <div class="an-bars">${teamData.map(t=>barRow(t.tl.name,t.completed,maxCompleted,'var(--purple)')).join('')}</div>
+    </div>
+    <div class="an-widget-hd" style="margin-top:1.25rem;margin-bottom:0.5rem;">👤 Member Breakdown <span class="an-hd-note">click member → their individual report</span></div>
+    ${teamWidgets}`;
+}
+
 renderAnalyticsContent=function(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
+  // show Teams tab for managers only
+  document.querySelectorAll('.sb-manager-tab').forEach(b=>b.style.display=me.role==='manager'?'':'none');
+  // teams view
+  if(analyticsView==='teams'){renderTeamsAnalytics(el);return;}
   anPopulateEmp();
   const isMgr=isLead();
   const now=Date.now();
@@ -3884,8 +4047,52 @@ renderAnalyticsContent=function(){
   }else{
     for(let i=5;i>=0;i--){const d=new Date(ref);d.setDate(ref.getDate()-i*7);d.setHours(0,0,0,0);const wk=new Date(d);wk.setDate(d.getDate()-d.getDay());buckets.push({label:wk.toLocaleString('en-GB',{day:'numeric',month:'short'}),start:wk.getTime(),end:wk.getTime()+7*864e5});}
   }
-  const scopeForTrend=canSeeAllJobs()?(analyticsEmp?jobs.filter(j=>j.owner===analyticsEmp):jobs):jobs.filter(j=>j.owner===me.id);
+  const scopeForTrend=analyticsEmp?visibleJobs().filter(j=>j.owner===analyticsEmp):visibleJobs();
   const trendPts=buckets.map(b=>({label:b.label,value:scopeForTrend.filter(j=>j.completed&&toMillis(j.completed)>=b.start&&toMillis(j.completed)<b.end).length}));
+  const createdPts=buckets.map(b=>({label:b.label,value:scopeForTrend.filter(j=>toMillis(j.created)>=b.start&&toMillis(j.created)<b.end).length}));
+
+  // job age buckets (active jobs only)
+  const nowMs=Date.now();
+  const activeJobs=scope.filter(j=>j.status!=='completed');
+  const ageGroups=[
+    {label:'0–3 days',min:0,max:3*864e5,color:'var(--green)'},
+    {label:'3–7 days',min:3*864e5,max:7*864e5,color:'var(--yellow)'},
+    {label:'1–2 weeks',min:7*864e5,max:14*864e5,color:'var(--orange)'},
+    {label:'2+ weeks',min:14*864e5,max:Infinity,color:'var(--red)'},
+  ];
+  const ageRows=ageGroups.map(g=>{const c=activeJobs.filter(j=>{const age=nowMs-toMillis(j.created);return age>=g.min&&age<g.max;}).length;return{label:g.label,value:c,color:g.color};});
+
+  // oldest active jobs list
+  const oldestActive=[...activeJobs].sort((a,b)=>toMillis(a.created)-toMillis(b.created)).slice(0,8);
+
+  // priority vs actual urgency (overdue rate per priority)
+  const priUrgency=['High','Medium','Low'].map(p=>{
+    const pj=scope.filter(j=>j.priority===p&&j.status!=='completed');
+    const od=pj.filter(j=>isOverdue(j)).length;
+    return{label:p,overdueCount:od,active:pj.length,pct:pj.length?Math.round(od/pj.length*100):0,color:PRIORITY_CHART_COLORS[p]};
+  }).filter(r=>r.active>0);
+
+  // deadline extension rate
+  const jobsWithDl=scope.filter(j=>j.deadline);
+  const jobIdsWithExt=new Set(extRequests.filter(r=>scope.some(j=>j.id===r.jobId)).map(r=>r.jobId));
+  const extRate=jobsWithDl.length?Math.round(jobIdsWithExt.size/jobsWithDl.length*100):0;
+  const extApproved=extRequests.filter(r=>r.status==='approved'&&scope.some(j=>j.id===r.jobId)).length;
+  const extRejected=extRequests.filter(r=>r.status==='rejected'&&scope.some(j=>j.id===r.jobId)).length;
+  const extPending=extRequests.filter(r=>r.status==='pending'&&scope.some(j=>j.id===r.jobId)).length;
+
+  // peak workload days
+  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const createdByDay=Array(7).fill(0),completedByDay=Array(7).fill(0);
+  scope.forEach(j=>{
+    if(j.created)createdByDay[new Date(toMillis(j.created)).getDay()]++;
+    if(j.completed)completedByDay[new Date(toMillis(j.completed)).getDay()]++;
+  });
+  const maxDay=Math.max(...createdByDay,...completedByDay,1);
+
+  // reassignment frequency from activity logs
+  const reassignMap={};
+  activityLogs.filter(e=>e.type==='reassigned'&&e.jobId).forEach(e=>{reassignMap[e.jobId]=(reassignMap[e.jobId]||0)+1;});
+  const topReassigned=Object.entries(reassignMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([id,cnt])=>{const j=jobs.find(x=>x.id===id);return{label:j?`${j.client} #${j.jobNum}`:id,value:cnt,color:'var(--purple)'};});
 
   // throughput by employee (leads with team view)
   let throughputHtml='';
@@ -3938,18 +4145,74 @@ renderAnalyticsContent=function(){
       </div>`).join('')}</div></div>`;
   }
 
+  // peak workload days HTML (inline to avoid repetition)
+  const dayBarRow=(name,cre,com,max)=>`<div class="an-day-row">
+    <span class="an-day-lbl">${name}</span>
+    <div class="an-day-bars">
+      <div class="an-day-bar" style="width:${Math.max(Math.round(cre/max*100),cre?2:0)}%;background:var(--blue);" title="Created: ${cre}"></div>
+      <div class="an-day-bar" style="width:${Math.max(Math.round(com/max*100),com?2:0)}%;background:var(--green);" title="Completed: ${com}"></div>
+    </div>
+    <span class="an-day-vals">${cre} / ${com}</span>
+  </div>`;
+
   el.innerHTML=`
   <div class="an-kpis">
     ${kpis.map(k=>`<div class="an-kpi"><div class="an-kpi-label">${k.label}</div><div class="an-kpi-value" style="color:${k.color}">${k.value}</div><div class="an-kpi-sub">${k.sub}</div></div>`).join('')}
   </div>
+
   <div class="an-row-2">
     <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
     <div class="an-widget"><div class="an-widget-hd">Jobs by Type</div>${anBars(typeRows)}</div>
   </div>
-  <div class="an-widget"><div class="an-widget-hd">Completion Trend <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anTrendChart(trendPts)}</div>
-  ${priRows.length?`<div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>`:''}
-  ${throughputHtml}
-  ${turnHtml}
+
+  <div class="an-row-2">
+    <div class="an-widget"><div class="an-widget-hd">Created vs Completed <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anDualLineChart(createdPts,trendPts,'Created','Completed','var(--blue)','var(--green)')}</div>
+    ${priRows.length?`<div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>`:''}
+  </div>
+
+  <div class="an-row-2">
+    <div class="an-widget">
+      <div class="an-widget-hd">Job Age <span class="an-hd-note">active jobs by how long open</span></div>
+      ${anBars(ageRows)}
+      ${oldestActive.length?`<div class="an-hd-note" style="margin-top:0.75rem;margin-bottom:0.35rem;">Oldest active jobs</div>
+      ${oldestActive.map(j=>{const age=nowMs-toMillis(j.created);const col=age>14*864e5?'var(--red)':age>7*864e5?'var(--orange)':'var(--text2)';const own=users.find(u=>u.id===j.owner)?.name||'?';return`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(j.client)} <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></span><span class="an-turn-time" style="color:${col}">${tdiff(0,age)}</span><span class="an-turn-n">${escapeHtml(own)}</span></div>`;}).join('')}`:''}
+    </div>
+    <div class="an-widget">
+      <div class="an-widget-hd">Priority vs Actual Urgency <span class="an-hd-note">% overdue per priority</span></div>
+      ${priUrgency.map(p=>`<div class="an-bar-row">
+        <span class="an-bar-label">${p.label}</span>
+        <div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(p.pct,p.overdueCount?2:0)}%;background:${p.color}"></div></div>
+        <span class="an-bar-val">${p.pct}% <span class="tc-muted">${p.overdueCount}/${p.active}</span></span>
+      </div>`).join('')}
+      ${priUrgency.every(p=>p.pct===0)?'<div class="empty" style="padding:0.5rem;">No overdue jobs 🎉</div>':''}
+    </div>
+  </div>
+
+  <div class="an-row-2">
+    <div class="an-widget">
+      <div class="an-widget-hd">Peak Workload Days <span class="an-hd-note" style="display:inline-flex;gap:0.5rem;"><span style="color:var(--blue)">■ created</span><span style="color:var(--green)">■ completed</span></span></div>
+      <div class="an-day-chart">${dayNames.map((d,i)=>dayBarRow(d,createdByDay[i],completedByDay[i],maxDay)).join('')}</div>
+    </div>
+    <div class="an-widget">
+      <div class="an-widget-hd">Deadline Extension Rate</div>
+      <div style="text-align:center;padding:0.75rem 0;">
+        <div style="font-size:2.2rem;font-weight:700;font-family:var(--mono);color:${extRate>=30?'var(--red)':extRate>=15?'var(--yellow)':'var(--green)'}">${extRate}%</div>
+        <div style="color:var(--text2);font-size:0.78rem;margin-top:0.25rem;">${jobIdsWithExt.size} of ${jobsWithDl.length} jobs with deadlines requested extensions</div>
+      </div>
+      <div class="an-bars" style="margin-top:0.5rem;">
+        ${anBars([
+          {label:'Approved',value:extApproved,color:'var(--green)'},
+          {label:'Rejected',value:extRejected,color:'var(--red)'},
+          {label:'Pending',value:extPending,color:'var(--yellow)'},
+        ].filter(r=>r.value>0))}
+      </div>
+    </div>
+  </div>
+
+  ${throughputHtml&&turnHtml?`<div class="an-row-2">${throughputHtml}${turnHtml}</div>`:throughputHtml||turnHtml}
+
+  ${topReassigned.length?`<div class="an-widget"><div class="an-widget-hd">Most Reassigned Jobs <span class="an-hd-note">times reassigned</span></div>${anBars(topReassigned)}</div>`:''}
+
   ${perfHtml}`;
 }
 
@@ -4023,52 +4286,179 @@ function renderTeamsOverview(){
   if(!me||me.role!=='manager'){root.innerHTML='<div class="empty" style="padding:2rem;">Manager access only.</div>';return;}
   const tls=users.filter(u=>u.role==='team_leader');
   if(!tls.length){root.innerHTML='<div class="empty" style="padding:2rem;">No team leaders yet. Add team leaders in Manage Users.</div>';return;}
-  const now=new Date(),ws=new Date(now);ws.setDate(now.getDate()-now.getDay());ws.setHours(0,0,0,0);
-  root.innerHTML=`<div class="tov-grid">${tls.map(tl=>{
-    const memberIds=new Set(users.filter(u=>u.teamLeaderId===tl.id).map(u=>u.id));
+
+  const nowD=new Date(),ws=new Date(nowD);ws.setDate(nowD.getDate()-nowD.getDay());ws.setHours(0,0,0,0);
+  const nowMs=Date.now();
+
+  // build data per team
+  const teams=tls.map(tl=>{
     const members=users.filter(u=>u.teamLeaderId===tl.id);
-    const teamJobs=jobs.filter(j=>memberIds.has(j.owner)||j.owner===tl.id);
-    const active=teamJobs.filter(j=>j.status!=='completed');
-    const overdue=teamJobs.filter(j=>isOverdue(j));
-    const doneWk=teamJobs.filter(j=>j.completed&&new Date(j.completed)>=ws);
-    const pending=teamJobs.filter(j=>j.status==='pending').length;
-    const ongoing=teamJobs.filter(j=>j.status==='ongoing').length;
-    const paused=teamJobs.filter(j=>j.status==='paused').length;
-    const pendExt=extRequests.filter(r=>r.status==='pending'&&(memberIds.has((jobs.find(x=>x.id===r.jobId)||{}).owner)||r.requestedBy===tl.id));
-    const sla=computeSlaStats(teamJobs);
-    const initial=tl.name.trim().charAt(0).toUpperCase();
-    return`<div class="tov-card">
-      <div class="tov-header">
-        <div class="user-avatar user-av-tl" style="width:40px;height:40px;font-size:1.1rem;">${escapeHtml(initial)}</div>
-        <div>
-          <div class="tov-name">${escapeHtml(tl.name)} <span class="bdg bdg-tl">Team Leader</span></div>
-          <div class="tov-meta">${members.length} member${members.length!==1?'s':''} · ${tl.email?escapeHtml(tl.email):'no email'}</div>
+    const memberIds=new Set([tl.id,...members.map(u=>u.id)]);
+    const tj=jobs.filter(j=>memberIds.has(j.owner));
+    const active=tj.filter(j=>j.status!=='completed');
+    const overdueJobs=tj.filter(j=>isOverdue(j));
+    const doneWk=tj.filter(j=>j.completed&&new Date(j.completed)>=ws);
+    const pending=tj.filter(j=>j.status==='pending').length;
+    const ongoing=tj.filter(j=>j.status==='ongoing').length;
+    const paused=tj.filter(j=>j.status==='paused').length;
+    const completed=tj.filter(j=>j.status==='completed').length;
+    const pendExt=extRequests.filter(r=>r.status==='pending'&&memberIds.has((jobs.find(x=>x.id===r.jobId)||{}).owner));
+    const sla=computeSlaStats(tj);
+    const doneWithTime=tj.filter(j=>j.completed&&j.created);
+    const avgMs=doneWithTime.length?doneWithTime.reduce((s,j)=>s+(toMillis(j.completed)-toMillis(j.created)),0)/doneWithTime.length:0;
+    // health score 0-100
+    const health=Math.max(0,Math.round(100-(overdueJobs.length/Math.max(active.length,1))*60-(pendExt.length*5)));
+    return{tl,members,memberIds,tj,active,overdueJobs,doneWk,pending,ongoing,paused,completed,pendExt,sla,avgMs,health};
+  });
+
+  // global summary
+  const totalMembers=teams.reduce((s,t)=>s+t.members.length,0);
+  const totalActive=teams.reduce((s,t)=>s+t.active.length,0);
+  const totalOverdue=teams.reduce((s,t)=>s+t.overdueJobs.length,0);
+  const totalDoneWk=teams.reduce((s,t)=>s+t.doneWk.length,0);
+  const totalExt=teams.reduce((s,t)=>s+t.pendExt.length,0);
+
+  // comparison bar helper
+  const maxActive=Math.max(...teams.map(t=>t.active.length),1);
+  const cmpBar=(t,val,max,col)=>`<div class="tov-cmp-row">
+    <span class="tov-cmp-lbl">${escapeHtml(t.tl.name)}</span>
+    <div class="tov-cmp-track"><div class="tov-cmp-fill" style="width:${Math.max(Math.round(val/max*100),val?3:0)}%;background:${col};"></div></div>
+    <span class="tov-cmp-val">${val}</span>
+  </div>`;
+
+  // per-team card
+  const teamCards=teams.map(t=>{
+    const healthCol=t.health>=70?'var(--green)':t.health>=40?'var(--yellow)':'var(--red)';
+    const healthLabel=t.health>=70?'Healthy':t.health>=40?'At Risk':'Needs Attention';
+
+    // member rows with full detail
+    const memberRows=t.members.map(m=>{
+      const mj=jobs.filter(j=>j.owner===m.id&&j.status!=='completed');
+      const mOd=jobs.filter(j=>j.owner===m.id&&isOverdue(j));
+      const mDone=jobs.filter(j=>j.owner===m.id&&j.status==='completed').length;
+      const col=mOd.length?'var(--red)':mj.length>=5?'var(--red)':mj.length>=3?'var(--yellow)':'var(--green)';
+      const pct=Math.min(100,Math.round(mj.length/6*100));
+      const statusDots=[
+        mj.filter(j=>j.status==='ongoing').length?`<span style="color:var(--blue)">${mj.filter(j=>j.status==='ongoing').length} ongoing</span>`:'',
+        mj.filter(j=>j.status==='pending').length?`<span style="color:var(--yellow)">${mj.filter(j=>j.status==='pending').length} pending</span>`:'',
+        mOd.length?`<span style="color:var(--red)">⚠${mOd.length} overdue</span>`:'',
+      ].filter(Boolean).join(' · ');
+      return`<div class="tov-member-row" onclick="goHub('insights','reports');setTimeout(()=>setAnalyticsEmp('${m.id}'),200)" title="View ${escapeHtml(m.name)}'s analytics">
+        <div class="tov-member-info">
+          <span class="tov-member-name">${escapeHtml(m.name)}</span>
+          <span class="tov-member-status">${statusDots||`<span style="color:var(--text3)">${mDone} done · no active jobs</span>`}</span>
+        </div>
+        <div class="tov-load-bar"><div style="width:${Math.max(pct,mj.length?3:0)}%;background:${col};height:100%;border-radius:2px;transition:width 0.3s;"></div></div>
+        <span class="tov-member-load" style="color:${col}">${mj.length}</span>
+      </div>`;
+    }).join('');
+
+    // overdue jobs list
+    const odHtml=t.overdueJobs.slice(0,4).map(j=>{
+      const own=users.find(u=>u.id===j.owner)?.name||'?';
+      const age=nowMs-toMillis(j.created);
+      return`<div class="tov-od-row">
+        <span class="tov-od-dot"></span>
+        <div class="tov-od-info"><span class="tov-od-client">${escapeHtml(j.client)}</span><span class="tc-muted"> #${escapeHtml(j.jobNum)}</span>
+          <span class="tov-od-meta"> · ${escapeHtml(own)} · ${j.deadline?'due '+fmtShort(j.deadline):'no deadline'}</span>
+        </div>
+        <button class="tbl-btn tbl-btn-ghost" style="font-size:0.7rem;padding:0.1rem 0.4rem;" onclick="openJobDetail('${j.id}')">View</button>
+      </div>`;
+    }).join('');
+
+    // pending extensions
+    const extHtml=t.pendExt.slice(0,3).map(r=>`<div class="tov-ext-row">
+      <span>${escapeHtml(r.client)} <span class="tc-muted">#${escapeHtml(String(r.jobNum))}</span> · ${escapeHtml(r.requestedByName)}</span>
+      <div style="display:flex;gap:0.3rem;">
+        <button class="bp" style="font-size:0.7rem;padding:0.15rem 0.5rem;" onclick="approveExt('${r.id}')">✓</button>
+        <button class="bp sec" style="font-size:0.7rem;padding:0.15rem 0.5rem;" onclick="rejectExt('${r.id}')">✕</button>
+      </div>
+    </div>`).join('');
+
+    return`<div class="tov-card-full">
+      <!-- header -->
+      <div class="tov-card-header">
+        <div class="tov-card-title-row">
+          <div class="user-avatar user-av-tl" style="width:42px;height:42px;font-size:1.15rem;flex-shrink:0;">${escapeHtml(t.tl.name.trim().charAt(0).toUpperCase())}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:1rem;font-weight:600;">${escapeHtml(t.tl.name)} <span class="bdg bdg-tl">TL</span></div>
+            <div style="font-size:0.75rem;color:var(--text2);margin-top:2px;">${t.members.length} member${t.members.length!==1?'s':''} · ${t.tj.length} total jobs${t.avgMs?` · ⏱ avg ${tdiff(0,t.avgMs)}`:''}</div>
+          </div>
+          <div class="tov-health-pill" style="background:${healthCol}22;color:${healthCol};border:1px solid ${healthCol}55;">${healthLabel}</div>
+        </div>
+        <!-- kpi row -->
+        <div class="tov-kpi-row">
+          <div class="tov-kpi"><span style="color:var(--blue)">${t.active.length}</span><span>Active</span></div>
+          <div class="tov-kpi"><span style="color:${t.overdueJobs.length?'var(--red)':'var(--green)'}">${t.overdueJobs.length}</span><span>Overdue</span></div>
+          <div class="tov-kpi"><span style="color:var(--green)">${t.doneWk.length}</span><span>Done Wk</span></div>
+          <div class="tov-kpi"><span style="color:var(--yellow)">${t.pending}</span><span>Pending</span></div>
+          <div class="tov-kpi"><span style="color:var(--blue)">${t.ongoing}</span><span>Ongoing</span></div>
+          <div class="tov-kpi"><span style="color:${t.sla.onTimePct>=70?'var(--green)':'var(--yellow)'}">${t.sla.onTimePct}%</span><span>On-Time</span></div>
+          <div class="tov-kpi"><span style="color:var(--green)">${t.completed}</span><span>Done Total</span></div>
+          ${t.pendExt.length?`<div class="tov-kpi"><span style="color:var(--orange)">${t.pendExt.length}</span><span>Ext. Req</span></div>`:''}
         </div>
       </div>
-      <div class="tov-stats">
-        <div class="tov-stat"><span class="tov-n" style="color:var(--blue)">${active.length}</span><span class="tov-l">Active</span></div>
-        <div class="tov-stat"><span class="tov-n" style="color:${overdue.length?'var(--red)':'var(--green)'}">${overdue.length}</span><span class="tov-l">Overdue</span></div>
-        <div class="tov-stat"><span class="tov-n" style="color:var(--green)">${doneWk.length}</span><span class="tov-l">Done Wk</span></div>
-        <div class="tov-stat"><span class="tov-n" style="color:${sla.onTimePct>=70?'var(--green)':'var(--yellow)'}">${sla.onTimePct}%</span><span class="tov-l">On-Time</span></div>
-        <div class="tov-stat"><span class="tov-n" style="color:var(--yellow)">${pending}</span><span class="tov-l">Pending</span></div>
-        <div class="tov-stat"><span class="tov-n" style="color:var(--blue)">${ongoing}</span><span class="tov-l">Ongoing</span></div>
-        ${pendExt.length?`<div class="tov-stat"><span class="tov-n" style="color:var(--orange)">${pendExt.length}</span><span class="tov-l">Ext. Req</span></div>`:''}
+      <!-- body: members + issues -->
+      <div class="tov-card-body">
+        <div class="tov-section">
+          <div class="tov-section-hd">👤 Team Members</div>
+          ${t.members.length?`<div class="tov-members">${memberRows}</div>`:'<div class="tov-no-members">No members assigned.</div>'}
+        </div>
+        ${t.overdueJobs.length?`<div class="tov-section">
+          <div class="tov-section-hd" style="color:var(--red);">⚠ Overdue Jobs (${t.overdueJobs.length})</div>
+          ${odHtml}
+          ${t.overdueJobs.length>4?`<div style="font-size:0.72rem;color:var(--text2);margin-top:0.35rem;">+${t.overdueJobs.length-4} more</div>`:''}
+        </div>`:''}
+        ${t.pendExt.length?`<div class="tov-section">
+          <div class="tov-section-hd" style="color:var(--orange);">📬 Pending Extensions (${t.pendExt.length})</div>
+          ${extHtml}
+        </div>`:''}
       </div>
-      ${members.length?`<div class="tov-members">
-        ${members.map(m=>{
-          const mJobs=jobs.filter(j=>j.owner===m.id&&j.status!=='completed');
-          const mOd=jobs.filter(j=>j.owner===m.id&&isOverdue(j)).length;
-          const col=mOd>0?'var(--red)':mJobs.length>=5?'var(--red)':mJobs.length>=3?'var(--yellow)':'var(--green)';
-          const pct=Math.min(100,Math.round(mJobs.length/6*100));
-          return`<div class="tov-member-row" style="cursor:pointer;" onclick="goHub('insights','reports');setTimeout(()=>setAnalyticsEmp('${m.id}'),200)" title="View ${escapeHtml(m.name)} analytics">
-            <span class="tov-member-name">${escapeHtml(m.name)}</span>
-            <div class="tov-load-bar"><div style="width:${Math.max(pct,2)}%;background:${col};height:100%;border-radius:2px;"></div></div>
-            <span class="tov-member-load" style="color:${col}">${mJobs.length} active${mOd?` ⚠${mOd}`:''}</span>
-          </div>`;
-        }).join('')}
-      </div>`:'<div class="tov-no-members">No team members assigned yet.</div>'}
+      <!-- footer -->
+      <div class="tov-card-foot">
+        <button class="bp sec" style="font-size:0.75rem;" onclick="goHub('insights','reports');setTimeout(()=>setAnalyticsView('teams',document.querySelector('.an-tab-btn[data-view=teams]')),200)">📊 Team Analytics</button>
+        <button class="bp sec" style="font-size:0.75rem;" onclick="goHub('team','board')">📋 Board</button>
+      </div>
     </div>`;
-  }).join('')}</div>`;
+  }).join('');
+
+  // comparison section
+  const maxOd=Math.max(...teams.map(t=>t.overdueJobs.length),1);
+  const maxDone=Math.max(...teams.map(t=>t.doneWk.length),1);
+
+  root.innerHTML=`
+    <!-- global summary bar -->
+    <div class="tov-summary-bar">
+      <div class="tov-sum-item"><span class="tov-sum-n">${tls.length}</span><span class="tov-sum-l">Teams</span></div>
+      <div class="tov-sum-item"><span class="tov-sum-n">${totalMembers}</span><span class="tov-sum-l">Members</span></div>
+      <div class="tov-sum-item"><span class="tov-sum-n" style="color:var(--blue)">${totalActive}</span><span class="tov-sum-l">Active Jobs</span></div>
+      <div class="tov-sum-item"><span class="tov-sum-n" style="color:${totalOverdue?'var(--red)':'var(--green)'}">${totalOverdue}</span><span class="tov-sum-l">Overdue</span></div>
+      <div class="tov-sum-item"><span class="tov-sum-n" style="color:var(--green)">${totalDoneWk}</span><span class="tov-sum-l">Done This Week</span></div>
+      ${totalExt?`<div class="tov-sum-item"><span class="tov-sum-n" style="color:var(--orange)">${totalExt}</span><span class="tov-sum-l">Ext. Requests</span></div>`:''}
+    </div>
+
+    <!-- comparison mini-charts -->
+    <div class="tov-compare-row">
+      <div class="tov-compare-card">
+        <div class="tov-compare-hd">Active Load</div>
+        ${teams.map(t=>cmpBar(t,t.active.length,maxActive,t.overdueJobs.length?'var(--red)':t.active.length>=5?'var(--yellow)':'var(--blue)')).join('')}
+      </div>
+      <div class="tov-compare-card">
+        <div class="tov-compare-hd">Overdue</div>
+        ${teams.map(t=>cmpBar(t,t.overdueJobs.length,maxOd,t.overdueJobs.length?'var(--red)':'var(--green)')).join('')}
+      </div>
+      <div class="tov-compare-card">
+        <div class="tov-compare-hd">Done This Week</div>
+        ${teams.map(t=>cmpBar(t,t.doneWk.length,maxDone,'var(--green)')).join('')}
+      </div>
+      <div class="tov-compare-card">
+        <div class="tov-compare-hd">On-Time Rate</div>
+        ${teams.map(t=>{const col=t.sla.onTimePct>=70?'var(--green)':t.sla.onTimePct>=40?'var(--yellow)':'var(--red)';return`<div class="tov-cmp-row"><span class="tov-cmp-lbl">${escapeHtml(t.tl.name)}</span><div class="tov-cmp-track"><div class="tov-cmp-fill" style="width:${Math.max(t.sla.onTimePct,t.sla.doneWithDl?3:0)}%;background:${col};"></div></div><span class="tov-cmp-val">${t.sla.onTimePct}%</span></div>`;}).join('')}
+      </div>
+    </div>
+
+    <!-- per-team cards -->
+    <div class="tov-cards-grid">${teamCards}</div>`;
 }
 window.renderTeamsOverview=renderTeamsOverview;
 

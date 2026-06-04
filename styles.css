@@ -1550,25 +1550,72 @@ textarea.af-input{resize:vertical;min-height:72px;}
   #sb-overlay{display:none!important;}
 }
 
+/* ── ANALYTICS TABS ──────────────────────────────────────────────────────── */
+.an-tabs{display:flex;gap:0.35rem;margin:0.75rem 0 0.25rem;border-bottom:1px solid var(--border);padding-bottom:0;}
+.an-tab-btn{padding:0.45rem 1rem;background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);font-size:0.83rem;font-weight:500;cursor:pointer;border-radius:6px 6px 0 0;transition:all 0.15s;margin-bottom:-1px;}
+.an-tab-btn:hover{color:var(--text);background:var(--hover);}
+.an-tab-btn.on{color:var(--text);border-bottom-color:var(--red);background:rgba(255,92,92,0.07);}
+
+/* ── PEAK WORKLOAD DAY CHART ─────────────────────────────────────────────── */
+.an-day-chart{display:flex;flex-direction:column;gap:0.4rem;}
+.an-day-row{display:flex;align-items:center;gap:0.5rem;}
+.an-day-lbl{font-size:0.78rem;color:var(--text2);width:28px;flex-shrink:0;}
+.an-day-bars{flex:1;display:flex;flex-direction:column;gap:2px;}
+.an-day-bar{height:7px;border-radius:3px;min-width:2px;transition:width 0.3s;}
+.an-day-vals{font-size:0.72rem;color:var(--text3);white-space:nowrap;min-width:36px;text-align:right;font-family:var(--mono);}
+
 /* ── JOBS SEARCH CHIP ────────────────────────────────────────────────────── */
 .jobs-search-chip{display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem 0.2rem 0.6rem;background:rgba(74,158,218,0.15);border:1px solid rgba(74,158,218,0.35);border-radius:20px;font-size:0.72rem;color:var(--blue);margin-left:0.5rem;}
 .jobs-search-chip button{background:none;border:none;cursor:pointer;color:var(--blue);font-size:0.9rem;padding:0;line-height:1;opacity:0.7;}
 .jobs-search-chip button:hover{opacity:1;}
 
 /* ── TEAMS OVERVIEW ──────────────────────────────────────────────────────── */
-.tov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;margin-top:1rem;}
-.tov-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.25rem;display:flex;flex-direction:column;gap:0.85rem;}
-.tov-header{display:flex;align-items:center;gap:0.75rem;}
-.tov-name{font-size:0.95rem;font-weight:600;color:var(--text);}
-.tov-meta{font-size:0.75rem;color:var(--text2);margin-top:2px;}
-.tov-stats{display:flex;flex-wrap:wrap;gap:0.5rem;}
-.tov-stat{display:flex;flex-direction:column;align-items:center;background:var(--bg2);border-radius:8px;padding:0.35rem 0.6rem;min-width:52px;}
-.tov-n{font-size:1.15rem;font-weight:700;font-family:var(--mono);line-height:1.1;}
-.tov-l{font-size:0.62rem;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-top:1px;}
-.tov-members{display:flex;flex-direction:column;gap:0.4rem;border-top:1px solid var(--border);padding-top:0.75rem;}
-.tov-member-row{display:flex;align-items:center;gap:0.5rem;padding:0.2rem 0.3rem;border-radius:6px;transition:background 0.15s;}
+/* summary bar */
+.tov-summary-bar{display:flex;gap:0.75rem;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1rem 1.25rem;margin-bottom:1rem;}
+.tov-sum-item{display:flex;flex-direction:column;align-items:center;min-width:70px;}
+.tov-sum-n{font-size:1.5rem;font-weight:700;font-family:var(--mono);line-height:1;}
+.tov-sum-l{font-size:0.68rem;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-top:3px;}
+/* comparison row */
+.tov-compare-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem;margin-bottom:1rem;}
+.tov-compare-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:0.9rem 1rem;}
+.tov-compare-hd{font-size:0.78rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:0.6rem;}
+.tov-cmp-row{display:flex;align-items:center;gap:0.4rem;margin-bottom:0.35rem;}
+.tov-cmp-lbl{font-size:0.75rem;color:var(--text);min-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tov-cmp-track{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;}
+.tov-cmp-fill{height:100%;border-radius:4px;transition:width 0.3s;}
+.tov-cmp-val{font-size:0.72rem;font-family:var(--mono);color:var(--text2);min-width:28px;text-align:right;}
+/* cards grid */
+.tov-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:1rem;}
+.tov-card-full{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);display:flex;flex-direction:column;overflow:hidden;}
+.tov-card-header{padding:1.1rem 1.25rem 0.75rem;border-bottom:1px solid var(--border);}
+.tov-card-title-row{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.85rem;}
+.tov-health-pill{font-size:0.7rem;font-weight:600;padding:0.2rem 0.55rem;border-radius:20px;white-space:nowrap;}
+.tov-kpi-row{display:flex;gap:0.5rem;flex-wrap:wrap;}
+.tov-kpi{display:flex;flex-direction:column;align-items:center;background:var(--bg2);border-radius:8px;padding:0.3rem 0.55rem;min-width:50px;}
+.tov-kpi span:first-child{font-size:1.1rem;font-weight:700;font-family:var(--mono);line-height:1.1;}
+.tov-kpi span:last-child{font-size:0.6rem;color:var(--text2);text-transform:uppercase;letter-spacing:.03em;margin-top:2px;}
+.tov-card-body{padding:0.85rem 1.25rem;display:flex;flex-direction:column;gap:0.85rem;flex:1;}
+.tov-section-hd{font-size:0.75rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:0.45rem;}
+/* members */
+.tov-members{display:flex;flex-direction:column;gap:0.3rem;}
+.tov-member-row{display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0.35rem;border-radius:6px;cursor:pointer;transition:background 0.12s;}
 .tov-member-row:hover{background:var(--hover);}
-.tov-member-name{font-size:0.8rem;color:var(--text);min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tov-member-info{display:flex;flex-direction:column;min-width:0;flex:0 0 140px;}
+.tov-member-name{font-size:0.8rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tov-member-status{font-size:0.68rem;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tov-load-bar{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
-.tov-member-load{font-size:0.72rem;color:var(--text2);white-space:nowrap;min-width:70px;text-align:right;}
-.tov-no-members{font-size:0.78rem;color:var(--text2);font-style:italic;padding-top:0.5rem;border-top:1px solid var(--border);}
+.tov-member-load{font-size:0.78rem;font-family:var(--mono);min-width:18px;text-align:right;}
+/* overdue & ext rows */
+.tov-od-row{display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0;border-bottom:1px solid var(--border2,var(--border));}
+.tov-od-row:last-child{border-bottom:none;}
+.tov-od-dot{width:6px;height:6px;border-radius:50%;background:var(--red);flex-shrink:0;}
+.tov-od-info{flex:1;font-size:0.78rem;min-width:0;overflow:hidden;}
+.tov-od-client{font-weight:500;}
+.tov-od-meta{color:var(--text2);}
+.tov-ext-row{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.3rem 0;font-size:0.78rem;border-bottom:1px solid var(--border2,var(--border));}
+.tov-ext-row:last-child{border-bottom:none;}
+/* footer */
+.tov-card-foot{padding:0.65rem 1.25rem;border-top:1px solid var(--border);display:flex;gap:0.5rem;}
+.tov-no-members{font-size:0.78rem;color:var(--text2);font-style:italic;}
+/* compat aliases kept for teams analytics tab */
+.tov-section{display:flex;flex-direction:column;}

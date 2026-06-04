@@ -362,6 +362,10 @@
         <button type="button" class="bp sec an-export" onclick="exportWeeklyReport()">📥 Export</button>
       </div>
     </div>
+    <div class="an-tabs" id="an-tabs">
+      <button class="an-tab-btn on" data-view="report" onclick="setAnalyticsView('report',this)">📈 Report</button>
+      <button class="an-tab-btn sb-manager-tab" data-view="teams" onclick="setAnalyticsView('teams',this)" style="display:none;">👥 Teams</button>
+    </div>
     <div id="analytics-content"></div>
   </section>
 
@@ -401,8 +405,9 @@
         <button class="msg-aud-pill on" data-to="all" onclick="setBcastAudience('all',this)">👥 Everyone</button>
         <button class="msg-aud-pill" data-to="employees" onclick="setBcastAudience('employees',this)">👤 Employees</button>
         <button class="msg-aud-pill" data-to="supervisors" onclick="setBcastAudience('supervisors',this)">🔰 Supervisors</button>
+        <button class="msg-aud-pill" data-to="team" onclick="setBcastAudience('team',this)" style="display:none;">🧭 My Team</button>
       </div>
-      <select id="bcast-to" style="display:none;"><option value="all"></option><option value="employees"></option><option value="supervisors"></option></select>
+      <select id="bcast-to" style="display:none;"><option value="all"></option><option value="employees"></option><option value="supervisors"></option><option value="team"></option></select>
       <textarea id="bcast-msg" class="msg-textarea" placeholder="Write an announcement to your team..."></textarea>
       <div class="msg-compose-foot">
         <span id="bcast-charcount" class="msg-charcount"></span>
