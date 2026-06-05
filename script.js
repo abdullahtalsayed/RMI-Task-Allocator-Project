@@ -3595,8 +3595,7 @@ async function notifyMentions(text,job,ctx){
   for(const uid of ids){
     const u=users.find(x=>x.id===uid);
     if(!u||uid===me?.id)continue;
-    if(u.role==='supervisor'||u.role==='manager')
-      await pushNotif(uid,'💬 Mentioned',`${me.name} mentioned you on ${label}: ${ctx.slice(0,80)}`);
+    await pushNotif(uid,'💬 Mentioned',`${me.name} mentioned you on ${label}: ${ctx.slice(0,80)}`);
   }
 }
 
@@ -3672,6 +3671,26 @@ window.exportWeeklyReport=function(){
   if(isManager())logAudit('report_export',`${me.name} downloaded weekly CSV`);
   showToastMsg('Weekly report downloaded.');
 };
+function checkDeadlineReminders(){
+  if(!me)return;
+  const now=Date.now();
+  const reminded=JSON.parse(localStorage.getItem('rmi_dl_reminded')||'{}');
+  const myJobs=visibleJobs().filter(j=>j.deadline&&j.status!=='completed');
+  for(const j of myJobs){
+    const dl=toMillis(j.deadline);
+    const diff=dl-now;
+    if(diff<0||diff>24*60*60*1000)continue;
+    const key=j.id+'_24h';
+    if(reminded[key]&&now-reminded[key]<20*60*60*1000)continue;
+    const h=Math.max(0,Math.round(diff/3600000));
+    const label=`${j.client} (#${j.jobNum})`;
+    const msg=h<=1?`⏰ Due in under 1 hour: ${label}`:`⏰ Due in ~${h}h: ${label}`;
+    pushNotif(j.owner,'Deadline Soon',msg);
+    if(j.owner!==me.id&&canManageJob(j))pushNotif(me.id,'Deadline Soon',msg);
+    reminded[key]=now;
+  }
+  localStorage.setItem('rmi_dl_reminded',JSON.stringify(reminded));
+}
 function checkScheduledWeeklyExport(){
   if(!isManager())return;
   const now=new Date();
@@ -3754,6 +3773,8 @@ loginAs=function(u){
   openJobFromUrl();
   checkScheduledWeeklyExport();
   setInterval(checkScheduledWeeklyExport,60000);
+  checkDeadlineReminders();
+  setInterval(checkDeadlineReminders,30*60*1000);
   if(isManager()){
     const dash=document.getElementById('dashboard');
     if(dash&&!document.getElementById('archive-jobs-btn')){
