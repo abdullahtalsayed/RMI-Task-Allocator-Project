@@ -59,6 +59,37 @@ let userSettings={...DEFAULT_SETTINGS};
 let confirmCallback=null, completeJobId=null;
 let tagStores={jtags:[],etags:[],mtags:[]};
 
+// ── EMAILJS ──────────────────────────────────────────────────────────────────
+const EJS_SERVICE='service_s2xci8q';
+const EJS_TEMPLATE='template_4as1q75';
+const EJS_KEY='N_HEKFKra4RbkbfFA';
+
+function sendEmail(toEmail,subject,message){
+  if(!toEmail||!USE_FIREBASE)return;
+  if(typeof emailjs==='undefined')return;
+  emailjs.send(EJS_SERVICE,EJS_TEMPLATE,{to_email:toEmail,subject,message},EJS_KEY).catch(()=>{});
+}
+function emailUser(userId,subject,message,exceptIds=[]){
+  if(!userId||exceptIds.includes(userId))return;
+  const u=users.find(x=>x.id===userId);
+  if(u?.email)sendEmail(u.email,subject,message);
+}
+function emailJobOwner(j,subject,message,exceptIds=[]){
+  if(j?.owner)emailUser(j.owner,subject,message,exceptIds);
+}
+function emailManagersAndSupervisors(subject,message,exceptIds=[]){
+  users.filter(u=>['manager','supervisor'].includes(u.role)&&!exceptIds.includes(u.id)&&u.email)
+    .forEach(u=>sendEmail(u.email,subject,message));
+}
+function emailTeamLeaderOf(ownerId,subject,message,exceptIds=[]){
+  const tl=users.find(u=>u.role==='team_leader'&&users.filter(x=>x.teamLeaderId===u.id).some(x=>x.id===ownerId));
+  if(tl&&!exceptIds.includes(tl.id)&&tl.email)sendEmail(tl.email,subject,message);
+}
+function emailAllOversight(j,subject,message,exceptIds=[]){
+  emailManagersAndSupervisors(subject,message,exceptIds);
+  if(j?.owner)emailTeamLeaderOf(j.owner,subject,message,exceptIds);
+}
+
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 function lsub(t){document.getElementById('lsub').textContent=t;}
 function toMillis(ts){
@@ -1018,6 +1049,9 @@ function notifyReassign(j,fromId,toId,byName){
   pushNotifExcept(ex,toId,'🔄 Job Reassigned',`${label} reassigned to you by ${byName}`);
   if(fromId&&fromId!==toId)pushNotifExcept(ex,fromId,'🔄 Job Reassigned',`${label} reassigned from you to ${toName}`);
   notifyManagersAndSupervisors('🔄 Job Reassigned',`${byName} reassigned ${label} to ${toName}`,ex);
+  // T2: email new owner on reassign
+  emailUser(toId,`Job Reassigned to You: ${label}`,`${byName} has reassigned a job to you.\n\nJob: ${label}`,ex);
+  emailAllOversight(j,`Job Reassigned: ${label}`,`${byName} reassigned ${label} to ${toName}`,ex);
 }
 function notifyForJobEvent(jobId,type,desc){
   if(!me)return;
@@ -1032,6 +1066,8 @@ function notifyForJobEvent(jobId,type,desc){
         notifyJobOwner(j,'📋 New Job Assigned',`${me.name} assigned you: ${label}`,ex);
         notifyManagersAndSupervisors('📋 Job Assigned',`${me.name} assigned ${label} to ${owner}`,ex);
         notifyTeamLeaderOf(j?.owner,'📋 Job Assigned',`${me.name} assigned ${label} to ${owner}`,ex);
+        // T1: email job owner on assignment
+        emailJobOwner(j,`New Job Assigned: ${label}`,`${me.name} has assigned you a new job.\n\nJob: ${label}\nAssigned by: ${me.name}`);
       }else{
         notifyManagersAndSupervisors('➕ New Job Created',`${me.name} created ${label}`,ex);
         notifyTeamLeaderOf(j?.owner,'➕ New Job Created',`${me.name} created ${label}`,ex);
@@ -1041,21 +1077,30 @@ function notifyForJobEvent(jobId,type,desc){
       notifyJobOwner(j,'▶ Job Started',`${me.name} started ${label}`,ex);
       notifyManagersAndSupervisors('▶ Job Started',`${me.name} started ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'▶ Job Started',`${me.name} started ${label}`,ex);
+      // T3: status change emails
+      emailJobOwner(j,`Job Started: ${label}`,`${me.name} has started the job.\n\nJob: ${label}`,ex);
+      emailAllOversight(j,`Job Started: ${label}`,`${me.name} started ${label}`,ex);
       break;
     case 'paused':
       notifyJobOwner(j,'⏸ Job Paused',`${me.name} paused ${label}`,ex);
       notifyManagersAndSupervisors('⏸ Job Paused',`${me.name} paused ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'⏸ Job Paused',`${me.name} paused ${label}`,ex);
+      emailJobOwner(j,`Job Paused: ${label}`,`${me.name} has paused the job.\n\nJob: ${label}`,ex);
+      emailAllOversight(j,`Job Paused: ${label}`,`${me.name} paused ${label}`,ex);
       break;
     case 'resumed':
       notifyJobOwner(j,'▶ Job Resumed',`${me.name} resumed ${label}`,ex);
       notifyManagersAndSupervisors('▶ Job Resumed',`${me.name} resumed ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'▶ Job Resumed',`${me.name} resumed ${label}`,ex);
+      emailJobOwner(j,`Job Resumed: ${label}`,`${me.name} has resumed the job.\n\nJob: ${label}`,ex);
+      emailAllOversight(j,`Job Resumed: ${label}`,`${me.name} resumed ${label}`,ex);
       break;
     case 'completed':
       notifyJobOwner(j,'✅ Job Completed',`${me.name} completed ${label}`,ex);
       notifyManagersAndSupervisors('✅ Job Completed',`${me.name} completed ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'✅ Job Completed',`${me.name} completed ${label}`,ex);
+      emailJobOwner(j,`Job Completed: ${label}`,`${me.name} has completed the job.\n\nJob: ${label}`,ex);
+      emailAllOversight(j,`Job Completed: ${label}`,`${me.name} completed ${label}`,ex);
       break;
     case 'edited':
       notifyJobOwner(j,'✏️ Job Edited',`${me.name} edited ${label}`,ex);
@@ -1088,6 +1133,9 @@ function notifyForJobEvent(jobId,type,desc){
     case 'extension_request':
       pushNotifToManagers('📅 Extension Request',`${me.name} requested an extension for ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'📅 Extension Request',`${me.name} requested an extension for ${label}`,ex);
+      // T7: extension request emails oversight
+      emailManagersAndSupervisors(`Extension Request: ${label}`,`${me.name} has requested a deadline extension.\n\nJob: ${label}`,ex);
+      emailTeamLeaderOf(j?.owner,`Extension Request: ${label}`,`${me.name} requested a deadline extension for ${label}`,ex);
       break;
     case 'ext_approved':
       notifyManagersAndSupervisors('✅ Extension Approved',short,ex);
@@ -3685,11 +3733,35 @@ function checkDeadlineReminders(){
     const h=Math.max(0,Math.round(diff/3600000));
     const label=`${j.client} (#${j.jobNum})`;
     const msg=h<=1?`⏰ Due in under 1 hour: ${label}`:`⏰ Due in ~${h}h: ${label}`;
+    const emailBody=`A job deadline is approaching.\n\nJob: ${label}\nDue: ${h<=1?'under 1 hour':'~'+h+' hours'}`;
     pushNotif(j.owner,'Deadline Soon',msg);
     if(j.owner!==me.id&&canManageJob(j))pushNotif(me.id,'Deadline Soon',msg);
+    // T4: email job owner
+    emailUser(j.owner,`Deadline Soon: ${label}`,emailBody);
+    // T5: email oversight (TL + managers/supervisors)
+    emailTeamLeaderOf(j.owner,`Team Deadline Soon: ${label}`,emailBody);
+    emailManagersAndSupervisors(`Deadline Soon: ${label}`,emailBody);
     reminded[key]=now;
   }
   localStorage.setItem('rmi_dl_reminded',JSON.stringify(reminded));
+}
+function checkOverdueEmails(){
+  if(!me)return;
+  const now=Date.now();
+  const notified=JSON.parse(localStorage.getItem('rmi_overdue_emailed')||'{}');
+  const overdueJobs=visibleJobs().filter(j=>j.deadline&&j.status!=='completed'&&toMillis(j.deadline)<now);
+  for(const j of overdueJobs){
+    const key=j.id+'_overdue';
+    if(notified[key]&&now-notified[key]<20*60*60*1000)continue;
+    const label=`${j.client} (#${j.jobNum})`;
+    const emailBody=`A job is overdue and has not been completed.\n\nJob: ${label}\nDeadline passed: ${new Date(toMillis(j.deadline)).toLocaleString()}`;
+    // T6: email owner + oversight
+    emailUser(j.owner,`Overdue Job: ${label}`,emailBody);
+    emailTeamLeaderOf(j.owner,`Overdue Job (Team): ${label}`,emailBody);
+    emailManagersAndSupervisors(`Overdue Job: ${label}`,emailBody);
+    notified[key]=now;
+  }
+  localStorage.setItem('rmi_overdue_emailed',JSON.stringify(notified));
 }
 function checkScheduledWeeklyExport(){
   if(!isManager())return;
@@ -3775,6 +3847,8 @@ loginAs=function(u){
   setInterval(checkScheduledWeeklyExport,60000);
   checkDeadlineReminders();
   setInterval(checkDeadlineReminders,30*60*1000);
+  checkOverdueEmails();
+  setInterval(checkOverdueEmails,60*60*1000);
   if(isManager()){
     const dash=document.getElementById('dashboard');
     if(dash&&!document.getElementById('archive-jobs-btn')){
