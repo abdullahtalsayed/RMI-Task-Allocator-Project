@@ -3899,7 +3899,7 @@ saveSettingsFromUI=function(){
 };
 
 // ── ANALYTICS — single-scroll report (replaces tab-based renderer) ───────────
-let analyticsRange='month',analyticsEmp='';
+let analyticsRange='month',analyticsEmp='',analyticsType='';
 function analyticsRangeStart(range){
   const n=new Date();
   if(range==='week'){const d=new Date(n);d.setDate(n.getDate()-n.getDay());d.setHours(0,0,0,0);return d.getTime();}
@@ -3911,9 +3911,18 @@ function analyticsScope(){
   if(!me)return[];
   let base=visibleJobs();
   if(analyticsEmp)base=base.filter(j=>j.owner===analyticsEmp);
+  if(analyticsType)base=base.filter(j=>(j.type||'Other')===analyticsType);
   const start=analyticsRangeStart(analyticsRange);
   if(!start)return base.slice();
   return base.filter(j=>toMillis(j.created)>=start);
+}
+window.setAnalyticsType=function(t){analyticsType=t;renderAnalyticsContent();};
+function anPopulateType(){
+  const sel=document.getElementById('an-type');if(!sel)return;
+  const cur=analyticsType;
+  const types=[...new Set(visibleJobs().map(j=>j.type||'Other'))].sort();
+  sel.innerHTML='<option value="">All Types</option>'+types.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  sel.value=cur;
 }
 window.setAnalyticsRange=function(r,btn){
   analyticsRange=r;
@@ -3929,8 +3938,10 @@ window.setAnalyticsView=function(v,btn){
   // hide range/emp controls when teams tab active (uses all-time data)
   const rangeSel=document.getElementById('an-range');
   const empSel=document.getElementById('an-emp');
+  const typeSel=document.getElementById('an-type');
   if(rangeSel)rangeSel.style.display=v==='teams'?'none':'';
   if(empSel)empSel.style.display=v==='teams'?'none':'';
+  if(typeSel)typeSel.style.display=v==='teams'?'none':'';
   renderAnalyticsContent();
 };
 function anPopulateEmp(){
@@ -4094,13 +4105,90 @@ function renderTeamsAnalytics(el){
     ${teamWidgets}`;
 }
 
+// ── NEW ANALYTICS HELPERS ─────────────────────────────────────────────────────
+function anSpeedVsTeam(myId,allVisJobs){
+  const myDone=allVisJobs.filter(j=>j.owner===myId&&j.completed&&j.created);
+  const types=[...new Set(myDone.map(j=>j.type||'Other'))];
+  if(!types.length)return'';
+  const rows=types.map(t=>{
+    const myT=myDone.filter(j=>(j.type||'Other')===t);
+    const allT=allVisJobs.filter(j=>(j.type||'Other')===t&&j.completed&&j.created);
+    if(!myT.length||!allT.length)return null;
+    const myAvg=myT.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/myT.length;
+    const teamAvg=allT.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/allT.length;
+    const faster=myAvg<=teamAvg;
+    return{label:t,myAvg,teamAvg,faster,n:myT.length};
+  }).filter(Boolean);
+  if(!rows.length)return'';
+  return`<div class="an-widget"><div class="an-widget-hd">My Speed vs Team Average <span class="an-hd-note">per job type</span></div><div class="an-turn">${rows.map(r=>`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(r.label)}</span><span class="an-turn-time" style="color:${r.faster?'var(--green)':'var(--red)'}">${tdiff(0,r.myAvg)} ${r.faster?'↑':'↓'}</span><span class="an-turn-n" style="color:var(--text3)">team: ${tdiff(0,r.teamAvg)}</span></div>`).join('')}</div></div>`;
+}
+function anMyRankCard(myId,allVisJobs){
+  const emps=users.filter(u=>u.role==='employee'||u.role==='team_leader');
+  if(emps.length<2)return'';
+  const ranked=emps.map(u=>({id:u.id,done:allVisJobs.filter(j=>j.owner===u.id&&j.status==='completed').length})).sort((a,b)=>b.done-a.done);
+  const myRank=ranked.findIndex(r=>r.id===myId)+1;
+  const myDone=ranked.find(r=>r.id===myId)?.done||0;
+  const color=myRank===1?'var(--green)':myRank<=Math.ceil(ranked.length/3)?'var(--blue)':'var(--text)';
+  return`<div class="an-widget"><div class="an-widget-hd">My Team Rank <span class="an-hd-note">by jobs completed (all time, anonymous)</span></div><div style="text-align:center;padding:0.75rem 0;"><div style="font-size:2.5rem;font-weight:700;font-family:var(--mono);color:${color}">#${myRank}</div><div style="color:var(--text2);font-size:0.82rem;margin-top:0.25rem;">of ${ranked.length} team members</div><div style="color:var(--text3);font-size:0.78rem;margin-top:0.2rem;">${myDone} jobs completed</div></div></div>`;
+}
+function anTeamHealthWidget(emps,allVisJobs){
+  const rows=emps.map(u=>{
+    const ej=allVisJobs.filter(j=>j.owner===u.id);
+    const active=ej.filter(j=>j.status!=='completed').length;
+    const done=ej.filter(j=>j.status==='completed').length;
+    const od=ej.filter(j=>isOverdue(j)).length;
+    const compRate=ej.length?Math.round(done/ej.length*100):0;
+    return{name:u.name,od,active,compRate,color:od>0?'var(--red)':active>5?'var(--yellow)':'var(--green)'};
+  }).filter(r=>r.active>0||r.compRate>0).sort((a,b)=>b.od-a.od||a.compRate-b.compRate);
+  if(!rows.length)return'';
+  return`<div class="an-widget"><div class="an-widget-hd">Team Member Health <span class="an-hd-note">overdue · active · completion %</span></div><div class="an-turn">${rows.map(r=>`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(r.name)}</span><span style="color:${r.color};font-family:var(--mono);font-size:0.8rem;font-weight:600;">${r.od} overdue</span><span class="an-turn-n">${r.active} active · ${r.compRate}% done</span></div>`).join('')}</div></div>`;
+}
+function anActiveVsPausedWidget(emps,allVisJobs){
+  const rows=emps.map(u=>{
+    const ej=allVisJobs.filter(j=>j.owner===u.id&&(j.durationActiveMs||j.durationPausedMs));
+    if(!ej.length)return null;
+    const active=ej.reduce((a,j)=>a+(j.durationActiveMs||0),0);
+    const paused=ej.reduce((a,j)=>a+(j.durationPausedMs||0),0);
+    const total=active+paused||1;
+    return{name:u.name,activePct:Math.round(active/total*100)};
+  }).filter(Boolean).sort((a,b)=>b.activePct-a.activePct);
+  if(!rows.length)return'';
+  return`<div class="an-widget"><div class="an-widget-hd">Active vs Paused Time <span class="an-hd-note">per employee</span></div><div class="an-bars">${rows.map(r=>`<div class="an-bar-row"><span class="an-bar-label">${escapeHtml(r.name)}</span><div class="an-bar-track" style="height:14px;display:flex;overflow:hidden;border-radius:var(--radius-pill);"><div style="width:${r.activePct}%;background:var(--green);height:100%;"></div><div style="width:${100-r.activePct}%;background:var(--orange);opacity:0.6;height:100%;"></div></div><span class="an-bar-val" style="font-size:0.72rem;">${r.activePct}% active</span></div>`).join('')}</div><div style="display:flex;gap:1rem;margin-top:0.6rem;font-size:0.72rem;color:var(--text3);"><span><span style="color:var(--green)">■</span> Active</span><span><span style="color:var(--orange)">■</span> Paused</span></div></div>`;
+}
+function anOverdueTrendWidget(allVisJobs,buckets){
+  const pts=buckets.map(b=>{
+    const inPeriod=allVisJobs.filter(j=>toMillis(j.created)>=b.start&&toMillis(j.created)<b.end);
+    const od=inPeriod.filter(j=>isOverdue(j)||(j.deadline&&j.completed&&toMillis(j.completed)>toMillis(j.deadline))).length;
+    return{label:b.label,value:inPeriod.length?Math.round(od/inPeriod.length*100):0};
+  });
+  return`<div class="an-widget"><div class="an-widget-hd">Overdue Rate Trend <span class="an-hd-note">% jobs overdue per period</span></div>${anTrendChart(pts)}</div>`;
+}
+function anCrossTeamTypeWidget(){
+  const tls=users.filter(u=>u.role==='team_leader');
+  if(tls.length<2)return'';
+  const allVJ=visibleJobs();
+  const types=[...new Set(allVJ.map(j=>j.type||'Other'))].slice(0,6);
+  const colors=['var(--blue)','var(--green)','var(--purple)','var(--orange)','var(--red)','var(--yellow)'];
+  const rows=types.map(t=>{
+    const typeJobs=allVJ.filter(j=>(j.type||'Other')===t);
+    return{type:t,teams:tls.map(tl=>{
+      const teamIds=users.filter(u=>u.teamLeaderId===tl.id).map(u=>u.id);
+      const tj=typeJobs.filter(j=>teamIds.includes(j.owner)||j.owner===tl.id);
+      const done=tj.filter(j=>j.status==='completed').length;
+      return{name:tl.name,total:tj.length,done,rate:tj.length?Math.round(done/tj.length*100):0};
+    })};
+  }).filter(r=>r.teams.some(t=>t.total>0));
+  if(!rows.length)return'';
+  return`<div class="an-widget"><div class="an-widget-hd">Cross-Team Comparison by Type <span class="an-hd-note">completion rate %</span></div>${rows.map(r=>`<div style="margin-bottom:0.85rem;"><div style="font-size:0.78rem;font-weight:600;color:var(--text2);margin-bottom:0.35rem;">${escapeHtml(r.type)}</div><div class="an-bars">${r.teams.filter(t=>t.total>0).map((t,i)=>`<div class="an-bar-row"><span class="an-bar-label">${escapeHtml(t.name)}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${t.rate}%;background:${colors[i%colors.length]}"></div></div><span class="an-bar-val">${t.rate}% <span class="an-bar-sub">${t.done}/${t.total}</span></span></div>`).join('')}</div></div>`).join('')}</div>`;
+}
+
 renderAnalyticsContent=function(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
   // show Teams tab for managers only
   document.querySelectorAll('.sb-manager-tab').forEach(b=>b.style.display=me.role==='manager'?'':'none');
   // teams view
   if(analyticsView==='teams'){renderTeamsAnalytics(el);return;}
-  anPopulateEmp();
+  anPopulateEmp();anPopulateType();
   const isMgr=isLead();
   const now=Date.now();
   const scope=analyticsScope();
@@ -4249,75 +4337,102 @@ renderAnalyticsContent=function(){
       </div>`).join('')}</div></div>`;
   }
 
-  // peak workload days HTML (inline to avoid repetition)
-  const dayBarRow=(name,cre,com,max)=>`<div class="an-day-row">
-    <span class="an-day-lbl">${name}</span>
-    <div class="an-day-bars">
-      <div class="an-day-bar" style="width:${Math.max(Math.round(cre/max*100),cre?2:0)}%;background:var(--blue);" title="Created: ${cre}"></div>
-      <div class="an-day-bar" style="width:${Math.max(Math.round(com/max*100),com?2:0)}%;background:var(--green);" title="Completed: ${com}"></div>
+  // shared reusable blocks
+  const dayBarRow=(name,cre,com,max)=>`<div class="an-day-row"><span class="an-day-lbl">${name}</span><div class="an-day-bars"><div class="an-day-bar" style="width:${Math.max(Math.round(cre/max*100),cre?2:0)}%;background:var(--blue);" title="Created: ${cre}"></div><div class="an-day-bar" style="width:${Math.max(Math.round(com/max*100),com?2:0)}%;background:var(--green);" title="Completed: ${com}"></div></div><span class="an-day-vals">${cre} / ${com}</span></div>`;
+  const kpiHtml=`<div class="an-kpis">${kpis.map(k=>`<div class="an-kpi"><div class="an-kpi-label">${k.label}</div><div class="an-kpi-value" style="color:${k.color}">${k.value}</div><div class="an-kpi-sub">${k.sub}</div></div>`).join('')}</div>`;
+  const turnHtml=turnRows.length?`<div class="an-widget"><div class="an-widget-hd">Turnaround by Type <span class="an-hd-note">avg time to complete</span></div><div class="an-turn">${turnRows.map(r=>`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(r.type)}</span><span class="an-turn-time">${tdiff(0,r.avg)}</span><span class="an-turn-n">${r.n} job${r.n>1?'s':''}</span></div>`).join('')}</div></div>`:'';
+  const jobAnalysisHtml=`
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Created vs Completed <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anDualLineChart(createdPts,trendPts,'Created','Completed','var(--blue)','var(--green)')}</div>
+      ${priRows.length?`<div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>`:''}
     </div>
-    <span class="an-day-vals">${cre} / ${com}</span>
-  </div>`;
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Job Age <span class="an-hd-note">active jobs by how long open</span></div>${anBars(ageRows)}${oldestActive.length?`<div class="an-hd-note" style="margin-top:0.75rem;margin-bottom:0.35rem;">Oldest active jobs</div>${oldestActive.map(j=>{const age=nowMs-toMillis(j.created);const col=age>14*864e5?'var(--red)':age>7*864e5?'var(--orange)':'var(--text2)';const own=users.find(u=>u.id===j.owner)?.name||'?';return`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(j.client)} <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></span><span class="an-turn-time" style="color:${col}">${tdiff(0,age)}</span><span class="an-turn-n">${escapeHtml(own)}</span></div>`;}).join('')}`:''}
+      </div>
+      <div class="an-widget"><div class="an-widget-hd">Priority vs Actual Urgency <span class="an-hd-note">% overdue per priority</span></div>${priUrgency.map(p=>`<div class="an-bar-row"><span class="an-bar-label">${p.label}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(p.pct,p.overdueCount?2:0)}%;background:${p.color}"></div></div><span class="an-bar-val">${p.pct}% <span class="tc-muted">${p.overdueCount}/${p.active}</span></span></div>`).join('')}${priUrgency.every(p=>p.pct===0)?'<div class="empty" style="padding:0.5rem;">No overdue jobs 🎉</div>':''}</div>
+    </div>
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Peak Workload Days <span class="an-hd-note" style="display:inline-flex;gap:0.5rem;"><span style="color:var(--blue)">■ created</span><span style="color:var(--green)">■ completed</span></span></div><div class="an-day-chart">${dayNames.map((d,i)=>dayBarRow(d,createdByDay[i],completedByDay[i],maxDay)).join('')}</div></div>
+      <div class="an-widget"><div class="an-widget-hd">Deadline Extension Rate</div><div style="text-align:center;padding:0.75rem 0;"><div style="font-size:2.2rem;font-weight:700;font-family:var(--mono);color:${extRate>=30?'var(--red)':extRate>=15?'var(--yellow)':'var(--green)'}">${extRate}%</div><div style="color:var(--text2);font-size:0.78rem;margin-top:0.25rem;">${jobIdsWithExt.size} of ${jobsWithDl.length} jobs with deadlines requested extensions</div></div><div class="an-bars" style="margin-top:0.5rem;">${anBars([{label:'Approved',value:extApproved,color:'var(--green)'},{label:'Rejected',value:extRejected,color:'var(--red)'},{label:'Pending',value:extPending,color:'var(--yellow)'}].filter(r=>r.value>0))}</div></div>
+    </div>
+    ${turnHtml}
+    ${topReassigned.length?`<div class="an-widget"><div class="an-widget-hd">Most Reassigned Jobs <span class="an-hd-note">times reassigned</span></div>${anBars(topReassigned)}</div>`:''}
+  `;
 
+  const isEmp=me.role==='employee';
+  const isTL_=isTeamLeader();
+  const isSup=me.role==='supervisor';
+  const leadEmps=teamUsersForView().filter(u=>u.role!=='manager');
+
+  // ── EMPLOYEE ──────────────────────────────────────────────────────────────
+  if(isEmp){
+    el.innerHTML=`
+      ${kpiHtml}
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
+        ${typeRows.length?`<div class="an-widget"><div class="an-widget-hd">My Jobs by Type</div>${anBars(typeRows)}</div>`:''}
+      </div>
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">My Completion Trend <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anTrendChart(trendPts)}</div>
+        ${anSpeedVsTeam(me.id,visibleJobs())}
+      </div>
+      ${anMyRankCard(me.id,visibleJobs())}
+      ${jobAnalysisHtml}`;
+    return;
+  }
+
+  // ── TEAM LEADER ───────────────────────────────────────────────────────────
+  if(isTL_){
+    el.innerHTML=`
+      ${kpiHtml}
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
+        ${throughputHtml}
+      </div>
+      <div class="an-row-2">
+        ${anTeamHealthWidget(leadEmps,visibleJobs())}
+        ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
+      </div>
+      ${anOverdueTrendWidget(visibleJobs(),buckets)}
+      ${perfHtml}
+      ${jobAnalysisHtml}`;
+    return;
+  }
+
+  // ── SUPERVISOR ────────────────────────────────────────────────────────────
+  if(isSup){
+    el.innerHTML=`
+      ${kpiHtml}
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
+        ${throughputHtml}
+      </div>
+      <div class="an-row-2">
+        ${anTeamHealthWidget(leadEmps,visibleJobs())}
+        ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
+      </div>
+      ${anOverdueTrendWidget(visibleJobs(),buckets)}
+      ${anCrossTeamTypeWidget()}
+      ${perfHtml}
+      ${jobAnalysisHtml}`;
+    return;
+  }
+
+  // ── MANAGER ───────────────────────────────────────────────────────────────
   el.innerHTML=`
-  <div class="an-kpis">
-    ${kpis.map(k=>`<div class="an-kpi"><div class="an-kpi-label">${k.label}</div><div class="an-kpi-value" style="color:${k.color}">${k.value}</div><div class="an-kpi-sub">${k.sub}</div></div>`).join('')}
-  </div>
-
-  <div class="an-row-2">
-    <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-    <div class="an-widget"><div class="an-widget-hd">Jobs by Type</div>${anBars(typeRows)}</div>
-  </div>
-
-  <div class="an-row-2">
-    <div class="an-widget"><div class="an-widget-hd">Created vs Completed <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anDualLineChart(createdPts,trendPts,'Created','Completed','var(--blue)','var(--green)')}</div>
-    ${priRows.length?`<div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>`:''}
-  </div>
-
-  <div class="an-row-2">
-    <div class="an-widget">
-      <div class="an-widget-hd">Job Age <span class="an-hd-note">active jobs by how long open</span></div>
-      ${anBars(ageRows)}
-      ${oldestActive.length?`<div class="an-hd-note" style="margin-top:0.75rem;margin-bottom:0.35rem;">Oldest active jobs</div>
-      ${oldestActive.map(j=>{const age=nowMs-toMillis(j.created);const col=age>14*864e5?'var(--red)':age>7*864e5?'var(--orange)':'var(--text2)';const own=users.find(u=>u.id===j.owner)?.name||'?';return`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(j.client)} <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></span><span class="an-turn-time" style="color:${col}">${tdiff(0,age)}</span><span class="an-turn-n">${escapeHtml(own)}</span></div>`;}).join('')}`:''}
+    ${kpiHtml}
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
+      ${throughputHtml}
     </div>
-    <div class="an-widget">
-      <div class="an-widget-hd">Priority vs Actual Urgency <span class="an-hd-note">% overdue per priority</span></div>
-      ${priUrgency.map(p=>`<div class="an-bar-row">
-        <span class="an-bar-label">${p.label}</span>
-        <div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(p.pct,p.overdueCount?2:0)}%;background:${p.color}"></div></div>
-        <span class="an-bar-val">${p.pct}% <span class="tc-muted">${p.overdueCount}/${p.active}</span></span>
-      </div>`).join('')}
-      ${priUrgency.every(p=>p.pct===0)?'<div class="empty" style="padding:0.5rem;">No overdue jobs 🎉</div>':''}
+    <div class="an-row-2">
+      ${anTeamHealthWidget(leadEmps,visibleJobs())}
+      ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
     </div>
-  </div>
-
-  <div class="an-row-2">
-    <div class="an-widget">
-      <div class="an-widget-hd">Peak Workload Days <span class="an-hd-note" style="display:inline-flex;gap:0.5rem;"><span style="color:var(--blue)">■ created</span><span style="color:var(--green)">■ completed</span></span></div>
-      <div class="an-day-chart">${dayNames.map((d,i)=>dayBarRow(d,createdByDay[i],completedByDay[i],maxDay)).join('')}</div>
-    </div>
-    <div class="an-widget">
-      <div class="an-widget-hd">Deadline Extension Rate</div>
-      <div style="text-align:center;padding:0.75rem 0;">
-        <div style="font-size:2.2rem;font-weight:700;font-family:var(--mono);color:${extRate>=30?'var(--red)':extRate>=15?'var(--yellow)':'var(--green)'}">${extRate}%</div>
-        <div style="color:var(--text2);font-size:0.78rem;margin-top:0.25rem;">${jobIdsWithExt.size} of ${jobsWithDl.length} jobs with deadlines requested extensions</div>
-      </div>
-      <div class="an-bars" style="margin-top:0.5rem;">
-        ${anBars([
-          {label:'Approved',value:extApproved,color:'var(--green)'},
-          {label:'Rejected',value:extRejected,color:'var(--red)'},
-          {label:'Pending',value:extPending,color:'var(--yellow)'},
-        ].filter(r=>r.value>0))}
-      </div>
-    </div>
-  </div>
-
-  ${throughputHtml&&turnHtml?`<div class="an-row-2">${throughputHtml}${turnHtml}</div>`:throughputHtml||turnHtml}
-
-  ${topReassigned.length?`<div class="an-widget"><div class="an-widget-hd">Most Reassigned Jobs <span class="an-hd-note">times reassigned</span></div>${anBars(topReassigned)}</div>`:''}
-
-  ${perfHtml}`;
+    ${anOverdueTrendWidget(visibleJobs(),buckets)}
+    ${anCrossTeamTypeWidget()}
+    ${perfHtml}
+    ${jobAnalysisHtml}`;
 }
 
 // handleNotifClick with URL update
