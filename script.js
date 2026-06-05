@@ -1752,7 +1752,7 @@ window.expTXT=function(id){
     dur.pausedMs>0?`  Paused time: ${tdiff(0,dur.pausedMs)}`:'',
     dur.pausedMs>0?`  Active work time: ${tdiff(0,dur.activeMs)}`:''
   ].filter(Boolean):[];
-  const lines=[`RMI Job Allocator — Export`,`═══════════════════════`,`Client: ${j.client}`,`Job #: ${j.jobNum}`,`Type: ${j.type}`,`Employee: ${own}`,`Assigned By: ${j.assignedBy}`,`Priority: ${j.priority}`,`Status: ${j.status}`,`Tags: ${(j.tags||[]).join(', ')||'None'}`,`Created: ${fmt(j.created)}`,`Started: ${j.started?fmt(j.started):'N/A'}`,`Completed: ${j.completed?fmt(j.completed):'N/A'}`,...durLines,j.deadline?`Deadline: ${fmt(j.deadline)}`:'',j.notes?`Notes: ${j.notes}`:'',j.completionNote?`Completion Note: ${j.completionNote}`:'',``,`Activity Timeline:`,evs||'  No activity logged'].filter(x=>x!==undefined&&x!==null);
+  const lines=[`RMI Task Allocator & Progress Tracker — Task Export`,`═══════════════════════`,`Client: ${j.client}`,`Job #: ${j.jobNum}`,`Type: ${j.type}`,`Employee: ${own}`,`Assigned By: ${j.assignedBy}`,`Priority: ${j.priority}`,`Status: ${j.status}`,`Tags: ${(j.tags||[]).join(', ')||'None'}`,`Created: ${fmt(j.created)}`,`Started: ${j.started?fmt(j.started):'N/A'}`,`Completed: ${j.completed?fmt(j.completed):'N/A'}`,...durLines,j.deadline?`Deadline: ${fmt(j.deadline)}`:'',j.notes?`Notes: ${j.notes}`:'',j.completionNote?`Completion Note: ${j.completionNote}`:'',``,`Activity Timeline:`,evs||'  No activity logged'].filter(x=>x!==undefined&&x!==null);
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/plain'}));a.download=`Job-${j.jobNum}.txt`;a.click();
 };
 
@@ -1957,7 +1957,7 @@ window.addUser=async function(){
   await logActivity({type:'user_added',category:'user',desc:`${me.name} added user ${name} (${role})`,userId:me.id,userName:me.name,role:me.role});
   pushNotif(id,'👤 Account Created',USE_AUTH
     ?`${me.name} added you. Use First-time setup with name "${name}", temp password from manager, and your email.`
-    :`${me.name} added you to RMI Job Allocator as ${role}`);
+    :`${me.name} added you to RMI Task Allocator & Progress Tracker as ${role}`);
   document.getElementById('uname').value='';document.getElementById('upw').value='';document.getElementById('uemail').value='';
   closeAddUserModal();
   renderUList();

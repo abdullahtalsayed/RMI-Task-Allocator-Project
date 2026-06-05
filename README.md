@@ -1,4 +1,4 @@
-# RMI Job Allocator
+# RMI Task Allocator & Progress Tracker
 
 Job/task management web app for Roof Metal Industries. Managers assign jobs to staff; staff track status, deadlines, completion.
 
@@ -73,7 +73,7 @@ Job statuses: `pending → ongoing → paused → completed`
 
 ```mermaid
 gantt
-    title RMI Job Allocator — Release Roadmap
+    title RMI Task Allocator & Progress Tracker — Release Roadmap
     dateFormat  YYYY-MM-DD
     axisFormat  %b %Y
 
