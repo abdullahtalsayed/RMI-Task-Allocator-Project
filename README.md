@@ -12,12 +12,24 @@ Job/task management web app for Roof Metal Industries. Managers assign jobs to s
 |------|------|
 | `index.html` | Markup shell — all views, modals, login |
 | `styles.css` | All styling — Apple-style dark theme + light mode via CSS vars |
-| `main.js` | App logic + bootstrap — ES module entry (`type="module"`) |
+| `main.js` | App bootstrap + remaining logic (auth, notifications, render, analytics, calendar, dashboard) — ES module entry (`type="module"`) |
 | `firebase.js` | Firebase SDK re-exports + config |
 | `state.js` | Shared state (live bindings) + setters + constants |
 | `helpers.js` | Pure utilities — formatting, time math, escaping |
 | `email.js` | EmailJS alert helpers |
+| `modals.js` | Confirm/Complete/Extension/Reassign dialogs + tag inputs |
+| `jobs.js` | Job CRUD, lifecycle actions, comments, extension review |
+| `admin.js` | Broadcasts + user management |
+| `manifest.webmanifest` | PWA manifest (installable app) |
 | `sw.js` | Service worker — network-first cache |
+
+**Module graph:** `main.js` is the entry; it imports the leaf modules
+(`firebase`, `state`, `helpers`, `email`) and the domain modules
+(`modals`, `jobs`, `admin`). Domain modules import shared functions back
+from `main.js` — these cycles are runtime-safe because every cross-module
+call happens inside a function body (after all modules finish loading),
+never at module-evaluation time. Functions assigned to `window.*` are
+global and called across modules without imports.
 | `firestore.rules` | Firestore security rules — paste into Firebase Console |
 
 ---

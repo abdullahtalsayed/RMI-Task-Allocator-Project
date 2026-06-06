@@ -7,9 +7,10 @@ import { jobs, me, users, extRequests, lastDel, tagStores, setJobs, setUsers, se
 import { uid, toMillis, tdiff, fmt, escapeHtml, getJobDurationBreakdown, jobPauseDefaults } from './helpers.js';
 import { setTags, showConfirm } from './modals.js';
 import { db, jCol, uCol, extCol, calFilterEmp, calShowMode,
-  renderBoard, isLead, isOverdue, visibleJobs, teamUsersForView, populateADrop, renderUList,
+  renderBoard, isLead, isOverdue, visibleJobs, teamUsersForView, populateADrop,
   renderAssignEmpGrid, getJobEvents, pushNotif, renderDashExtensions, localSave,
   addEvent, showToastMsg, canManageJob, assignableUsers } from './main.js';
+import { renderUList } from './admin.js';
 
 // ── COMMENTS ──────────────────────────────────────────────────────────────────
 export async function addComment(jobId,text){
