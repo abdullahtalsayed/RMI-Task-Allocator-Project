@@ -13,6 +13,22 @@ import { addEvent, showToastMsg, pushNotif, isOverdue, isTeamLeader, amDirector 
 
 const esc=escapeHtml;
 
+// ── FIXED TOOLTIP (escapes overflow containers) ────────────────────────────────
+const _htlTipEl=(()=>{const d=document.createElement('div');d.className='wf-htl-gtip';document.body.appendChild(d);return d;})();
+const _htlTipData={};
+window.wfHtlShow=function(el,key){
+  const html=_htlTipData[key];if(!html)return;
+  _htlTipEl.innerHTML=html;_htlTipEl.style.display='block';
+  const r=el.getBoundingClientRect();
+  const tw=_htlTipEl.offsetWidth;const th=_htlTipEl.offsetHeight;
+  let left=r.left+r.width/2-tw/2;
+  let top=r.top-th-10;
+  if(top<8){top=r.bottom+10;} // flip below if no room above
+  left=Math.max(8,Math.min(left,window.innerWidth-tw-8));
+  _htlTipEl.style.left=left+'px';_htlTipEl.style.top=top+'px';
+};
+window.wfHtlHide=function(){_htlTipEl.style.display='none';};
+
 // ── STAGE MACHINE ─────────────────────────────────────────────────────────────
 // actor: who must act next ('tl' = teamLeaderId, 'drafter' = owner/drafterId)
 export const WF_STAGES={
@@ -458,22 +474,17 @@ function _wfTlVisual(j){
     const shortLabel=`<div class="wf-htl-label">${icon} ${esc(wfStageMeta(e.to).short)}</div><div class="wf-htl-sublabel">${esc(dur)}</div>`;
     const checks=_checksHtml(e.checklist);
     const noteHtml=e.note?`<div class="wf-htl-tt-note">${esc(e.note)}</div>`:'';
-    // edge-align tooltip so it doesn't clip
-    // tooltip lives on .wf-htl-event (position:relative), not inside the dot
-    const ttEdge=i===0?'left:0;transform:none;':i===h.length-1?'right:0;left:auto;transform:none;':'left:50%;transform:translateX(-50%);';
-    const tooltip=`<div class="wf-htl-tooltip" style="${ttEdge}">
-      <div class="wf-htl-tt-stage">${icon} ${esc(wfStageMeta(e.to).label)}</div>
-      <div class="wf-htl-tt-meta">${esc(e.by)} · ${fmt(e.at)}</div>
-      <div class="wf-htl-tt-dur">${esc(dur)}</div>
-      ${noteHtml}${checks}
-    </div>`;
-    return`<div class="wf-htl-event" tabindex="0">
+    // fixed-position tooltip — stored by key, shown via wfHtlShow (escapes overflow containers)
+    const tipKey=`${j.id}_${i}`;
+    _htlTipData[tipKey]=`<div class="wf-htl-tt-stage">${icon} ${esc(wfStageMeta(e.to).label)}</div>`+
+      `<div class="wf-htl-tt-meta">${esc(e.by)} · ${fmt(e.at)}</div>`+
+      `<div class="wf-htl-tt-dur">${esc(dur)}</div>${noteHtml}${checks}`;
+    return`<div class="wf-htl-event" onmouseenter="wfHtlShow(this,'${tipKey}')" onmouseleave="wfHtlHide()">
       <div class="wf-htl-above">${above?shortLabel:''}</div>
       <div class="wf-htl-stem ${above?'wf-htl-stem-down':'wf-htl-stem-up'}"></div>
       <div class="wf-htl-dot wf-htl-dot-${col}">${i+1}</div>
       <div class="wf-htl-stem ${above?'wf-htl-stem-up':'wf-htl-stem-down'}"></div>
       <div class="wf-htl-below">${above?'':shortLabel}</div>
-      ${tooltip}
     </div>`;
   }).join('');
   return`<div class="wf-htl"><div class="wf-htl-track">
