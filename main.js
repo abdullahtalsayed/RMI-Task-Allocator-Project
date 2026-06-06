@@ -3314,7 +3314,7 @@ function anDonut(data,centerNum,centerLbl){
   if(nz.length===1){svg=`<circle cx="70" cy="70" r="60" fill="${nz[0].color}"/>`;}
   else nz.forEach(d=>{const frac=d.value/total,ang=frac*2*Math.PI;const x1=70+60*Math.sin(start),y1=70-60*Math.cos(start);const x2=70+60*Math.sin(start+ang),y2=70-60*Math.cos(start+ang);const lg=ang>Math.PI?1:0;svg+=`<path d="M70,70 L${x1},${y1} A60,60 0 ${lg} 1 ${x2},${y2} Z" fill="${d.color}"><title>${escapeHtml(d.label)}: ${d.value}</title></path>`;start+=ang;});
   return`<div class="an-donut-wrap">
-    <svg width="140" height="140" viewBox="0 0 140 140">${svg||'<circle cx="70" cy="70" r="60" fill="var(--card2)"/>'}<circle cx="70" cy="70" r="34" fill="var(--card)"/><text x="70" y="66" text-anchor="middle" class="an-donut-num">${centerNum}</text><text x="70" y="82" text-anchor="middle" class="an-donut-lbl">${centerLbl}</text></svg>
+    <svg width="110" height="110" viewBox="0 0 140 140">${svg||'<circle cx="70" cy="70" r="60" fill="var(--card2)"/>'}<circle cx="70" cy="70" r="34" fill="var(--card)"/><text x="70" y="66" text-anchor="middle" class="an-donut-num">${centerNum}</text><text x="70" y="82" text-anchor="middle" class="an-donut-lbl">${centerLbl}</text></svg>
     <div class="an-legend">${data.map(d=>`<div class="an-legend-row"><span class="an-legend-dot" style="background:${d.color}"></span>${d.label}<span class="an-legend-val">${d.value}</span></div>`).join('')}</div>
   </div>`;
 }
