@@ -319,7 +319,7 @@ async function onFirebaseAuthChanged(authUser){
   if(authLoginInProgress)return;
   authStateReady=true;
   if(!users.length&&uCol){
-    try{const uSnap=await getDocs(uCol);users=uSnap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){}
+    try{const uSnap=await getDocs(uCol);setUsers(uSnap.docs.map(d=>({id:d.id,...d.data()})));}catch(e){}
   }
   if(authUser){
     const profile=await resolveProfileFromAuth(authUser);
