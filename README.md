@@ -12,7 +12,11 @@ Job/task management web app for Roof Metal Industries. Managers assign jobs to s
 |------|------|
 | `index.html` | Markup shell — all views, modals, login |
 | `styles.css` | All styling — Apple-style dark theme + light mode via CSS vars |
-| `script.js` | All logic — ES module, Firebase via CDN |
+| `main.js` | App logic + bootstrap — ES module entry (`type="module"`) |
+| `firebase.js` | Firebase SDK re-exports + config |
+| `state.js` | Shared state (live bindings) + setters + constants |
+| `helpers.js` | Pure utilities — formatting, time math, escaping |
+| `email.js` | EmailJS alert helpers |
 | `sw.js` | Service worker — network-first cache |
 | `firestore.rules` | Firestore security rules — paste into Firebase Console |
 

@@ -1,159 +1,27 @@
-﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, getDocs, getDoc, query, where, limit, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+﻿// ── RMI Task Allocator — main module ──────────────────────────────────────────
+// Entry point. Imports shared leaves (firebase / state / helpers / email),
+// holds all app logic + bootstrap. Loaded via <script type="module" src="main.js">.
+import { initializeApp, getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, getDocs, getDoc, query, where, limit, writeBatch, getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, getStorage, ref, uploadBytes, getDownloadURL, deleteObject, CFG, MGR_PW, USE_FIREBASE, USE_AUTH } from './firebase.js';
+import { JOB_TYPES, ACTIVITY_TYPE_LABELS, FB_LIMITS, JOBS_PAGE_SIZE, ARCHIVE_AFTER_MS, DEFAULT_SETTINGS, NOTIF_BUBBLE_TTL, NOTIF_TOAST_MAX, jobs, users, events, notifications, extRequests, broadcasts, activityLogs, me, myFilter, lastDel, isDark, currentATab, userSettings, setMe, setJobs, setUsers, setEvents, setNotifications, setExtRequests, setBroadcasts, setActivityLogs, setMyFilter, setLastDel, setIsDark, setCurrentATab, setUserSettings } from './state.js';
+import { lsub, toMillis, escapeHtml, fmt, fmtShort, tdiff, getJobPausedMs, getJobDurationBreakdown, formatJobDurationHtml, jobPauseDefaults, uid, timeAgo } from './helpers.js';
+import { sendEmail, emailPref, emailUser, emailJobOwner, emailManagersAndSupervisors, emailTeamLeaderOf, emailAllOversight } from './email.js';
 
-// ── CONFIG ──────────────────────────────────────────────────────────────────
-const CFG = {
-  apiKey:            "AIzaSyCsAsi2R-bNvG1F8bLN2xvKgw1S1BcV9-Q",
-  authDomain:        "rmi-job-allocation.firebaseapp.com",
-  projectId:         "rmi-job-allocation",
-  storageBucket:     "rmi-job-allocation.firebasestorage.app",
-  messagingSenderId: "420212187802",
-  appId:             "1:420212187802:web:d1bc5b9478eb808d347523"
-};
-const MGR_PW = "manager123";
-const USE_FIREBASE = CFG.apiKey !== "PASTE_apiKey_HERE";
-const USE_AUTH = USE_FIREBASE;
-
-const JOB_TYPES=[
-  'Panels Release','Flashings Release','Accessories Release','Purlins Release',
-  'Panels + Flashings Release','Panels + Accessories Release','Flashings + Accessories Release',
-  'Panels + Flashings + Accessories Release','Full Job Release','Shop Drawing',
-  'Editing Internally','Editing Revision','Erection Drawing','Civil Defense','BOM','Other'
-];
-
-const ACTIVITY_TYPE_LABELS={
-  login:'Login',logout:'Logout',created:'Job Created',assigned:'Job Assigned',started:'Job Started',
-  completed:'Job Completed',paused:'Job Paused',resumed:'Job Resumed',edited:'Job Edited',deleted:'Job Deleted',restored:'Job Restored',
-  pinned:'Job Pinned',reassigned:'Job Reassigned',bulk_edit:'Bulk Status Change',
-  extension_request:'Extension Request',ext_approved:'Extension Approved',ext_rejected:'Extension Rejected',
-  comment:'Comment',broadcast:'Broadcast',user_added:'User Added',user_removed:'User Removed',
-  report_export:'Report exported',jobs_archived:'Jobs archived',attachment_added:'Attachment added',
-  broadcast_edited:'Broadcast edited',settings_changed:'Settings changed',audit:'Audit',user_edited:'User Edited'
-};
-
-// ── STATE ────────────────────────────────────────────────────────────────────
+// ── MAIN-LOCAL STATE (firebase handles + UI-only mutables) ────────────────────
 let db, auth, storage, jCol, uCol, evCol, notifCol, extCol, bcastCol, logCol, authMapCol, archiveCol;
 let authStateReady=false, authLoginInProgress=false;
-let jobs=[], users=[], events=[], notifications=[], extRequests=[], broadcasts=[], activityLogs=[];
-let me=null, myFilter='all', lastDel=null, isDark=true;
+let calY=new Date().getFullYear(), calM=new Date().getMonth(), calFilterEmp='', calShowMode='all';
+let selectedJobs=new Set();
+let chartPrefs={bytype:{mode:'bar',showPct:true,showNum:true},bypriority:{mode:'bar',showPct:true,showNum:true}};
+let knownNotifIds=new Set(), notifSoundReady=false, notifSnapshotReady=false, notifBulkClearing=false;
+let fbUnsubs=[];
+let notifToastTimers=new Map();
+let confirmCallback=null, completeJobId=null;
+let tagStores={jtags:[],etags:[],mtags:[]};
 
 window.setF=function(f){
   setMyFilter(f);
   renderJobs();
 };
-let calY=new Date().getFullYear(), calM=new Date().getMonth(), calFilterEmp='', calShowMode='all';
-let selectedJobs=new Set(), currentATab='overview';
-let chartPrefs={bytype:{mode:'bar',showPct:true,showNum:true},bypriority:{mode:'bar',showPct:true,showNum:true}};
-let knownNotifIds=new Set(), notifSoundReady=false, notifSnapshotReady=false, notifBulkClearing=false;
-let fbUnsubs=[];
-const FB_LIMITS={notifications:60,activityLog:200,broadcasts:40,extensions:30,jobEvents:40,dashActivity:25,jobsListen:500};
-const JOBS_PAGE_SIZE=50;
-const ARCHIVE_AFTER_MS=90*86400000;
-const DEFAULT_SETTINGS={dashStatsView:'cards',notifSound:true,desktopNotif:true,muteLoginNotif:false,managerJobsScope:'all',jobsSort:'created',jobsPage:0,emailAssigned:true,emailStatus:true,emailDeadline:true,emailOverdue:true,emailExtension:true};
-const NOTIF_BUBBLE_TTL=120000;
-const NOTIF_TOAST_MAX=12;
-let notifToastTimers=new Map();
-let userSettings={...DEFAULT_SETTINGS};
-let confirmCallback=null, completeJobId=null;
-let tagStores={jtags:[],etags:[],mtags:[]};
-
-// ── STATE SETTERS (enable cross-module reassignment after split) ──────────────
-function setMe(v){me=v;}
-function setJobs(v){jobs=v;}
-function setUsers(v){users=v;}
-function setEvents(v){events=v;}
-function setNotifications(v){notifications=v;}
-function setExtRequests(v){extRequests=v;}
-function setBroadcasts(v){broadcasts=v;}
-function setActivityLogs(v){activityLogs=v;}
-function setMyFilter(v){myFilter=v;}
-function setLastDel(v){lastDel=v;}
-function setIsDark(v){isDark=v;}
-function setCurrentATab(v){currentATab=v;}
-function setUserSettings(v){userSettings=v;}
-
-// ── EMAILJS ──────────────────────────────────────────────────────────────────
-const EJS_SERVICE='service_s2xci8q';
-const EJS_TEMPLATE='template_4as1q75';
-const EJS_KEY='N_HEKFKra4RbkbfFA';
-
-function sendEmail(toEmail,subject,message,prefKey){
-  if(!toEmail||!USE_FIREBASE)return;
-  if(typeof emailjs==='undefined')return;
-  // check sender's own pref — only block if the email is TO the current user
-  if(prefKey&&toEmail===me?.email&&userSettings[prefKey]===false)return;
-  emailjs.send(EJS_SERVICE,EJS_TEMPLATE,{to_email:toEmail,subject,message},EJS_KEY).catch(()=>{});
-}
-function emailPref(key){return userSettings[key]!==false;}
-function emailUser(userId,subject,message,exceptIds=[]){
-  if(!userId||exceptIds.includes(userId))return;
-  const u=users.find(x=>x.id===userId);
-  if(u?.email)sendEmail(u.email,subject,message);
-}
-function emailJobOwner(j,subject,message,exceptIds=[]){
-  if(j?.owner)emailUser(j.owner,subject,message,exceptIds);
-}
-function emailManagersAndSupervisors(subject,message,exceptIds=[]){
-  users.filter(u=>['manager','supervisor'].includes(u.role)&&!exceptIds.includes(u.id)&&u.email)
-    .forEach(u=>sendEmail(u.email,subject,message));
-}
-function emailTeamLeaderOf(ownerId,subject,message,exceptIds=[]){
-  const tl=users.find(u=>u.role==='team_leader'&&users.filter(x=>x.teamLeaderId===u.id).some(x=>x.id===ownerId));
-  if(tl&&!exceptIds.includes(tl.id)&&tl.email)sendEmail(tl.email,subject,message);
-}
-function emailAllOversight(j,subject,message,exceptIds=[]){
-  emailManagersAndSupervisors(subject,message,exceptIds);
-  if(j?.owner)emailTeamLeaderOf(j.owner,subject,message,exceptIds);
-}
-
-// ── HELPERS ──────────────────────────────────────────────────────────────────
-function lsub(t){document.getElementById('lsub').textContent=t;}
-function toMillis(ts){
-  if(ts==null||ts===undefined)return 0;
-  if(typeof ts==='number'&&!isNaN(ts))return ts;
-  if(typeof ts?.toMillis==='function')return ts.toMillis();
-  if(typeof ts?.seconds==='number')return ts.seconds*1000+(ts.nanoseconds||0)/1e6;
-  const n=new Date(ts).getTime();
-  return isNaN(n)?0:n;
-}
-function escapeHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function fmt(ts){const ms=toMillis(ts);if(!ms)return'—';const d=new Date(ms);return d.toLocaleDateString('en-GB')+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});}
-function fmtShort(ts){const ms=toMillis(ts);if(!ms)return'—';return new Date(ms).toLocaleDateString('en-GB');}
-function tdiff(s,e){const d=Math.floor((toMillis(e)-toMillis(s))/1000);if(d<60)return d+'s';if(d<3600)return Math.floor(d/60)+'m';if(d<86400)return Math.floor(d/3600)+'h '+Math.floor((d%3600)/60)+'m';return Math.floor(d/86400)+'d '+Math.floor((d%86400)/3600)+'h';}
-function getJobPausedMs(j,endMs){
-  let ms=j.totalPausedMs||0;
-  if(j.status==='paused'&&j.pausedAt)ms+=toMillis(endMs||Date.now())-toMillis(j.pausedAt);
-  return ms;
-}
-function getJobDurationBreakdown(j,endMs){
-  const end=toMillis(endMs||(j.completed||Date.now()));
-  const start=toMillis(j.started||j.created);
-  const totalMs=Math.max(0,end-start);
-  const pausedMs=getJobPausedMs(j,end);
-  const activeMs=Math.max(0,totalMs-pausedMs);
-  return{totalMs,pausedMs,activeMs};
-}
-function formatJobDurationHtml(j){
-  if(!j.started&&!j.completed)return'';
-  const {totalMs,pausedMs,activeMs}=getJobDurationBreakdown(j);
-  if(j.status==='completed'){
-    if(pausedMs>0)return`<br>Completed: ${fmt(j.completed)} — ⏱ Job took ${tdiff(0,totalMs)} (${tdiff(0,pausedMs)} paused, ${tdiff(0,activeMs)} active work)`;
-    return`<br>Completed: ${fmt(j.completed)} — ⏱ ${tdiff(0,totalMs)}`;
-  }
-  if(j.status==='paused'){
-    const curPause=j.pausedAt?toMillis(Date.now())-toMillis(j.pausedAt):0;
-    return`<br><span style="color:var(--yellow);font-weight:500;">⏸ Paused${j.pausedAt?' since '+fmt(j.pausedAt):''} — this pause: ${tdiff(0,curPause)}, total paused: ${tdiff(0,pausedMs)}</span>`;
-  }
-  if((j.totalPausedMs||0)>0&&(j.status==='ongoing'||j.started)){
-    return`<br><span style="color:var(--text2);">⏱ Active work so far: ${tdiff(0,activeMs)} (${tdiff(0,pausedMs)} total paused time)</span>`;
-  }
-  return'';
-}
-function jobPauseDefaults(){return{totalPausedMs:0,pausedAt:null};}
-function uid(){return crypto.randomUUID();}
-function timeAgo(ts){const d=Date.now()-toMillis(ts);if(d<60000)return'just now';if(d<3600000)return Math.floor(d/60000)+'m ago';if(d<86400000)return Math.floor(d/3600000)+'h ago';return Math.floor(d/86400000)+'d ago';}
 
 // ── THEME ────────────────────────────────────────────────────────────────────
 window.toggleTheme=function(){
