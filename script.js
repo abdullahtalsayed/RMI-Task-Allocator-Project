@@ -51,7 +51,7 @@ let fbUnsubs=[];
 const FB_LIMITS={notifications:60,activityLog:200,broadcasts:40,extensions:30,jobEvents:40,dashActivity:25,jobsListen:500};
 const JOBS_PAGE_SIZE=50;
 const ARCHIVE_AFTER_MS=90*86400000;
-const DEFAULT_SETTINGS={dashStatsView:'cards',notifSound:true,desktopNotif:true,muteLoginNotif:false,managerJobsScope:'all',jobsSort:'created',jobsPage:0};
+const DEFAULT_SETTINGS={dashStatsView:'cards',notifSound:true,desktopNotif:true,muteLoginNotif:false,managerJobsScope:'all',jobsSort:'created',jobsPage:0,emailAssigned:true,emailStatus:true,emailDeadline:true,emailOverdue:true,emailExtension:true};
 const NOTIF_BUBBLE_TTL=120000;
 const NOTIF_TOAST_MAX=12;
 let notifToastTimers=new Map();
@@ -64,11 +64,14 @@ const EJS_SERVICE='service_s2xci8q';
 const EJS_TEMPLATE='template_4as1q75';
 const EJS_KEY='N_HEKFKra4RbkbfFA';
 
-function sendEmail(toEmail,subject,message){
+function sendEmail(toEmail,subject,message,prefKey){
   if(!toEmail||!USE_FIREBASE)return;
   if(typeof emailjs==='undefined')return;
+  // check sender's own pref — only block if the email is TO the current user
+  if(prefKey&&toEmail===me?.email&&userSettings[prefKey]===false)return;
   emailjs.send(EJS_SERVICE,EJS_TEMPLATE,{to_email:toEmail,subject,message},EJS_KEY).catch(()=>{});
 }
+function emailPref(key){return userSettings[key]!==false;}
 function emailUser(userId,subject,message,exceptIds=[]){
   if(!userId||exceptIds.includes(userId))return;
   const u=users.find(x=>x.id===userId);
@@ -814,6 +817,11 @@ window.saveSettingsFromUI=function(){
   userSettings.notifSound=el('set-notif-sound')?.checked!==false;
   userSettings.desktopNotif=el('set-desktop-notif')?.checked!==false;
   userSettings.muteLoginNotif=el('set-mute-login')?.checked===true;
+  userSettings.emailAssigned=el('set-email-assigned')?.checked!==false;
+  userSettings.emailStatus=el('set-email-status')?.checked!==false;
+  userSettings.emailDeadline=el('set-email-deadline')?.checked!==false;
+  userSettings.emailOverdue=el('set-email-overdue')?.checked!==false;
+  userSettings.emailExtension=el('set-email-extension')?.checked!==false;
   saveUserSettings();
   if(userSettings.desktopNotif)ensureDesktopNotifPermission();
   showToastMsg('Settings saved');
@@ -859,10 +867,18 @@ function renderAccountPreferences(){
   </div>`;
   el.innerHTML=`
   <div class="pref-card">
-    <div class="pref-card-hd">Notifications</div>
+    <div class="pref-card-hd">In-App Notifications</div>
     ${toggle('set-notif-sound','Sound','Play a chime for new notifications',s.notifSound)}
     ${toggle('set-desktop-notif','Desktop alerts','Show browser notifications',s.desktopNotif!==false)}
     ${me.role==='manager'?toggle('set-mute-login','Mute sign-in alerts','Don\'t notify me when staff log in',s.muteLoginNotif):''}
+  </div>
+  <div class="pref-card" style="margin-top:0.85rem;">
+    <div class="pref-card-hd">Email Alerts</div>
+    ${toggle('set-email-assigned','Job assigned to me','Email when a job is assigned or reassigned to you',s.emailAssigned!==false)}
+    ${toggle('set-email-status','Job status changes','Email when your job status changes',s.emailStatus!==false)}
+    ${toggle('set-email-deadline','Deadline reminders','Email when a deadline is within 24 hours',s.emailDeadline!==false)}
+    ${toggle('set-email-overdue','Overdue alerts','Email when a job becomes overdue',s.emailOverdue!==false)}
+    ${isLead()?toggle('set-email-extension','Extension requests','Email when a team member requests a deadline extension',s.emailExtension!==false):''}
   </div>`;
 }
 window.accountChangePassword=async function(){
@@ -1050,8 +1066,7 @@ function notifyReassign(j,fromId,toId,byName){
   if(fromId&&fromId!==toId)pushNotifExcept(ex,fromId,'🔄 Job Reassigned',`${label} reassigned from you to ${toName}`);
   notifyManagersAndSupervisors('🔄 Job Reassigned',`${byName} reassigned ${label} to ${toName}`,ex);
   // T2: email new owner on reassign
-  emailUser(toId,`Job Reassigned to You: ${label}`,`${byName} has reassigned a job to you.\n\nJob: ${label}`,ex);
-  emailAllOversight(j,`Job Reassigned: ${label}`,`${byName} reassigned ${label} to ${toName}`,ex);
+  if(emailPref('emailAssigned')){emailUser(toId,`Job Reassigned to You: ${label}`,`${byName} has reassigned a job to you.\n\nJob: ${label}`,ex);emailAllOversight(j,`Job Reassigned: ${label}`,`${byName} reassigned ${label} to ${toName}`,ex);}
 }
 function notifyForJobEvent(jobId,type,desc){
   if(!me)return;
@@ -1067,7 +1082,7 @@ function notifyForJobEvent(jobId,type,desc){
         notifyManagersAndSupervisors('📋 Job Assigned',`${me.name} assigned ${label} to ${owner}`,ex);
         notifyTeamLeaderOf(j?.owner,'📋 Job Assigned',`${me.name} assigned ${label} to ${owner}`,ex);
         // T1: email job owner on assignment
-        emailJobOwner(j,`New Job Assigned: ${label}`,`${me.name} has assigned you a new job.\n\nJob: ${label}\nAssigned by: ${me.name}`);
+        if(emailPref('emailAssigned'))emailJobOwner(j,`New Job Assigned: ${label}`,`${me.name} has assigned you a new job.\n\nJob: ${label}\nAssigned by: ${me.name}`);
       }else{
         notifyManagersAndSupervisors('➕ New Job Created',`${me.name} created ${label}`,ex);
         notifyTeamLeaderOf(j?.owner,'➕ New Job Created',`${me.name} created ${label}`,ex);
@@ -1078,29 +1093,25 @@ function notifyForJobEvent(jobId,type,desc){
       notifyManagersAndSupervisors('▶ Job Started',`${me.name} started ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'▶ Job Started',`${me.name} started ${label}`,ex);
       // T3: status change emails
-      emailJobOwner(j,`Job Started: ${label}`,`${me.name} has started the job.\n\nJob: ${label}`,ex);
-      emailAllOversight(j,`Job Started: ${label}`,`${me.name} started ${label}`,ex);
+      if(emailPref('emailStatus')){emailJobOwner(j,`Job Started: ${label}`,`${me.name} has started the job.\n\nJob: ${label}`,ex);emailAllOversight(j,`Job Started: ${label}`,`${me.name} started ${label}`,ex);}
       break;
     case 'paused':
       notifyJobOwner(j,'⏸ Job Paused',`${me.name} paused ${label}`,ex);
       notifyManagersAndSupervisors('⏸ Job Paused',`${me.name} paused ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'⏸ Job Paused',`${me.name} paused ${label}`,ex);
-      emailJobOwner(j,`Job Paused: ${label}`,`${me.name} has paused the job.\n\nJob: ${label}`,ex);
-      emailAllOversight(j,`Job Paused: ${label}`,`${me.name} paused ${label}`,ex);
+      if(emailPref('emailStatus')){emailJobOwner(j,`Job Paused: ${label}`,`${me.name} has paused the job.\n\nJob: ${label}`,ex);emailAllOversight(j,`Job Paused: ${label}`,`${me.name} paused ${label}`,ex);}
       break;
     case 'resumed':
       notifyJobOwner(j,'▶ Job Resumed',`${me.name} resumed ${label}`,ex);
       notifyManagersAndSupervisors('▶ Job Resumed',`${me.name} resumed ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'▶ Job Resumed',`${me.name} resumed ${label}`,ex);
-      emailJobOwner(j,`Job Resumed: ${label}`,`${me.name} has resumed the job.\n\nJob: ${label}`,ex);
-      emailAllOversight(j,`Job Resumed: ${label}`,`${me.name} resumed ${label}`,ex);
+      if(emailPref('emailStatus')){emailJobOwner(j,`Job Resumed: ${label}`,`${me.name} has resumed the job.\n\nJob: ${label}`,ex);emailAllOversight(j,`Job Resumed: ${label}`,`${me.name} resumed ${label}`,ex);}
       break;
     case 'completed':
       notifyJobOwner(j,'✅ Job Completed',`${me.name} completed ${label}`,ex);
       notifyManagersAndSupervisors('✅ Job Completed',`${me.name} completed ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'✅ Job Completed',`${me.name} completed ${label}`,ex);
-      emailJobOwner(j,`Job Completed: ${label}`,`${me.name} has completed the job.\n\nJob: ${label}`,ex);
-      emailAllOversight(j,`Job Completed: ${label}`,`${me.name} completed ${label}`,ex);
+      if(emailPref('emailStatus')){emailJobOwner(j,`Job Completed: ${label}`,`${me.name} has completed the job.\n\nJob: ${label}`,ex);emailAllOversight(j,`Job Completed: ${label}`,`${me.name} completed ${label}`,ex);}
       break;
     case 'edited':
       notifyJobOwner(j,'✏️ Job Edited',`${me.name} edited ${label}`,ex);
@@ -1134,8 +1145,7 @@ function notifyForJobEvent(jobId,type,desc){
       pushNotifToManagers('📅 Extension Request',`${me.name} requested an extension for ${label}`,ex);
       notifyTeamLeaderOf(j?.owner,'📅 Extension Request',`${me.name} requested an extension for ${label}`,ex);
       // T7: extension request emails oversight
-      emailManagersAndSupervisors(`Extension Request: ${label}`,`${me.name} has requested a deadline extension.\n\nJob: ${label}`,ex);
-      emailTeamLeaderOf(j?.owner,`Extension Request: ${label}`,`${me.name} requested a deadline extension for ${label}`,ex);
+      if(emailPref('emailExtension')){emailManagersAndSupervisors(`Extension Request: ${label}`,`${me.name} has requested a deadline extension.\n\nJob: ${label}`,ex);emailTeamLeaderOf(j?.owner,`Extension Request: ${label}`,`${me.name} requested a deadline extension for ${label}`,ex);}
       break;
     case 'ext_approved':
       notifyManagersAndSupervisors('✅ Extension Approved',short,ex);
@@ -3737,10 +3747,9 @@ function checkDeadlineReminders(){
     pushNotif(j.owner,'Deadline Soon',msg);
     if(j.owner!==me.id&&canManageJob(j))pushNotif(me.id,'Deadline Soon',msg);
     // T4: email job owner
-    emailUser(j.owner,`Deadline Soon: ${label}`,emailBody);
+    if(emailPref('emailDeadline'))emailUser(j.owner,`Deadline Soon: ${label}`,emailBody);
     // T5: email oversight (TL + managers/supervisors)
-    emailTeamLeaderOf(j.owner,`Team Deadline Soon: ${label}`,emailBody);
-    emailManagersAndSupervisors(`Deadline Soon: ${label}`,emailBody);
+    if(emailPref('emailDeadline')){emailTeamLeaderOf(j.owner,`Team Deadline Soon: ${label}`,emailBody);emailManagersAndSupervisors(`Deadline Soon: ${label}`,emailBody);}
     reminded[key]=now;
   }
   localStorage.setItem('rmi_dl_reminded',JSON.stringify(reminded));
@@ -3756,9 +3765,7 @@ function checkOverdueEmails(){
     const label=`${j.client} (#${j.jobNum})`;
     const emailBody=`A job is overdue and has not been completed.\n\nJob: ${label}\nDeadline passed: ${new Date(toMillis(j.deadline)).toLocaleString()}`;
     // T6: email owner + oversight
-    emailUser(j.owner,`Overdue Job: ${label}`,emailBody);
-    emailTeamLeaderOf(j.owner,`Overdue Job (Team): ${label}`,emailBody);
-    emailManagersAndSupervisors(`Overdue Job: ${label}`,emailBody);
+    if(emailPref('emailOverdue')){emailUser(j.owner,`Overdue Job: ${label}`,emailBody);emailTeamLeaderOf(j.owner,`Overdue Job (Team): ${label}`,emailBody);emailManagersAndSupervisors(`Overdue Job: ${label}`,emailBody);}
     notified[key]=now;
   }
   localStorage.setItem('rmi_overdue_emailed',JSON.stringify(notified));
