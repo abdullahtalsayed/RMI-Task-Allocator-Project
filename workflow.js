@@ -497,26 +497,16 @@ function _wfTlVisual(j){
 export function wfTimeline(j){return _wfTlList(j);}
 
 // ── TIMELINE TOGGLE ───────────────────────────────────────────────────────────
-const _tlMode={};
-function _renderTl(id){
-  const el=document.getElementById('wf-tl-'+id);
-  if(!el||el.style.display==='none')return;
-  const j=jobs.find(x=>x.id===id);if(!j)return;
-  const mode=_tlMode[id]||'list';
-  const modeTabs=`<div class="wf-tl-modetabs">
-    <button class="wf-tl-mtab${mode==='list'?' active':''}" onclick="wfSetTlMode('${id}','list')">☰ List</button>
-    <button class="wf-tl-mtab${mode==='visual'?' active':''}" onclick="wfSetTlMode('${id}','visual')">📊 Visual</button>
-  </div>`;
-  el.innerHTML=modeTabs+(mode==='visual'?_wfTlVisual(j):_wfTlList(j));
-}
 window.wfToggleTimeline=function(id){
   const el=document.getElementById('wf-tl-'+id);
   if(!el)return;
   const hidden=el.style.display==='none'||!el.style.display;
   el.style.display=hidden?'block':'none';
-  if(hidden)_renderTl(id);
+  if(hidden){
+    const j=jobs.find(x=>x.id===id);
+    if(j)el.innerHTML=_wfTlVisual(j);
+  }
 };
-window.wfSetTlMode=function(id,mode){_tlMode[id]=mode;_renderTl(id);};
 
 // ── STAGE PROGRESS PIPELINE (visual) ──────────────────────────────────────────
 const PIPELINE=['intake','drafting','tl_sample_review','detailing','tl_sd_review','client_wait','jobcard','tl_jobcard_review','completed'];
