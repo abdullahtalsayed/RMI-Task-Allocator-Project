@@ -3335,7 +3335,7 @@ function anTrendChart(points){
   const xy=points.map((p,i)=>({x:pad+i*stepX,y:H-pad-(p.value/max)*(H-pad*2),...p}));
   const line=xy.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const area=`M${xy[0].x},${H-pad} `+xy.map(p=>`L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+` L${xy[xy.length-1].x},${H-pad} Z`;
-  return`<div class="an-trend"><svg viewBox="0 0 ${W} ${H+18}" width="${W}" height="${H+18}" preserveAspectRatio="xMidYMid meet" style="overflow:visible;max-width:100%;display:block;">
+  return`<div class="an-trend"><svg viewBox="0 0 ${W} ${H+18}" width="100%" height="auto" preserveAspectRatio="xMidYMid meet" style="overflow:visible;display:block;max-height:${H+18}px;">
     <path d="${area}" fill="rgba(50,215,75,0.12)"/>
     <path d="${line}" fill="none" stroke="var(--green)" stroke-width="2" stroke-linejoin="round"/>
     ${xy.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="var(--green)"><title>${escapeHtml(p.label)}: ${p.value}</title></circle>`).join('')}
@@ -3355,7 +3355,7 @@ function anDualLineChart(seriesA,seriesB,labelA,labelB,colorA,colorB){
   const legend=(col,lbl)=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;color:var(--text2);"><span style="display:inline-block;width:14px;height:2px;background:${col};border-radius:1px;"></span>${lbl}</span>`;
   return`<div class="an-trend">
     <div style="display:flex;gap:1rem;margin-bottom:0.4rem;">${legend(colorA,labelA)}${legend(colorB,labelB)}</div>
-    <svg viewBox="0 0 ${W} ${H+18}" width="${W}" height="${H+18}" preserveAspectRatio="xMidYMid meet" style="overflow:visible;max-width:100%;display:block;">
+    <svg viewBox="0 0 ${W} ${H+18}" width="100%" height="auto" preserveAspectRatio="xMidYMid meet" style="overflow:visible;display:block;max-height:${H+18}px;">
       ${mkLine(xyA,colorA)}${mkLine(xyB,colorB)}
       ${mkDots(xyA,colorA)}${mkDots(xyB,colorB)}
       ${xyA.map(p=>`<text x="${p.x.toFixed(1)}" y="${H+10}" text-anchor="middle" class="an-trend-lbl">${escapeHtml(p.label)}</text>`).join('')}
