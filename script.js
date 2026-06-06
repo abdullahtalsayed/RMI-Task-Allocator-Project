@@ -40,7 +40,7 @@ let jobs=[], users=[], events=[], notifications=[], extRequests=[], broadcasts=[
 let me=null, myFilter='all', lastDel=null, isDark=true;
 
 window.setF=function(f){
-  myFilter=f;
+  setMyFilter(f);
   renderJobs();
 };
 let calY=new Date().getFullYear(), calM=new Date().getMonth(), calFilterEmp='', calShowMode='all';
@@ -58,6 +58,21 @@ let notifToastTimers=new Map();
 let userSettings={...DEFAULT_SETTINGS};
 let confirmCallback=null, completeJobId=null;
 let tagStores={jtags:[],etags:[],mtags:[]};
+
+// ── STATE SETTERS (enable cross-module reassignment after split) ──────────────
+function setMe(v){me=v;}
+function setJobs(v){jobs=v;}
+function setUsers(v){users=v;}
+function setEvents(v){events=v;}
+function setNotifications(v){notifications=v;}
+function setExtRequests(v){extRequests=v;}
+function setBroadcasts(v){broadcasts=v;}
+function setActivityLogs(v){activityLogs=v;}
+function setMyFilter(v){myFilter=v;}
+function setLastDel(v){lastDel=v;}
+function setIsDark(v){isDark=v;}
+function setCurrentATab(v){currentATab=v;}
+function setUserSettings(v){userSettings=v;}
 
 // ── EMAILJS ──────────────────────────────────────────────────────────────────
 const EJS_SERVICE='service_s2xci8q';
@@ -142,7 +157,7 @@ function timeAgo(ts){const d=Date.now()-toMillis(ts);if(d<60000)return'just now'
 
 // ── THEME ────────────────────────────────────────────────────────────────────
 window.toggleTheme=function(){
-  isDark=!isDark;
+  setIsDark(!isDark);
   document.body.classList.toggle('light-mode',!isDark);
   localStorage.setItem('rmi_theme',isDark?'dark':'light');
 };
@@ -262,13 +277,13 @@ function localSave(){
   localStorage.setItem('rmi_activitylogs',JSON.stringify(activityLogs));
 }
 function localLoad(){
-  users=JSON.parse(localStorage.getItem('rmi_users')||'[]');
-  jobs=JSON.parse(localStorage.getItem('rmi_jobs')||'[]');
-  events=JSON.parse(localStorage.getItem('rmi_events')||'[]');
-  notifications=JSON.parse(localStorage.getItem('rmi_notifs')||'[]');
-  extRequests=JSON.parse(localStorage.getItem('rmi_exts')||'[]');
-  broadcasts=JSON.parse(localStorage.getItem('rmi_bcasts')||'[]');
-  activityLogs=JSON.parse(localStorage.getItem('rmi_activitylogs')||localStorage.getItem('rmi_loginlogs')||'[]');
+  setUsers(JSON.parse(localStorage.getItem('rmi_users')||'[]'));
+  setJobs(JSON.parse(localStorage.getItem('rmi_jobs')||'[]'));
+  setEvents(JSON.parse(localStorage.getItem('rmi_events')||'[]'));
+  setNotifications(JSON.parse(localStorage.getItem('rmi_notifs')||'[]'));
+  setExtRequests(JSON.parse(localStorage.getItem('rmi_exts')||'[]'));
+  setBroadcasts(JSON.parse(localStorage.getItem('rmi_bcasts')||'[]'));
+  setActivityLogs(JSON.parse(localStorage.getItem('rmi_activitylogs')||localStorage.getItem('rmi_loginlogs')||'[]'));
   if(!users.find(u=>u.role==='manager'))users.push({id:'manager',name:'Manager',role:'manager',password:MGR_PW,email:'',viewAll:'yes'});
   localSave();
 }
@@ -277,7 +292,7 @@ function localLoad(){
 async function init(){
   // Restore theme
   const savedTheme=localStorage.getItem('rmi_theme');
-  if(savedTheme==='light'){isDark=false;document.body.classList.add('light-mode');}
+  if(savedTheme==='light'){setIsDark(false);document.body.classList.add('light-mode');}
 
   if(!USE_FIREBASE){
     lsub('Running locally — fill in Firebase config to go online');
@@ -306,13 +321,13 @@ async function init(){
       if(uSnap.empty){
         lsub('Creating manager account...');
         await setDoc(doc(uCol,'manager'),{name:'Manager',role:'manager',email:'',viewAll:'yes',needsActivation:true,tempPassword:MGR_PW});
-        users=[{id:'manager',name:'Manager',role:'manager',email:'',viewAll:'yes',needsActivation:true,tempPassword:MGR_PW}];
+        setUsers([{id:'manager',name:'Manager',role:'manager',email:'',viewAll:'yes',needsActivation:true,tempPassword:MGR_PW}]);
       }else{
-        users=uSnap.docs.map(d=>({id:d.id,...d.data()}));
+        setUsers(uSnap.docs.map(d=>({id:d.id,...d.data()})));
       }
     }catch(loadErr){
       if(loadErr?.code==='permission-denied'){
-        users=[];
+        setUsers([]);
         console.warn('Users preload blocked — publish firestore.rules from project folder, then refresh.');
       }else throw loadErr;
     }
@@ -464,7 +479,7 @@ function showLoginScreen(){
 }
 function softLogoutUI(){
   detachFirebaseListeners();
-  me=null;
+  setMe(null);
   notifSoundReady=false;
   notifSnapshotReady=false;
   knownNotifIds=new Set();
@@ -528,14 +543,14 @@ function jobsQueryForUser(){
 async function refreshUsersRemote(){
   if(!USE_FIREBASE||!uCol)return;
   const snap=await getDocs(uCol);
-  users=snap.docs.map(d=>({id:d.id,...d.data()}));
+  setUsers(snap.docs.map(d=>({id:d.id,...d.data()})));
   populateADrop();renderUList();populateReassignDrops();populateCalEmpDrop();
   if(document.getElementById('cal')?.classList.contains('on'))renderCal();
 }
 async function refreshActivityLogsRemote(){
   if(USE_FIREBASE&&logCol){
     const snap=await getDocs(query(logCol,limit(FB_LIMITS.activityLog)));
-    activityLogs=snap.docs.map(d=>({id:d.id,...d.data()}));
+    setActivityLogs(snap.docs.map(d=>({id:d.id,...d.data()})));
     activityLogs.sort((a,b)=>(b.ts||0)-(a.ts||0));
   }
   populateActivityLogFilters();
@@ -544,7 +559,7 @@ async function refreshActivityLogsRemote(){
 async function refreshBroadcastsRemote(){
   if(USE_FIREBASE&&bcastCol){
     const snap=await getDocs(query(bcastCol,limit(FB_LIMITS.broadcasts)));
-    broadcasts=snap.docs.map(d=>({id:d.id,...d.data()}));
+    setBroadcasts(snap.docs.map(d=>({id:d.id,...d.data()})));
     broadcasts.sort((a,b)=>(b.created||0)-(a.created||0));
   }
   renderBroadcasts();
@@ -552,13 +567,13 @@ async function refreshBroadcastsRemote(){
 async function refreshExtensionsRemote(){
   if(!USE_FIREBASE||!extCol)return;
   const snap=await getDocs(query(extCol,limit(FB_LIMITS.extensions)));
-  extRequests=snap.docs.map(d=>({id:d.id,...d.data()}));
+  setExtRequests(snap.docs.map(d=>({id:d.id,...d.data()})));
   if(me?.role==='manager')renderDashExtensions();
 }
 async function refreshJobEventsRemote(jobId){
   if(!USE_FIREBASE||!evCol||!jobId)return;
   const snap=await getDocs(query(evCol,where('jobId','==',jobId),limit(FB_LIMITS.jobEvents)));
-  events=events.filter(e=>e.jobId!==jobId);
+  setEvents(events.filter(e=>e.jobId!==jobId));
   snap.docs.forEach(d=>events.push({id:d.id,...d.data()}));
 }
 function attachFirebaseListeners(){
@@ -566,14 +581,14 @@ function attachFirebaseListeners(){
   if(!USE_FIREBASE||!me||!db)return;
   const jq=jobsQueryForUser();
   fbUnsubs.push(onSnapshot(jq,snap=>{
-    jobs=snap.docs.map(d=>({id:d.id,...d.data()}));
+    setJobs(snap.docs.map(d=>({id:d.id,...d.data()})));
     jobs.sort((a,b)=>(b.created||0)-(a.created||0));
     renderAll();
     if(isLead())renderBoard();
     updateSynced();
   }));
   fbUnsubs.push(onSnapshot(query(notifCol,where('userId','==',me.id),limit(FB_LIMITS.notifications)),snap=>{
-    notifications=snap.docs.map(d=>({id:d.id,...d.data()}));
+    setNotifications(snap.docs.map(d=>({id:d.id,...d.data()})));
     onNotificationsUpdated();
   }));
 }
@@ -689,7 +704,7 @@ window.doLogin=async function(){
 async function ensureUsersLoaded(){
   if(users.length||!USE_FIREBASE||!uCol)return;
   const uSnap=await getDocs(query(uCol,where('needsActivation','==',true)));
-  users=uSnap.docs.map(d=>({id:d.id,...d.data()}));
+  setUsers(uSnap.docs.map(d=>({id:d.id,...d.data()})));
 }
 window.doActivate=async function(){
   if(!USE_AUTH){showLoginErr('Firebase not configured.',true);return;}
@@ -747,7 +762,7 @@ window.doForgotPassword=async function(){
 };
 
 function loginAs(u){
-  me=u;
+  setMe(u);
   playPageTransition();
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='block';
@@ -756,7 +771,7 @@ function loginAs(u){
   const ico=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':u.role==='team_leader'?'🧭':'👤';
   document.getElementById('ubadge').textContent=ico+' '+u.name;
   localStorage.setItem('rmi_session',u.id);
-  userSettings=loadUserSettings();
+  setUserSettings(loadUserSettings());
   attachFirebaseListeners();
   refreshUsersRemote();
   applyMainNav();
@@ -774,7 +789,7 @@ function loginAs(u){
 window.doLogout=async function(){
   if(me)logActivity({type:'logout',category:'auth',desc:`${me.name} signed out`,userId:me.id,userName:me.name,role:me.role});
   detachFirebaseListeners();
-  me=null;
+  setMe(null);
   notifSoundReady=false;
   notifSnapshotReady=false;
   knownNotifIds=new Set();
@@ -827,7 +842,7 @@ window.saveSettingsFromUI=function(){
   showToastMsg('Settings saved');
 };
 window.resetUserSettings=function(){
-  userSettings={...DEFAULT_SETTINGS};
+  setUserSettings({...DEFAULT_SETTINGS});
   saveUserSettings();
   renderSettings();
   showToastMsg('Settings reset');
@@ -1237,7 +1252,7 @@ window.clearNotif=async function(id){
     try{await deleteDoc(doc(notifCol,id));}
     catch(e){showToastMsg('Could not clear that notification.');}
   }else{
-    notifications=notifications.filter(n=>n.id!==id);
+    setNotifications(notifications.filter(n=>n.id!==id));
     knownNotifIds.delete(id);
     localSave();
     renderNotifPanel();
@@ -1250,7 +1265,7 @@ window.clearAllNotifs=async function(){
   if(!mine.length)return;
   if(!confirm(`Clear all ${mine.length} notification(s) shown? Any older ones in the database will be removed too.`))return;
   notifBulkClearing=true;
-  notifications=[];
+  setNotifications([]);
   knownNotifIds=new Set();
   renderNotifPanel();
   updateNotifBadge();
@@ -1261,7 +1276,7 @@ window.clearAllNotifs=async function(){
       showToastMsg(total?`Cleared ${total} notification(s).`:'Notifications cleared.');
     }else{
       const ids=new Set(mine.map(n=>n.id));
-      notifications=notifications.filter(n=>!ids.has(n.id));
+      setNotifications(notifications.filter(n=>!ids.has(n.id)));
       knownNotifIds=new Set();
       localSave();
       showToastMsg('Notifications cleared.');
@@ -1557,7 +1572,7 @@ async function jUpdate(id,data){
 }
 async function jDelete(id){
   if(USE_FIREBASE){await deleteDoc(doc(db,'jobs',id));}
-  else{jobs=jobs.filter(x=>x.id!==id);localSave();renderAll();}
+  else{setJobs(jobs.filter(x=>x.id!==id));localSave();renderAll();}
 }
 async function jRestore(j){
   if(USE_FIREBASE){const{id,...data}=j;await setDoc(doc(db,'jobs',id),data);}
@@ -1573,7 +1588,7 @@ async function uUpdate(id,data){
 }
 async function uDelete(id){
   if(USE_FIREBASE){await deleteDoc(doc(uCol,id));}
-  else{users=users.filter(u=>u.id!==id);localSave();populateADrop();renderUList();populateCalEmpDrop();}
+  else{setUsers(users.filter(u=>u.id!==id));localSave();populateADrop();renderUList();populateCalEmpDrop();}
 }
 function empOverdueJobs(uid){return visibleJobs().filter(j=>j.owner===uid&&isOverdue(j));}
 function dateKey(ts){const ms=toMillis(ts);if(!ms)return'';const d=new Date(ms);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -1683,7 +1698,7 @@ window.delJob=async function(id){
   if(!j||!canManageJob(j)){showToastMsg('Not authorized.');return;}
   if(j.managerAssigned&&me.role!=='manager'){showToastMsg('Cannot delete manager-assigned tasks.');return;}
   showConfirm('Delete Job','This job will be deleted. You can undo within 15 seconds.',async()=>{
-    lastDel=j;
+    setLastDel(j);
     await addEvent(id,'deleted',`Job deleted by ${me.name}`,'red');
     await jDelete(id);
     const t=document.getElementById('toast');t.style.display='block';setTimeout(()=>t.style.display='none',15000);
@@ -1694,7 +1709,7 @@ window.undoDel=async function(){
   if(!canManageJob(lastDel)){showToastMsg('Not authorized.');return;}
   await jRestore(lastDel);
   await addEvent(lastDel.id,'restored',`Job restored by ${me.name}`,'green');
-  lastDel=null;document.getElementById('toast').style.display='none';
+  setLastDel(null);document.getElementById('toast').style.display='none';
 };
 
 window.editJob=function(id){
@@ -1942,7 +1957,7 @@ window.deleteBroadcast=function(id){
   const preview=(b.msg||'').slice(0,80)+(b.msg&&b.msg.length>80?'…':'');
   showConfirm('Delete Broadcast',`Remove this message from history?\n\n"${preview}"`,async()=>{
     if(USE_FIREBASE&&bcastCol){await deleteDoc(doc(bcastCol,id));}
-    broadcasts=broadcasts.filter(x=>x.id!==id);
+    setBroadcasts(broadcasts.filter(x=>x.id!==id));
     if(!USE_FIREBASE)localSave();
     await logActivity({type:'broadcast',category:'broadcast',desc:`${me.name} deleted broadcast: ${preview}`,userId:me.id,userName:me.name,role:me.role});
     renderBroadcasts();
@@ -2787,7 +2802,7 @@ const PRIORITY_CHART_COLORS={High:'#e05555',Medium:'#c9a227',Low:'#7a8a9a'};
 const TYPE_CHART_COLORS=['#4a9eff','#9b59b6','#2ecc71','#e67e22','#1abc9c','#e74c3c','#3498db','#f39c12','#16a085','#8e44ad','#27ae60','#d35400','#2980b9','#c0392b','#fd79a8','#00cec9','#6c5ce7'];
 
 window.setATab=function(tab,btn){
-  currentATab=tab;
+  setCurrentATab(tab);
   document.querySelectorAll('.atabs button').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
   renderAnalyticsContent();
@@ -3345,7 +3360,7 @@ window.undoDel=async function(){
   if(!canManageJob(lastDel)){showToastMsg('Not authorized.');return;}
   await jRestore(lastDel);
   await addEvent(lastDel.id,'restored',`Job restored by ${me.name}`,'green');
-  lastDel=null;document.getElementById('toast').style.display='none';
+  setLastDel(null);document.getElementById('toast').style.display='none';
 };
 setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleDateString('en-GB')+' '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
 
