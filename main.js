@@ -2252,6 +2252,9 @@ function allJobTypesForAnalytics(scope){
   JOB_TYPES.forEach(t=>fromJobs.add(t));
   return [...fromJobs];
 }
+let _anSubTab='overview';
+window.setAnSubTab=function(t){_anSubTab=t;renderAnalyticsContent();};
+
 function renderAnalyticsContent(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
   if(analyticsView==='teams'){renderTeamsAnalytics(el);bindChartInteractions(el);return;}
@@ -2261,8 +2264,20 @@ function renderAnalyticsContent(){
   const now=new Date();
   const ws=new Date(now);ws.setDate(now.getDate()-now.getDay());ws.setHours(0,0,0,0);
   const total=myJobs.length||1;
+  const hasWf=jobs.some(j=>j.workflow);
 
-  // ── KPI numbers ──
+  // sub-tabs (always visible)
+  const subTabs=[
+    {k:'overview',label:'📊 Overview'},
+    {k:'jobs',label:'🗂 Jobs'},
+    ...(mgr?[{k:'team',label:'👥 Team'}]:[]),
+    ...(hasWf?[{k:'workflow',label:'🧺 Workflow'}]:[])
+  ];
+  // guard: if current tab not available for this role, reset
+  if(!subTabs.find(t=>t.k===_anSubTab))_anSubTab='overview';
+  const tabBar=`<div class="an-subtabs">${subTabs.map(t=>`<button class="an-subtab${t.k===_anSubTab?' active':''}" onclick="setAnSubTab('${t.k}')">${t.label}</button>`).join('')}</div>`;
+
+  // ── shared data ──
   const pending=myJobs.filter(j=>j.status==='pending').length;
   const ongoing=myJobs.filter(j=>j.status==='ongoing').length;
   const paused=myJobs.filter(j=>j.status==='paused').length;
@@ -2273,62 +2288,72 @@ function renderAnalyticsContent(){
   const dn=myJobs.filter(j=>j.completed&&j.created);
   const avg=dn.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/(dn.length||1);
   const compRate=Math.round(completed/total*100);
-
   const kpi=(label,val,color,sub='')=>
     `<div class="an-kpi"><div class="an-kpi-label">${label}</div><div class="an-kpi-value" style="color:${color}">${val}</div>${sub?`<div class="an-kpi-sub">${sub}</div>`:''}</div>`;
 
-  // ── Status donut ──
-  const donutData=[
-    {label:'Pending',value:pending,color:'#ffd60a'},
-    {label:'Ongoing',value:ongoing,color:'#0a84ff'},
-    {label:'Paused',value:paused,color:'#6e6e73'},
-    {label:'Completed',value:completed,color:'#32d74b'}
-  ];
+  let body='';
 
-  // ── By type ──
-  const typeRows=allJobTypesForAnalytics(myJobs)
-    .filter(t=>myJobs.some(j=>j.type===t))
-    .map((t,i)=>({label:t,value:myJobs.filter(j=>j.type===t).length,color:TYPE_CHART_COLORS[i%TYPE_CHART_COLORS.length]}))
-    .filter(r=>r.value>0).sort((a,b)=>b.value-a.value).slice(0,12);
+  // ── OVERVIEW ──
+  if(_anSubTab==='overview'){
+    const donutData=[
+      {label:'Pending',value:pending,color:'#ffd60a'},
+      {label:'Ongoing',value:ongoing,color:'#0a84ff'},
+      {label:'Paused',value:paused,color:'#6e6e73'},
+      {label:'Completed',value:completed,color:'#32d74b'}
+    ];
+    const byMonth={};
+    myJobs.filter(j=>j.completed).forEach(j=>{
+      const d=new Date(toMillis(j.completed));
+      const k=d.toLocaleString('en-GB',{month:'short',year:'2-digit'});
+      byMonth[k]=(byMonth[k]||0)+1;
+    });
+    const monthPts=Object.entries(byMonth).slice(-8).map(([label,value])=>({label,value}));
+    body=`
+      <div class="an-kpis">
+        ${kpi('Pending',pending,'var(--yellow)')}
+        ${kpi('Ongoing',ongoing,'var(--blue)')}
+        ${kpi('Paused',paused,'var(--text2)')}
+        ${kpi('Completed',completed,'var(--green)',compRate+'% rate')}
+        ${kpi('Overdue',overdueN,overdueN?'var(--red)':'var(--text3)')}
+        ${kpi('Done Today',dt,'var(--yellow)')}
+        ${kpi('Done This Week',dw,'var(--blue)')}
+        ${kpi('Avg Completion',dn.length?tdiff(0,avg):'—','var(--text2)')}
+      </div>
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(donutData,myJobs.length,'jobs')}</div>
+        <div class="an-widget"><div class="an-widget-hd">Monthly Completions</div>${anTrendChart(monthPts)}</div>
+      </div>`;
+  }
 
-  // ── By priority (completion rate) ──
-  const priRows=['High','Medium','Low'].map(p=>{
-    const all=myJobs.filter(j=>j.priority===p);
-    const done=all.filter(j=>j.status==='completed').length;
-    const t=all.length;
-    return{label:p,value:t?Math.round(done/t*100):0,sub:`${done}/${t}`,color:PRIORITY_CHART_COLORS[p]};
-  }).filter(r=>r.sub!=='0/0');
+  // ── JOBS ──
+  else if(_anSubTab==='jobs'){
+    const typeRows=allJobTypesForAnalytics(myJobs)
+      .filter(t=>myJobs.some(j=>j.type===t))
+      .map((t,i)=>({label:t,value:myJobs.filter(j=>j.type===t).length,color:TYPE_CHART_COLORS[i%TYPE_CHART_COLORS.length]}))
+      .filter(r=>r.value>0).sort((a,b)=>b.value-a.value).slice(0,14);
+    const priRows=['High','Medium','Low'].map(p=>{
+      const all=myJobs.filter(j=>j.priority===p);
+      const done=all.filter(j=>j.status==='completed').length;
+      const t=all.length;
+      return{label:p,value:t?Math.round(done/t*100):0,sub:`${done}/${t}`,color:PRIORITY_CHART_COLORS[p]};
+    }).filter(r=>r.sub!=='0/0');
+    body=`
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Jobs by Type</div>${anBars(typeRows)}</div>
+        <div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>
+      </div>`;
+  }
 
-  // ── Monthly completions trend ──
-  const byMonth={};
-  myJobs.filter(j=>j.completed).forEach(j=>{
-    const d=new Date(toMillis(j.completed));
-    const k=d.toLocaleString('en-GB',{month:'short',year:'2-digit'});
-    byMonth[k]=(byMonth[k]||0)+1;
-  });
-  const monthPts=Object.entries(byMonth).slice(-8).map(([label,value])=>({label,value}));
-
-  // ── Team load (manager+) ──
-  let teamSection='';
-  if(mgr){
+  // ── TEAM (manager+) ──
+  else if(_anSubTab==='team'&&mgr){
     const pool=teamUsersForView().filter(u=>!isNonStaffRole(u.role)&&u.role!=='manager');
     const activeRows=pool.map(u=>{
       const c=myJobs.filter(j=>j.owner===u.id&&j.status!=='completed').length;
       return{label:u.name,value:c,color:c>=5?'var(--red)':c>=3?'var(--yellow)':'var(--green)'};
     }).sort((a,b)=>b.value-a.value);
     const totalRows=pool.map(u=>({
-      label:u.name,
-      value:myJobs.filter(j=>j.owner===u.id).length,
-      color:'var(--purple)'
+      label:u.name,value:myJobs.filter(j=>j.owner===u.id).length,color:'var(--purple)'
     })).sort((a,b)=>b.value-a.value);
-    teamSection=`
-      <div class="an-section-title">👤 Team Load</div>
-      <div class="an-row-2">
-        <div class="an-widget"><div class="an-widget-hd">Active Jobs by Employee <span class="an-hd-note">red=5+, yellow=3+</span></div>${anBars(activeRows)}</div>
-        <div class="an-widget"><div class="an-widget-hd">Total Jobs by Employee</div>${anBars(totalRows)}</div>
-      </div>`;
-
-    // ── Performance cards ──
     const perfCards=pool.map(u=>{
       const ej=myJobs.filter(j=>j.owner===u.id);
       const doneJ=ej.filter(j=>j.completed&&j.created);
@@ -2342,39 +2367,23 @@ function renderAnalyticsContent(){
         <div class="an-perf-row"><span>Active</span><strong>${ej.filter(j=>j.status!=='completed').length}</strong></div>
         <div class="an-perf-row"><span>This Week</span><strong>${wkDone}</strong></div>
         <div class="an-perf-row"><span>Overdue</span><strong style="color:${od?'var(--red)':'var(--green)'}">${od}</strong></div>
-        <div class="an-perf-row"><span>Avg Time</span><strong style="font-size:0.72rem;">${doneJ.length?tdiff(0,avgT):'—'}</strong></div>
+        <div class="an-perf-row"><span>Avg Time</span><strong>${doneJ.length?tdiff(0,avgT):'—'}</strong></div>
       </div>`;
-    });
-    if(perfCards.length){
-      teamSection+=`<div class="an-section-title">🏅 Performance</div><div class="an-perf-grid">${perfCards.join('')}</div>`;
-    }
+    }).join('');
+    body=`
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Active Jobs by Employee <span class="an-hd-note">red ≥5 · yellow ≥3</span></div>${anBars(activeRows)}</div>
+        <div class="an-widget"><div class="an-widget-hd">Total Jobs by Employee</div>${anBars(totalRows)}</div>
+      </div>
+      <div class="an-widget" style="margin-top:0.4rem;"><div class="an-widget-hd">🏅 Performance</div><div class="an-perf-grid">${perfCards}</div></div>`;
   }
 
-  // ── Workflow ──
-  const wfBlock=wfAnalyticsSection();
+  // ── WORKFLOW ──
+  else if(_anSubTab==='workflow'){
+    body=wfAnalyticsSection()||'<div class="empty" style="padding:2rem;">No workflow data yet.</div>';
+  }
 
-  el.innerHTML=`
-    <div class="an-kpis">
-      ${kpi('Pending',pending,'var(--yellow)')}
-      ${kpi('Ongoing',ongoing,'var(--blue)')}
-      ${kpi('Paused',paused,'var(--text2)')}
-      ${kpi('Completed',completed,'var(--green)',`${compRate}% rate`)}
-      ${kpi('Overdue',overdueN,overdueN?'var(--red)':'var(--text3)')}
-      ${kpi('Done Today',dt,'var(--yellow)')}
-      ${kpi('Done This Week',dw,'var(--blue)')}
-      ${kpi('Avg Completion',dn.length?tdiff(0,avg):'—','var(--text2)')}
-    </div>
-    <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(donutData,myJobs.length,'jobs')}</div>
-      <div class="an-widget"><div class="an-widget-hd">Jobs by Type</div>${anBars(typeRows)}</div>
-    </div>
-    <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>
-      <div class="an-widget"><div class="an-widget-hd">Monthly Completions</div>${anTrendChart(monthPts)}</div>
-    </div>
-    ${teamSection}
-    ${wfBlock}
-  `;
+  el.innerHTML=tabBar+`<div class="an-sub-body">${body}</div>`;
   bindChartInteractions(el);
 }
 
