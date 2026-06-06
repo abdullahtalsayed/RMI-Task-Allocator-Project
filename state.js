@@ -28,6 +28,9 @@ export const NOTIF_TOAST_MAX=12;
 
 // ── ORG-WIDE EMAIL CONTROL (manager-set, stored in Firestore config/email) ────
 // Cascading gate: master → per-event .on → per-recipient flag. All default on.
+// RMI branch / entity tag on each user account (independent of team).
+export const BRANCHES=['RMI - Syria','RMI - UAE','RMI - India'];
+
 export const EMAIL_EVENTS=['assigned','status','deadline','overdue','extension'];
 export const EMAIL_RECIPS=['owner','teamLeader','supervisor','manager'];
 export function defaultEmailConfig(){

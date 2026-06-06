@@ -172,10 +172,11 @@ window.addUser=async function(){
   const teamLeaderId=rawTlId&&users.find(u=>u.id===rawTlId&&u.role==='team_leader')?rawTlId:null;
   if(!name||!pw){alert('Name and password required.');return;}
   if(USE_AUTH&&!email){alert('Email is required so the employee can activate their account.');return;}
+  const branch=document.getElementById('ubranch')?.value||'';
   const id=name.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now();
   const data=USE_AUTH
-    ?{id,name,role,email,viewAll,teamLeaderId,needsActivation:true,tempPassword:pw}
-    :{id,name,role,password:pw,email,viewAll,teamLeaderId};
+    ?{id,name,role,email,viewAll,teamLeaderId,branch,needsActivation:true,tempPassword:pw}
+    :{id,name,role,password:pw,email,viewAll,teamLeaderId,branch};
   await uAdd(id,data);
   await logActivity({type:'user_added',category:'user',desc:`${me.name} added user ${name} (${role})`,userId:me.id,userName:me.name,role:me.role});
   pushNotif(id,'👤 Account Created',USE_AUTH
@@ -221,6 +222,7 @@ window.openAddUserModal=function(){
   ['uname','uemail','upw'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const r=document.getElementById('urole');if(r)r.value='employee';
   const v=document.getElementById('uviewall');if(v)v.value='no';
+  const br=document.getElementById('ubranch');if(br)br.value='';
   populateTeamLeadSelect('u-teamlead','');
   onRoleChange('add');
   document.getElementById('add-user-modal').classList.add('open');
@@ -266,7 +268,7 @@ export function renderUList(){
       <div class="user-avatar user-av-${bdg}">${escapeHtml(initial)}</div>
       <div class="user-info">
         <div class="user-name-row">${escapeHtml(u.name)} <span class="bdg bdg-${bdg}">${rmeta.label}</span></div>
-        <div class="user-meta">${u.email?`✉️ ${escapeHtml(u.email)}`:'<span class="tc-muted">no email</span>'} · ${u.viewAll==='yes'?'All jobs':'Own only'}${teamMeta}</div>
+        <div class="user-meta">${u.email?`✉️ ${escapeHtml(u.email)}`:'<span class="tc-muted">no email</span>'} · ${u.viewAll==='yes'?'All jobs':'Own only'}${u.branch?` · 🏢 ${escapeHtml(u.branch)}`:''}${teamMeta}</div>
       </div>
       <div class="user-stat"><span class="user-stat-n">${active}</span><span class="user-stat-l">active</span></div>
       ${status}
@@ -285,6 +287,7 @@ window.openEditUserModal=function(id){
   document.getElementById('edit-upw').value='';
   document.getElementById('edit-urole').value=u.role||'employee';
   document.getElementById('edit-uviewall').value=u.viewAll==='yes'?'yes':'no';
+  const ebr=document.getElementById('edit-ubranch');if(ebr)ebr.value=u.branch||'';
   populateTeamLeadSelect('edit-uteamlead',u.teamLeaderId||'');
   onRoleChange('edit');
   document.getElementById('edit-user-modal').classList.add('open');
@@ -302,7 +305,8 @@ window.saveEditUser=async function(){
   const rawEditTlId=role==='employee'?(document.getElementById('edit-uteamlead')?.value||null):null;
   const teamLeaderId=rawEditTlId&&users.find(u=>u.id===rawEditTlId&&u.role==='team_leader')?rawEditTlId:null;
   if(!name){alert('Name is required.');return;}
-  const patch={name,email,role,viewAll,teamLeaderId};
+  const branch=document.getElementById('edit-ubranch')?.value||'';
+  const patch={name,email,role,viewAll,teamLeaderId,branch};
   if(pw)patch.password=pw;
   await uUpdate(id,patch);
   await logActivity({type:'user_edited',category:'user',desc:`${me.name} updated user ${name} (${role})`,userId:me.id,userName:me.name,role:me.role});

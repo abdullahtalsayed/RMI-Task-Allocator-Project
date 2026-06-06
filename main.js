@@ -6,7 +6,7 @@ import { JOB_TYPES, ACTIVITY_TYPE_LABELS, FB_LIMITS, JOBS_PAGE_SIZE, ARCHIVE_AFT
 import { lsub, toMillis, escapeHtml, fmt, fmtShort, tdiff, getJobPausedMs, getJobDurationBreakdown, formatJobDurationHtml, jobPauseDefaults, uid, timeAgo } from './helpers.js';
 import { sendEmail, emailPref, emailUser, emailJobOwner, emailManagersAndSupervisors, emailTeamLeaderOf, emailAllOversight, emailEventOwner, emailEventOwnerId, emailEventTeamLeader, emailEventManagers, emailEventSupervisors, emailEventOversight } from './email.js';
 import { tagStores } from './state.js';
-import { EMAIL_EVENTS, EMAIL_RECIPS, defaultEmailConfig, emailConfig, setEmailConfig } from './state.js';
+import { EMAIL_EVENTS, EMAIL_RECIPS, defaultEmailConfig, emailConfig, setEmailConfig, BRANCHES } from './state.js';
 import { renderTags, setTags, showConfirm } from './modals.js';
 import { populateCalEmpDrop, populateCalEmpPills, jobsForCalendarDay, empOverdueJobs, renderCommentSection, uAdd, uUpdate, uDelete, jUpdate, jDelete, jRestore } from './jobs.js';
 import { renderUList, renderBroadcasts, updateBroadcastUI, roleMeta, markBroadcastsSeen } from './admin.js';
@@ -3241,7 +3241,8 @@ saveSettingsFromUI=function(){
 };
 
 // ── ANALYTICS — single-scroll report (replaces tab-based renderer) ───────────
-let analyticsRange='month',analyticsEmp='',analyticsType='';
+let analyticsRange='month',analyticsEmp='',analyticsType='',analyticsBranch='';
+function branchOf(ownerId){return users.find(u=>u.id===ownerId)?.branch||'';}
 function analyticsRangeStart(range){
   const n=new Date();
   if(range==='week'){const d=new Date(n);d.setDate(n.getDate()-n.getDay());d.setHours(0,0,0,0);return d.getTime();}
@@ -3254,6 +3255,7 @@ function analyticsScope(){
   let base=visibleJobs();
   if(analyticsEmp)base=base.filter(j=>j.owner===analyticsEmp);
   if(analyticsType)base=base.filter(j=>(j.type||'Other')===analyticsType);
+  if(analyticsBranch)base=base.filter(j=>branchOf(j.owner)===analyticsBranch);
   const start=analyticsRangeStart(analyticsRange);
   if(!start)return base.slice();
   return base.filter(j=>toMillis(j.created)>=start);
@@ -3272,6 +3274,16 @@ window.setAnalyticsRange=function(r,btn){
   renderAnalyticsContent();
 };
 window.setAnalyticsEmp=function(e){analyticsEmp=e;renderAnalyticsContent();};
+window.setAnalyticsBranch=function(b){analyticsBranch=b;renderAnalyticsContent();};
+function anPopulateBranch(){
+  const sel=document.getElementById('an-branch');if(!sel)return;
+  const cur=analyticsBranch;
+  // branches actually present among visible jobs' owners, ordered by the master list
+  const present=new Set(visibleJobs().map(j=>branchOf(j.owner)).filter(Boolean));
+  const opts=BRANCHES.filter(b=>present.has(b));
+  sel.innerHTML='<option value="">All Branches</option>'+opts.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+  sel.value=cur;
+}
 
 let analyticsView='report';
 window.setAnalyticsView=function(v,btn){
@@ -3530,7 +3542,7 @@ renderAnalyticsContent=function(){
   document.querySelectorAll('.sb-manager-tab').forEach(b=>b.style.display=me.role==='manager'?'':'none');
   // teams view
   if(analyticsView==='teams'){renderTeamsAnalytics(el);return;}
-  anPopulateEmp();anPopulateType();
+  anPopulateEmp();anPopulateType();anPopulateBranch();
   const isMgr=isLead()||amDirector();
   const now=Date.now();
   const scope=analyticsScope();
