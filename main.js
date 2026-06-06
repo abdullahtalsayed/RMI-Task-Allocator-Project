@@ -4194,11 +4194,6 @@ renderAnalyticsContent=function(){
     const avg=done.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/done.length;
     return{type:t,avg,n:done.length};
   }).filter(Boolean).sort((a,b)=>a.avg-b.avg);
-  let turnHtml='';
-  if(turnRows.length){
-    turnHtml=`<div class="an-widget"><div class="an-widget-hd">Turnaround by Type <span class="an-hd-note">avg time to complete</span></div>
-      <div class="an-turn">${turnRows.map(r=>`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(r.type)}</span><span class="an-turn-time">${tdiff(0,r.avg)}</span><span class="an-turn-n">${r.n} job${r.n>1?'s':''}</span></div>`).join('')}</div></div>`;
-  }
   /* note: renderAnalyticsContent is assigned (not declared) so it overrides the module-level binding */
 
   // performance leaderboard (leads, team-scoped)
