@@ -1723,6 +1723,11 @@ const lbl=j.status==='completed'?'📅 Deadline':diff<0?'⚠️ OVERDUE':diff<86
     </div>
     <div id="tl-${j.id}" style="display:none;margin-top:0.5rem;">${renderTimeline(j.id)}${renderCommentSection(j.id)}</div>`;
   }
+  else if(acts&&amDirector()){
+    // directors: read-only — timeline + comment only, no action buttons
+    ab=`<div class="arow"><button onclick="toggleTimeline('${j.id}')">🕐 Timeline</button></div>
+    <div id="tl-${j.id}" style="display:none;margin-top:0.5rem;">${renderTimeline(j.id)}${renderCommentSection(j.id)}</div>`;
+  }
   const stLbl=j.status==='paused'?'<span class="bdg" style="background:#3a3a3a;color:var(--yellow);">⏸ paused</span>':`<strong>${j.status}</strong>`;
   return`<div class="card ${pc} ${sc} ${pinCls} ${selCls} ${j.status==='paused'?'paused':''} ${od?'od':''}" id="card-${j.id}">
     <h4>${j.pinned?'📌 ':''}<span>${j.client}</span> <span style="font-weight:400;color:var(--text2);">(#${j.jobNum})</span>${sb}${pb}</h4>
@@ -2693,10 +2698,14 @@ function applyMainNav(){
   const r=me?.role||'';
   // Directors: read-only oversight. Only Dashboard, Analytics, Teams, Account, Accounts directory.
   if(isDirectorRole(r)){
-    const allow=new Set(['dashboard','analytics','teams-overview','account','users']);
+    const allow=new Set(['dashboard','analytics','teams-overview','account','users','my-jobs']);
     document.querySelectorAll('.sb-item').forEach(el=>{el.style.display=allow.has(el.dataset.sb)?'flex':'none';});
     const teamGrp=document.getElementById('sbg-team');if(teamGrp)teamGrp.style.display='none';
-    const topbar=document.querySelector('.topbar');if(topbar)topbar.style.display='none';
+    // directors get a read-only "Jobs" view: rename the item + page title, hide "add job"
+    document.querySelectorAll('[data-sb="my-jobs"] span').forEach(s=>s.textContent='Jobs');
+    const t=document.getElementById('my-jobs-title');if(t)t.textContent='Jobs';
+    const nb=document.getElementById('new-job-btn');if(nb)nb.style.display='none';
+    const topbar=document.querySelector('.topbar');if(topbar)topbar.style.display=currentHub==='jobs'?'flex':'none';
     return;
   }
   const isManager=r==='manager';

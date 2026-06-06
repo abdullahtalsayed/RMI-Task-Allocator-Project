@@ -5,7 +5,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RMI Task Allocator & Progress Tracker v2.6.0</title>
+<title>RMI Task Allocator & Progress Tracker v2.6.1</title>
 <link rel="icon" type="image/png" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_32,h_32,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <link rel="apple-touch-icon" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_180,h_180,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <meta name="theme-color" content="#07080c"/>
@@ -79,7 +79,7 @@
     <div class="hl">
       <button id="sb-toggle" class="sb-toggle-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
       <img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/>
-      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.6.0</div><div id="clock"></div></div>
+      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.6.1</div><div id="clock"></div></div>
     </div>
     <div class="hr">
       <span id="synced"></span>
@@ -199,7 +199,7 @@
   </section>
 
   <section id="my-jobs" class="on">
-    <div class="jobs-head"><h2>My Jobs</h2><button type="button" class="bp" onclick="openNewJob()">+ New job</button></div>
+    <div class="jobs-head"><h2 id="my-jobs-title">My Jobs</h2><button type="button" class="bp" id="new-job-btn" onclick="openNewJob()">+ New job</button></div>
     <div class="jobs-toolbar" id="jobs-toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.65rem;">
       <span id="jobs-scope-wrap" style="display:none;"><label style="font-size:0.75rem;color:var(--text2);">Show</label>
         <select id="jobs-scope" onchange="setManagerJobsScope(this.value)" style="margin-left:0.25rem;padding:0.25rem 0.5rem;background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.78rem;">

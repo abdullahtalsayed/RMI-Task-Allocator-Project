@@ -9,7 +9,7 @@ import { setTags, showConfirm } from './modals.js';
 import { db, jCol, uCol, extCol, calFilterEmp, calShowMode,
   renderBoard, isLead, isOverdue, visibleJobs, teamUsersForView, populateADrop,
   renderAssignEmpGrid, getJobEvents, pushNotif, renderDashExtensions, localSave,
-  addEvent, showToastMsg, canManageJob, assignableUsers } from './main.js';
+  addEvent, showToastMsg, canManageJob, assignableUsers, amDirector } from './main.js';
 import { renderUList } from './admin.js';
 
 // ── COMMENTS ──────────────────────────────────────────────────────────────────
@@ -102,6 +102,7 @@ export async function extUpdate(id,data){
 
 // ── JOB ACTIONS ───────────────────────────────────────────────────────────────
 window.addJob=async function(){
+  if(amDirector()){showToastMsg('View only — directors cannot add jobs.');return;}
   const c=document.getElementById('jc').value.trim(),n=document.getElementById('jn').value.trim();
   if(!c||!n){alert('Client and Job # required.');return;}
   const dlv=document.getElementById('jdl').value;
