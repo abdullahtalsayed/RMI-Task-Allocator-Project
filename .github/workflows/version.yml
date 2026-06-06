@@ -17,50 +17,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get latest tag
-        id: get_tag
+      - name: Read version from index.html
+        id: get_version
         run: |
+          version=$(grep -oP 'v\d+\.\d+\.\d+' index.html | head -1)
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Detected version: $version"
+
+      - name: Create or force-update tag
+        run: |
+          new_tag=${{ steps.get_version.outputs.version }}
           git fetch --tags
-          latest=$(git tag --sort=-v:refname | head -n 1)
-
-          if [ -z "$latest" ]; then
-            latest="v1.0.0"
-          fi
-
-          echo "latest=$latest" >> $GITHUB_OUTPUT
-
-      - name: Analyze commit message
-        id: bump
-        run: |
-          msg=$(git log -1 --pretty=%B)
-
-          version=${{ steps.get_tag.outputs.latest }}
-          version=${version#v}
-
-          IFS='.' read -r major minor patch <<< "$version"
-
-          if [[ "$msg" == *"BREAKING"* ]]; then
-            major=$((major + 1))
-            minor=0
-            patch=0
-          elif [[ "$msg" == feat:* ]]; then
-            minor=$((minor + 1))
-            patch=0
-          else
-            patch=$((patch + 1))
-          fi
-
-          new_version="v$major.$minor.$patch"
-          echo "new_version=$new_version" >> $GITHUB_OUTPUT
-
-      - name: Create tag
-        run: |
-          git tag ${{ steps.bump.outputs.new_version }}
-          git push origin ${{ steps.bump.outputs.new_version }}
+          # Delete remote tag if it already exists (force-sync to current commit)
+          git push origin :refs/tags/$new_tag 2>/dev/null || true
+          git tag -fa "$new_tag" -m "Release $new_tag"
+          git push origin "$new_tag"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.bump.outputs.new_version }}
-          name: Release ${{ steps.bump.outputs.new_version }}
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
           generate_release_notes: true
