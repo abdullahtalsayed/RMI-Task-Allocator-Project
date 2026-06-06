@@ -3733,21 +3733,23 @@ renderAnalyticsContent=function(){
   const dayBarRow=(name,cre,com,max)=>`<div class="an-day-row"><span class="an-day-lbl">${name}</span><div class="an-day-bars"><div class="an-day-bar" style="width:${Math.max(Math.round(cre/max*100),cre?2:0)}%;background:var(--blue);" title="Created: ${cre}"></div><div class="an-day-bar" style="width:${Math.max(Math.round(com/max*100),com?2:0)}%;background:var(--green);" title="Completed: ${com}"></div></div><span class="an-day-vals">${cre} / ${com}</span></div>`;
   const kpiHtml=`<div class="an-kpis">${kpis.map(k=>`<div class="an-kpi"><div class="an-kpi-label">${k.label}</div><div class="an-kpi-value" style="color:${k.color}">${k.value}</div><div class="an-kpi-sub">${k.sub}</div></div>`).join('')}</div>`;
   const turnHtml=turnRows.length?`<div class="an-widget"><div class="an-widget-hd">Turnaround by Type <span class="an-hd-note">avg time to complete</span></div><div class="an-turn">${turnRows.map(r=>`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(r.type)}</span><span class="an-turn-time">${tdiff(0,r.avg)}</span><span class="an-turn-n">${r.n} job${r.n>1?'s':''}</span></div>`).join('')}</div></div>`:'';
+  // compact bar-only cards for 3-col row
+  const priUrgencyCard=`<div class="an-widget"><div class="an-widget-hd">Priority vs Urgency <span class="an-hd-note">% overdue</span></div>${priUrgency.map(p=>`<div class="an-bar-row"><span class="an-bar-label">${p.label}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(p.pct,p.overdueCount?2:0)}%;background:${p.color}"></div></div><span class="an-bar-val">${p.pct}% <span class="tc-muted">${p.overdueCount}/${p.active}</span></span></div>`).join('')}${priUrgency.every(p=>p.pct===0)?'<div class="empty" style="padding:0.35rem 0;">No overdue jobs 🎉</div>':''}</div>`;
+  const extCard=`<div class="an-widget"><div class="an-widget-hd">Extension Rate</div><div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.45rem;"><span style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:${extRate>=30?'var(--red)':extRate>=15?'var(--yellow)':'var(--green)'}">${extRate}%</span><span style="font-size:0.72rem;color:var(--text3);">${jobIdsWithExt.size} of ${jobsWithDl.length} jobs</span></div>${extApproved+extRejected+extPending>0?anBars([{label:'Approved',value:extApproved,color:'var(--green)'},{label:'Rejected',value:extRejected,color:'var(--red)'},{label:'Pending',value:extPending,color:'var(--yellow)'}].filter(r=>r.value>0)):''}</div>`;
+  const peakCard=`<div class="an-widget"><div class="an-widget-hd">Peak Workload <span class="an-hd-note"><span style="color:var(--blue)">■ cre</span> <span style="color:var(--green)">■ done</span></span></div><div class="an-day-chart">${dayNames.map((d,i)=>dayBarRow(d,createdByDay[i],completedByDay[i],maxDay)).join('')}</div></div>`;
   const jobAnalysisHtml=`
     <div class="an-row-2">
       <div class="an-widget"><div class="an-widget-hd">Created vs Completed <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anDualLineChart(createdPts,trendPts,'Created','Completed','var(--blue)','var(--green)')}</div>
       ${priRows.length?`<div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>`:''}
     </div>
+    <div class="an-row-3">
+      ${priUrgencyCard}${extCard}${peakCard}
+    </div>
     <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Job Age <span class="an-hd-note">active jobs by how long open</span></div>${anBars(ageRows)}${oldestActive.length?`<div class="an-hd-note" style="margin-top:0.75rem;margin-bottom:0.35rem;">Oldest active jobs</div>${oldestActive.map(j=>{const age=nowMs-toMillis(j.created);const col=age>14*864e5?'var(--red)':age>7*864e5?'var(--orange)':'var(--text2)';const own=users.find(u=>u.id===j.owner)?.name||'?';return`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(j.client)} <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></span><span class="an-turn-time" style="color:${col}">${tdiff(0,age)}</span><span class="an-turn-n">${escapeHtml(own)}</span></div>`;}).join('')}`:''}
+      <div class="an-widget"><div class="an-widget-hd">Job Age <span class="an-hd-note">active jobs by how long open</span></div>${anBars(ageRows)}${oldestActive.length?`<div class="an-hd-note" style="margin-top:0.55rem;margin-bottom:0.3rem;">Oldest active jobs</div>${oldestActive.map(j=>{const age=nowMs-toMillis(j.created);const col=age>14*864e5?'var(--red)':age>7*864e5?'var(--orange)':'var(--text2)';const own=users.find(u=>u.id===j.owner)?.name||'?';return`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(j.client)} <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></span><span class="an-turn-time" style="color:${col}">${tdiff(0,age)}</span><span class="an-turn-n">${escapeHtml(own)}</span></div>`;}).join('')}`:''}
       </div>
-      <div class="an-widget"><div class="an-widget-hd">Priority vs Actual Urgency <span class="an-hd-note">% overdue per priority</span></div>${priUrgency.map(p=>`<div class="an-bar-row"><span class="an-bar-label">${p.label}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(p.pct,p.overdueCount?2:0)}%;background:${p.color}"></div></div><span class="an-bar-val">${p.pct}% <span class="tc-muted">${p.overdueCount}/${p.active}</span></span></div>`).join('')}${priUrgency.every(p=>p.pct===0)?'<div class="empty" style="padding:0.5rem;">No overdue jobs 🎉</div>':''}</div>
+      ${turnHtml}
     </div>
-    <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Peak Workload Days <span class="an-hd-note" style="display:inline-flex;gap:0.5rem;"><span style="color:var(--blue)">■ created</span><span style="color:var(--green)">■ completed</span></span></div><div class="an-day-chart">${dayNames.map((d,i)=>dayBarRow(d,createdByDay[i],completedByDay[i],maxDay)).join('')}</div></div>
-      <div class="an-widget"><div class="an-widget-hd">Deadline Extension Rate</div><div style="text-align:center;padding:0.75rem 0;"><div style="font-size:2.2rem;font-weight:700;font-family:var(--mono);color:${extRate>=30?'var(--red)':extRate>=15?'var(--yellow)':'var(--green)'}">${extRate}%</div><div style="color:var(--text2);font-size:0.78rem;margin-top:0.25rem;">${jobIdsWithExt.size} of ${jobsWithDl.length} jobs with deadlines requested extensions</div></div><div class="an-bars" style="margin-top:0.5rem;">${anBars([{label:'Approved',value:extApproved,color:'var(--green)'},{label:'Rejected',value:extRejected,color:'var(--red)'},{label:'Pending',value:extPending,color:'var(--yellow)'}].filter(r=>r.value>0))}</div></div>
-    </div>
-    ${turnHtml}
     ${topReassigned.length?`<div class="an-widget"><div class="an-widget-hd">Most Reassigned Jobs <span class="an-hd-note">times reassigned</span></div>${anBars(topReassigned)}</div>`:''}
   `;
 
@@ -3791,6 +3793,9 @@ renderAnalyticsContent=function(){
     return;
   }
 
+  const crossTeam=anCrossTeamTypeWidget();
+  const overdueTrend=anOverdueTrendWidget(visibleJobs(),buckets);
+
   // ── SUPERVISOR ────────────────────────────────────────────────────────────
   if(isSup){
     el.innerHTML=`
@@ -3803,8 +3808,7 @@ renderAnalyticsContent=function(){
         ${anTeamHealthWidget(leadEmps,visibleJobs())}
         ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
       </div>
-      ${anOverdueTrendWidget(visibleJobs(),buckets)}
-      ${anCrossTeamTypeWidget()}
+      ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
       ${anBranchSection()}
       ${perfHtml}
       ${jobAnalysisHtml}`;
@@ -3822,8 +3826,7 @@ renderAnalyticsContent=function(){
       ${anTeamHealthWidget(leadEmps,visibleJobs())}
       ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
     </div>
-    ${anOverdueTrendWidget(visibleJobs(),buckets)}
-    ${anCrossTeamTypeWidget()}
+    ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
     ${anBranchSection()}
     ${perfHtml}
     ${jobAnalysisHtml}`;
