@@ -17,8 +17,8 @@ const esc=escapeHtml;
 // actor: who must act next ('tl' = teamLeaderId, 'drafter' = owner/drafterId)
 export const WF_STAGES={
   intake:           {actor:'tl',      label:'TL Intake',                  short:'Intake',          color:'blue'},
-  drafting:         {actor:'drafter', label:'Roof Layout & Sample',       short:'Drafting',        color:'yellow'},
-  tl_sample_review: {actor:'tl',      label:'Sample Review',              short:'Sample Review',   color:'purple'},
+  drafting:         {actor:'drafter', label:'Roof Layout, Cross Section, Gutter/Curve Sample', short:'Layout & Sample', color:'yellow'},
+  tl_sample_review: {actor:'tl',      label:'Initial Roof Layout, Cross Section, Gutter/Curve Sample Review', short:'Sample Review', color:'purple'},
   detailing:        {actor:'drafter', label:'Shop Drawing Detailing',     short:'Detailing',       color:'yellow'},
   tl_sd_review:     {actor:'tl',      label:'Shop Drawing Review',        short:'SD Review',       color:'purple'},
   client_wait:      {actor:'tl',      label:'Awaiting Client Approval',   short:'Client Wait',     color:'orange'},
@@ -170,8 +170,8 @@ window.wfConfirmAssign=async function(){
     note:`Assigned to ${member?.name} as ${type}`,
     extra:{type,deadline:dlv?new Date(dlv).getTime():null,status:'pending',started:null,rejectedSample:false}
   });
-  await addEvent(j.id,'wf_drafting',`🧭 ${me.name} checked IFC+Architectural, assigned ${type} to ${member?.name}`,'yellow');
-  pushNotif(memberId,'🧺 New Workflow Job',`${j.client} (#${j.jobNum}) — prepare roof layout & sample.`);
+  await addEvent(j.id,'wf_drafting',`🧭 ${me.name} checked IFC+Architectural, assigned ${type} to ${member?.name} — prepare Roof Layout, Cross Section, Gutter/Curve Sample`,'yellow');
+  pushNotif(memberId,'🧺 New Workflow Job',`${j.client} (#${j.jobNum}) — prepare Roof Layout, Cross Section, Gutter/Curve Sample.`);
   window.wfCloseModal();
   showToastMsg(`✅ Assigned to ${member?.name}.`);
   renderJobBasket();
@@ -387,7 +387,7 @@ function wfActionFor(j){
   if(j.stage==='intake'&&amTL)return{label:'📥 Take & Assign',fn:`wfTakeJob('${j.id}')`,cls:'primary'};
   if(j.stage==='drafting'&&amDrafter){
     if(j.status==='pending')return{label:'▶ Start Job',fn:`wfStart('${j.id}')`,cls:'primary'};
-    return{label:'📐 Submit for Sample Review',fn:`wfSubmitSample('${j.id}')`,cls:'primary'};
+    return{label:'📐 Submit Roof Layout, CS & Gutter/Curve Sample',fn:`wfSubmitSample('${j.id}')`,cls:'primary'};
   }
   if(j.stage==='tl_sample_review'&&amTL)return{label:'🔍 Review Sample',fn:`wfReviewSample('${j.id}')`,cls:'primary'};
   if(j.stage==='detailing'&&amDrafter)return{label:'📑 Submit Shop Drawing',fn:`wfSubmitSD('${j.id}')`,cls:'primary'};
