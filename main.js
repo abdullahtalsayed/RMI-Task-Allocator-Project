@@ -2254,102 +2254,127 @@ function allJobTypesForAnalytics(scope){
 }
 function renderAnalyticsContent(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
-  const isManager=isLead();
-  const showChartTools=isManager;
-  const myJobs=analyticsJobs();
-  const now=new Date(),ws=new Date(now);ws.setDate(now.getDate()-now.getDay());
-  const jobTotal=myJobs.length||1;
+  if(analyticsView==='teams'){renderTeamsAnalytics(el);bindChartInteractions(el);return;}
 
-  if(currentATab==='overview'){
-    const dt=myJobs.filter(j=>j.completed&&new Date(j.completed).toDateString()===now.toDateString()).length;
-    const dw=myJobs.filter(j=>j.completed&&new Date(j.completed)>=ws).length;
-    const dn=myJobs.filter(j=>j.completed&&j.created);
-    const avg=dn.reduce((a,j)=>a+(j.completed-j.created),0)/(dn.length||1);
-    el.innerHTML=`<div class="analytics-grid">${[
-      ['Pending',myJobs.filter(j=>j.status==='pending').length,'var(--yellow)'],
-      ['Ongoing',myJobs.filter(j=>j.status==='ongoing').length,'var(--blue)'],
-      ['Paused',myJobs.filter(j=>j.status==='paused').length,'var(--text2)'],
-      ['Completed',myJobs.filter(j=>j.status==='completed').length,'var(--green)'],
-      ['Done Today',dt,'var(--yellow)'],
-      ['Done This Week',dw,'var(--blue)'],
-      ['Overdue',myJobs.filter(j=>isOverdue(j)).length,'var(--red)'],
-      ['Avg Completion',dn.length?tdiff(0,avg):'—','var(--text2)',true]
-    ].map(([l,n,c,small])=>`<div class="sc"><div class="n" style="color:${c};${small?'font-size:1rem;':''}">${n}</div><div class="l">${l}</div></div>`).join('')}</div>`;
-  } else if(currentATab==='bytype'){
-    const types=allJobTypesForAnalytics(myJobs).filter(t=>myJobs.some(j=>j.type===t));
-    const counts=types.map((t,i)=>{const cnt=myJobs.filter(j=>j.type===t).length;return{label:t,value:cnt,color:TYPE_CHART_COLORS[i%TYPE_CHART_COLORS.length],share:jobTotal?Math.round(cnt/jobTotal*100):0};}).filter(r=>r.value>0).sort((a,b)=>b.value-a.value);
-    if(showChartTools){
-      el.innerHTML=`<div class="analytics-grid">${renderChartBlock('Jobs by Type','bytype',counts,false,true)}</div>`;
-    }else{
-      const max=Math.max(...counts.map(r=>r.value),1);
-      el.innerHTML=`<div class="analytics-grid"><div class="achart achart-wide"><h4>Jobs by Type</h4>${counts.map(r=>`<div class="bar-row"><span class="bar-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(r.value/max*100)}%;background:${r.color};"></div></div><span class="bar-val">${r.value}</span></div>`).join('')}</div></div>`;
-    }
-  } else if(currentATab==='bypriority'){
-    const pris=['High','Medium','Low'];
-    const rows=pris.map(p=>{
-      const all=myJobs.filter(j=>j.priority===p);
-      const done=all.filter(j=>j.status==='completed').length;
-      const total=all.length;
-      return{label:p,value:total,done,total,rate:total?Math.round(done/total*100):0,color:PRIORITY_CHART_COLORS[p]};
-    }).filter(r=>r.total>0);
-    if(showChartTools){
-      el.innerHTML=`<div class="analytics-grid">${renderChartBlock('Completion Rate by Priority','bypriority',rows,true,true)}</div>`;
-    }else{
-      const max=Math.max(...rows.map(r=>r.total),1);
-      el.innerHTML=`<div class="analytics-grid"><div class="achart achart-wide"><h4>Jobs by Priority</h4>${rows.map(r=>`<div class="bar-row"><span class="bar-label">${r.label}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(r.total/max*100)}%;background:${r.color};"></div></div><span class="bar-val">${r.total}</span></div>`).join('')}</div></div>`;
-    }
-  } else if(currentATab==='completion'){
-    const total=myJobs.length||1;
-    const done=myJobs.filter(j=>j.status==='completed').length;
-    const rate=Math.round(done/total*100);
-    const byMonth={};
-    myJobs.filter(j=>j.completed).forEach(j=>{const d=new Date(j.completed);const k=d.toLocaleString('en-GB',{month:'short',year:'numeric'});byMonth[k]=(byMonth[k]||0)+1;});
-    const months=Object.entries(byMonth).slice(-6);
-    const maxM=Math.max(...months.map(x=>x[1]),1);
-    const pris=['High','Medium','Low'];
-    const priRows=pris.map(p=>{
-      const all=myJobs.filter(j=>j.priority===p);
-      const d=all.filter(j=>j.status==='completed').length;
-      const t=all.length;
-      return{label:p,value:t,done:d,total:t,rate:t?Math.round(d/t*100):0,color:PRIORITY_CHART_COLORS[p]};
-    }).filter(r=>r.total>0);
-    let priBlock='';
-    if(showChartTools&&priRows.length){
-      priBlock=renderChartBlock('Completion Rate by Priority','bypriority',priRows,true);
-    }else if(priRows.length){
-      priBlock=`<div class="achart"><h4>Completion by Priority</h4>${priRows.map(r=>`<div class="bar-row"><span class="bar-label">${r.label}</span><div class="bar-track"><div class="bar-fill" style="width:${r.rate}%;background:${r.color};"></div></div><span class="bar-val">${r.rate}% (${r.done}/${r.total})</span></div>`).join('')}</div>`;
-    }
-    const monthChart=months.length?`<div class="achart"><h4>Completions by Month</h4>${months.map(([m,c])=>`<div class="bar-row"><span class="bar-label">${m}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(c/maxM*100)}%;background:var(--green);"></div></div><span class="bar-val">${c}</span></div>`).join('')}</div>`:'';
-    el.innerHTML=`<div class="analytics-grid">
-      <div class="achart"><h4>Overall Completion</h4><div style="text-align:center;font-size:2.5rem;font-weight:600;font-family:var(--mono);color:${rate>=70?'var(--green)':rate>=40?'var(--yellow)':'var(--red)'};">${rate}%</div><div style="text-align:center;color:var(--text2);font-size:0.8rem;margin-top:0.5rem;">${done} of ${total} jobs</div></div>
-      ${priBlock}${monthChart}
-    </div>`;
-  } else if(currentATab==='employee'&&isManager){
-    const emps=users.filter(u=>u.role!=='manager');
-    const max=Math.max(...emps.map(u=>jobs.filter(j=>j.owner===u.id).length),1);
-    el.innerHTML=`<div class="analytics-grid">
-      <div class="achart"><h4>Total Jobs by Employee</h4>${emps.map(u=>{const cnt=jobs.filter(j=>j.owner===u.id).length;return`<div class="bar-row"><span class="bar-label">${escapeHtml(u.name)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(cnt/max*100)}%;background:var(--purple);"></div></div><span class="bar-val">${cnt}</span></div>`;}).join('')}</div>
-      <div class="achart"><h4>Active Jobs by Employee</h4>${emps.map(u=>{const cnt=jobs.filter(j=>j.owner===u.id&&j.status!=='completed').length;const col=cnt>=5?'var(--red)':cnt>=3?'var(--yellow)':'var(--green)';return`<div class="bar-row"><span class="bar-label">${escapeHtml(u.name)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(cnt/6*100)}%;background:${col};"></div></div><span class="bar-val">${cnt}</span></div>`;}).join('')}</div>
-    </div>`;
-  } else if(currentATab==='performance'&&isManager){
-    const emps=users.filter(u=>u.role!=='manager');
-    el.innerHTML=`<div class="perf-grid">${emps.map(u=>{
-      const ej=jobs.filter(j=>j.owner===u.id);
-      const done=ej.filter(j=>j.completed&&j.created);
-      const avg=done.reduce((a,j)=>a+(j.completed-j.created),0)/(done.length||1);
-      const od=ej.filter(j=>isOverdue(j)).length;
-      const now2=new Date(),ws2=new Date(now2);ws2.setDate(now2.getDate()-now2.getDay());
-      const thisWeek=ej.filter(j=>j.completed&&new Date(j.completed)>=ws2).length;
-      return`<div class="perf-block"><h4>👤 ${escapeHtml(u.name)} <span class="bdg bdg-${u.role==='supervisor'?'sup':'l'}">${u.role}</span></h4>
-        <div class="perf-row"><span>Total</span><span>${ej.length}</span></div>
-        <div class="perf-row"><span>Done</span><span>${ej.filter(j=>j.status==='completed').length}</span></div>
-        <div class="perf-row"><span>Active</span><span>${ej.filter(j=>j.status!=='completed').length}</span></div>
-        <div class="perf-row"><span>This Week</span><span>${thisWeek}</span></div>
-        <div class="perf-row"><span>Overdue</span><span style="color:${od?'var(--red)':'var(--green)'}">${od}</span></div>
-        <div class="perf-row"><span>Avg Time</span><span style="font-size:0.72rem;">${done.length?tdiff(0,avg):'—'}</span></div>
+  const mgr=isLead();
+  const myJobs=analyticsJobs();
+  const now=new Date();
+  const ws=new Date(now);ws.setDate(now.getDate()-now.getDay());ws.setHours(0,0,0,0);
+  const total=myJobs.length||1;
+
+  // ── KPI numbers ──
+  const pending=myJobs.filter(j=>j.status==='pending').length;
+  const ongoing=myJobs.filter(j=>j.status==='ongoing').length;
+  const paused=myJobs.filter(j=>j.status==='paused').length;
+  const completed=myJobs.filter(j=>j.status==='completed').length;
+  const overdueN=myJobs.filter(j=>isOverdue(j)).length;
+  const dt=myJobs.filter(j=>j.completed&&new Date(toMillis(j.completed)).toDateString()===now.toDateString()).length;
+  const dw=myJobs.filter(j=>j.completed&&toMillis(j.completed)>=ws.getTime()).length;
+  const dn=myJobs.filter(j=>j.completed&&j.created);
+  const avg=dn.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/(dn.length||1);
+  const compRate=Math.round(completed/total*100);
+
+  const kpi=(label,val,color,sub='')=>
+    `<div class="an-kpi"><div class="an-kpi-label">${label}</div><div class="an-kpi-value" style="color:${color}">${val}</div>${sub?`<div class="an-kpi-sub">${sub}</div>`:''}</div>`;
+
+  // ── Status donut ──
+  const donutData=[
+    {label:'Pending',value:pending,color:'#ffd60a'},
+    {label:'Ongoing',value:ongoing,color:'#0a84ff'},
+    {label:'Paused',value:paused,color:'#6e6e73'},
+    {label:'Completed',value:completed,color:'#32d74b'}
+  ];
+
+  // ── By type ──
+  const typeRows=allJobTypesForAnalytics(myJobs)
+    .filter(t=>myJobs.some(j=>j.type===t))
+    .map((t,i)=>({label:t,value:myJobs.filter(j=>j.type===t).length,color:TYPE_CHART_COLORS[i%TYPE_CHART_COLORS.length]}))
+    .filter(r=>r.value>0).sort((a,b)=>b.value-a.value).slice(0,12);
+
+  // ── By priority (completion rate) ──
+  const priRows=['High','Medium','Low'].map(p=>{
+    const all=myJobs.filter(j=>j.priority===p);
+    const done=all.filter(j=>j.status==='completed').length;
+    const t=all.length;
+    return{label:p,value:t?Math.round(done/t*100):0,sub:`${done}/${t}`,color:PRIORITY_CHART_COLORS[p]};
+  }).filter(r=>r.sub!=='0/0');
+
+  // ── Monthly completions trend ──
+  const byMonth={};
+  myJobs.filter(j=>j.completed).forEach(j=>{
+    const d=new Date(toMillis(j.completed));
+    const k=d.toLocaleString('en-GB',{month:'short',year:'2-digit'});
+    byMonth[k]=(byMonth[k]||0)+1;
+  });
+  const monthPts=Object.entries(byMonth).slice(-8).map(([label,value])=>({label,value}));
+
+  // ── Team load (manager+) ──
+  let teamSection='';
+  if(mgr){
+    const pool=teamUsersForView().filter(u=>!isNonStaffRole(u.role)&&u.role!=='manager');
+    const activeRows=pool.map(u=>{
+      const c=myJobs.filter(j=>j.owner===u.id&&j.status!=='completed').length;
+      return{label:u.name,value:c,color:c>=5?'var(--red)':c>=3?'var(--yellow)':'var(--green)'};
+    }).sort((a,b)=>b.value-a.value);
+    const totalRows=pool.map(u=>({
+      label:u.name,
+      value:myJobs.filter(j=>j.owner===u.id).length,
+      color:'var(--purple)'
+    })).sort((a,b)=>b.value-a.value);
+    teamSection=`
+      <div class="an-section-title">👤 Team Load</div>
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Active Jobs by Employee <span class="an-hd-note">red=5+, yellow=3+</span></div>${anBars(activeRows)}</div>
+        <div class="an-widget"><div class="an-widget-hd">Total Jobs by Employee</div>${anBars(totalRows)}</div>
       </div>`;
-    }).join('')}</div>`;
+
+    // ── Performance cards ──
+    const perfCards=pool.map(u=>{
+      const ej=myJobs.filter(j=>j.owner===u.id);
+      const doneJ=ej.filter(j=>j.completed&&j.created);
+      const avgT=doneJ.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/(doneJ.length||1);
+      const od=ej.filter(j=>isOverdue(j)).length;
+      const wkDone=ej.filter(j=>j.completed&&toMillis(j.completed)>=ws.getTime()).length;
+      return`<div class="an-perf-card">
+        <div class="an-perf-name">👤 ${escapeHtml(u.name)}</div>
+        <div class="an-perf-row"><span>Total</span><strong>${ej.length}</strong></div>
+        <div class="an-perf-row"><span>Completed</span><strong style="color:var(--green)">${ej.filter(j=>j.status==='completed').length}</strong></div>
+        <div class="an-perf-row"><span>Active</span><strong>${ej.filter(j=>j.status!=='completed').length}</strong></div>
+        <div class="an-perf-row"><span>This Week</span><strong>${wkDone}</strong></div>
+        <div class="an-perf-row"><span>Overdue</span><strong style="color:${od?'var(--red)':'var(--green)'}">${od}</strong></div>
+        <div class="an-perf-row"><span>Avg Time</span><strong style="font-size:0.72rem;">${doneJ.length?tdiff(0,avgT):'—'}</strong></div>
+      </div>`;
+    });
+    if(perfCards.length){
+      teamSection+=`<div class="an-section-title">🏅 Performance</div><div class="an-perf-grid">${perfCards.join('')}</div>`;
+    }
   }
+
+  // ── Workflow ──
+  const wfBlock=wfAnalyticsSection();
+
+  el.innerHTML=`
+    <div class="an-kpis">
+      ${kpi('Pending',pending,'var(--yellow)')}
+      ${kpi('Ongoing',ongoing,'var(--blue)')}
+      ${kpi('Paused',paused,'var(--text2)')}
+      ${kpi('Completed',completed,'var(--green)',`${compRate}% rate`)}
+      ${kpi('Overdue',overdueN,overdueN?'var(--red)':'var(--text3)')}
+      ${kpi('Done Today',dt,'var(--yellow)')}
+      ${kpi('Done This Week',dw,'var(--blue)')}
+      ${kpi('Avg Completion',dn.length?tdiff(0,avg):'—','var(--text2)')}
+    </div>
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(donutData,myJobs.length,'jobs')}</div>
+      <div class="an-widget"><div class="an-widget-hd">Jobs by Type</div>${anBars(typeRows)}</div>
+    </div>
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>
+      <div class="an-widget"><div class="an-widget-hd">Monthly Completions</div>${anTrendChart(monthPts)}</div>
+    </div>
+    ${teamSection}
+    ${wfBlock}
+  `;
   bindChartInteractions(el);
 }
 
