@@ -79,7 +79,9 @@ Each user activates once via the in-app **Activate account** flow (name + temp p
 
 ## Data model
 
-Collections: `jobs`, `users`, `events`, `notifications`, `extensions`, `broadcasts`, `loginlogs`, `usersByAuth`, `jobsArchive`
+Collections: `jobs`, `users`, `events`, `notifications`, `extensions`, `broadcasts`, `loginlogs`, `usersByAuth`, `jobsArchive`, `config`
+
+`config/email` — org-wide Email Control settings (manager-writable, everyone reads). Cascading gate: `master → per-event .on → per-recipient flag`.
 
 Job statuses: `pending → ongoing → paused → completed`
 
@@ -130,7 +132,7 @@ pie title Feature Completion (v2.4.1)
 
 | Status | Features |
 |--------|----------|
-| ✅ Shipped | Job CRUD, Roles & auth, Firebase auth, Analytics (role-specific layouts), Calendar, Board, Extensions, Broadcasts, In-app notifications, Email alerts (EmailJS), Attachments, Comments, @mentions (all users), Deadline reminders, Dark/light mode, Team leader role, Advanced search, CSV export, Activity log, PWA/SW, Auth guards, Type-filtered analytics, 6 new analytics charts, App rename, Per-user notification prefs |
+| ✅ Shipped | Job CRUD, Roles & auth, Firebase auth, Analytics (role-specific layouts), Calendar, Board, Extensions, Broadcasts, In-app notifications, Email alerts (EmailJS), Email Control panel (manager, org-wide cascading switches), Attachments, Comments, @mentions (all users), Deadline reminders, Dark/light mode, Team leader role, Advanced search, CSV export, Activity log, PWA/SW + manifest, Auth guards, Type-filtered analytics, 6 new analytics charts, App rename, Per-user notification prefs, ES-module architecture (8 files) |
 | 🔲 Planned | Recurring jobs, Job templates, Time-tracking export, PDF reports, Offline + mobile PWA, Advanced analytics filters |
 
 ---

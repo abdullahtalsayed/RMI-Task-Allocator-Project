@@ -5,7 +5,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RMI Task Allocator & Progress Tracker v2.4.9</title>
+<title>RMI Task Allocator & Progress Tracker v2.5.0</title>
 <link rel="icon" type="image/png" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_32,h_32,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <link rel="apple-touch-icon" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_180,h_180,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <meta name="theme-color" content="#07080c"/>
@@ -79,7 +79,7 @@
     <div class="hl">
       <button id="sb-toggle" class="sb-toggle-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
       <img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/>
-      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.4.9</div><div id="clock"></div></div>
+      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.5.0</div><div id="clock"></div></div>
     </div>
     <div class="hr">
       <span id="synced"></span>
@@ -123,6 +123,7 @@
         <a class="sb-item sb-lead" data-sb="analytics" href="#" style="display:none;">📊 <span>Analytics</span></a>
         <a class="sb-item sb-manager" data-sb="teams-overview" href="#" style="display:none;">👥 <span>Teams</span></a>
         <a class="sb-item sb-manager" data-sb="adv-search" href="#" style="display:none;">🔍 <span>Search</span></a>
+        <a class="sb-item sb-manager" data-sb="email-control" href="#" style="display:none;">📧 <span>Email Control</span><span id="sb-email-badge" class="sb-badge" style="display:none;">off</span></a>
         <div class="sb-divider"></div>
         <a class="sb-item on" data-sb="my-jobs" href="#">📋 <span>My Jobs</span></a>
         <div class="sb-divider"></div>
@@ -174,6 +175,15 @@
       <h2 style="margin:0;">👥 Teams Overview</h2>
     </div>
     <div id="teams-overview-root"></div>
+  </section>
+
+  <!-- EMAIL CONTROL (manager-only) -->
+  <section id="email-control">
+    <div class="an-header">
+      <h2 style="margin:0;">📧 Email Control</h2>
+    </div>
+    <p style="color:var(--text2);max-width:640px;margin:.25rem 0 1rem;">Org-wide email switches. Flick the master off to hold all emails. Each event can be turned on/off, and you choose which roles receive it. A switch is locked until the one above it is on.</p>
+    <div id="email-control-body"></div>
   </section>
 
   <!-- MANAGER DASHBOARD -->

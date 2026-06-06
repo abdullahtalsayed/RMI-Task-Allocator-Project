@@ -106,7 +106,15 @@ service cloud.firestore {
       allow read: if signedIn() && isManagerOrSupervisor();
       allow create: if signedIn();
       allow update, delete: if signedIn() && isManager();
-    }
+    }
+
+    // Org-wide config (e.g. email control). Everyone signed-in reads it so the
+    // email gate applies for all senders; only managers can change it.
+    match /config/{id} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isManager();
+    }
+
   }
 }
 

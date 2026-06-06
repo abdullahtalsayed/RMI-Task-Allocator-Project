@@ -26,6 +26,18 @@ export const DEFAULT_SETTINGS={dashStatsView:'cards',notifSound:true,desktopNoti
 export const NOTIF_BUBBLE_TTL=120000;
 export const NOTIF_TOAST_MAX=12;
 
+// ── ORG-WIDE EMAIL CONTROL (manager-set, stored in Firestore config/email) ────
+// Cascading gate: master → per-event .on → per-recipient flag. All default on.
+export const EMAIL_EVENTS=['assigned','status','deadline','overdue','extension'];
+export const EMAIL_RECIPS=['owner','teamLeader','supervisor','manager'];
+export function defaultEmailConfig(){
+  const ev={};
+  for(const e of EMAIL_EVENTS){ev[e]={on:true,owner:true,teamLeader:true,supervisor:true,manager:true};}
+  return {master:true,events:ev};
+}
+export let emailConfig=defaultEmailConfig();
+export function setEmailConfig(v){emailConfig=v;}
+
 export let jobs=[], users=[], events=[], notifications=[], extRequests=[], broadcasts=[], activityLogs=[];
 export let me=null, myFilter='all', lastDel=null, isDark=true, currentATab='overview';
 export let userSettings={...DEFAULT_SETTINGS};
