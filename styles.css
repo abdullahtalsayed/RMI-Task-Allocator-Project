@@ -1727,3 +1727,11 @@ textarea.af-input{resize:vertical;min-height:72px;}
 .wf-btn-no{padding:0.5rem 1.3rem;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--card2);color:var(--text2);font-weight:600;font-size:0.85rem;cursor:pointer;font-family:var(--font);}
 .wf-btn-reject{padding:0.5rem 1.3rem;border-radius:var(--radius-pill);border:1px solid rgba(255,69,58,0.3);background:rgba(255,69,58,0.1);color:#ff9d99;font-weight:700;font-size:0.85rem;cursor:pointer;font-family:var(--font);}
 .wf-btn-yes:hover,.wf-btn-no:hover,.wf-btn-reject:hover{filter:brightness(1.1);}
+/* job basket sub-tabs */
+.wf-tabs{display:flex;gap:0.35rem;margin-bottom:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;flex-wrap:wrap;}
+.wf-tab{padding:0.35rem 0.9rem;border-radius:var(--radius-pill);border:1px solid transparent;background:transparent;color:var(--text3);font-size:0.78rem;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:0.35rem;transition:all var(--t-fast);}
+.wf-tab:hover{background:var(--hover);color:var(--text);}
+.wf-tab.active{background:var(--blue);color:#fff;border-color:transparent;}
+.wf-tab-count{background:rgba(255,255,255,0.22);color:inherit;font-size:0.65rem;font-weight:700;padding:0px 6px;border-radius:var(--radius-pill);font-family:var(--mono);}
+.wf-tab.active .wf-tab-count{background:rgba(255,255,255,0.25);}
+.wf-tab-content{min-height:80px;}

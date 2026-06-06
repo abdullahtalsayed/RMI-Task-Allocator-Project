@@ -529,6 +529,17 @@ export function wfAnalyticsSection(){
     </div>`;
 }
 
+// ── TAB STATE ─────────────────────────────────────────────────────────────────
+let _wfTab=null;
+window.wfSetTab=function(key){_wfTab=key;renderJobBasket();};
+function _tabBar(tabs,cur){
+  return`<div class="wf-tabs">${tabs.map(t=>`<button class="wf-tab${t.key===cur?' active':''}" onclick="wfSetTab('${t.key}')">${t.label}${t.n?` <span class="wf-tab-count">${t.n}</span>`:''}</button>`).join('')}</div>`;
+}
+function _pickTab(tabs,preferred){
+  const keys=tabs.map(t=>t.key);
+  return keys.includes(preferred)?preferred:keys[0];
+}
+
 // ── MAIN RENDER ───────────────────────────────────────────────────────────────
 export function renderJobBasket(){
   const root=document.getElementById('job-basket-root');
@@ -539,53 +550,94 @@ export function renderJobBasket(){
   // ── SALES OPERATION ──
   if(r==='sales_operation'){
     const mine=wfJobs.filter(j=>j.wfCreatedBy===me.id).sort((a,b)=>(b.created||0)-(a.created||0));
-    root.innerHTML=`
-      <div class="wf-so-form">
+    const active=mine.filter(j=>j.stage!=='completed');
+    const done=mine.filter(j=>j.stage==='completed');
+    const tabs=[
+      {key:'submit',label:'📤 Submit'},
+      {key:'active',label:'🔄 Active',n:active.length||null},
+      {key:'done',label:'✅ Done',n:done.length||null}
+    ];
+    const tab=_pickTab(tabs,_wfTab);_wfTab=tab;
+    let content='';
+    if(tab==='submit'){
+      content=`<div class="wf-so-form">
         <div class="wf-an-hd">📤 Send Job to Basket</div>
         <label class="wf-f">Client Name<input id="wf-so-client" placeholder="Client name"></label>
         <label class="wf-f">Job #<input id="wf-so-jobnum" placeholder="Job number"></label>
         <label class="wf-f">Project Name<input id="wf-so-project" placeholder="Project name (optional)"></label>
         <button class="wf-act primary" style="margin-top:0.5rem;" onclick="wfSubmitToBasket()">🧺 Send to Basket</button>
         <div class="tc-muted" style="font-size:0.72rem;margin-top:0.4rem;">Auto-assigned to the freest team leader's team.</div>
-      </div>
-      <div class="wf-an-hd" style="margin-top:1.2rem;">📋 My Submitted Jobs <span class="tc-muted">${mine.length}</span></div>
-      ${mine.length?mine.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.5rem;">No jobs submitted yet.</div>'}`;
+      </div>`;
+    }else if(tab==='active'){
+      content=active.length?active.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.5rem;">No active jobs.</div>';
+    }else{
+      content=done.length?done.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.5rem;">No completed jobs yet.</div>';
+    }
+    root.innerHTML=_tabBar(tabs,tab)+`<div class="wf-tab-content">${content}</div>`;
     return;
   }
 
   // ── TEAM LEADER ──
   if(r==='team_leader'){
-    const action=wfJobs.filter(j=>wfActionFor(j)).sort((a,b)=>(a.deadline||9e15)-(b.deadline||9e15));
-    const waiting=wfJobs.filter(j=>j.teamLeaderId===me.id&&!wfActionFor(j)&&j.stage!=='completed');
+    // BUG FIX: completed jobs excluded from action queue; shown only in Completed tab with Reopen button
+    const myAction=wfJobs.filter(j=>wfActionFor(j)&&j.stage!=='completed').sort((a,b)=>(a.deadline||9e15)-(b.deadline||9e15));
+    const withTeam=wfJobs.filter(j=>j.teamLeaderId===me.id&&!wfActionFor(j)&&j.stage!=='completed');
     const doneJobs=wfJobs.filter(j=>j.teamLeaderId===me.id&&j.stage==='completed');
-    root.innerHTML=`
-      <div class="wf-an-hd">⚡ Needs My Action <span class="wf-count">${action.length}</span></div>
-      ${action.length?action.map(j=>wfCard(j,true)).join(''):'<div class="empty" style="padding:1.25rem;">Nothing waiting on you 🎉</div>'}
-      ${waiting.length?`<div class="wf-an-hd" style="margin-top:1.1rem;">⏳ With My Team <span class="tc-muted">${waiting.length}</span></div>${waiting.map(j=>wfCard(j,false)).join('')}`:''}
-      ${doneJobs.length?`<div class="wf-an-hd" style="margin-top:1.1rem;">✅ Completed <span class="tc-muted">${doneJobs.length}</span></div>${doneJobs.map(j=>wfCard(j,true)).join('')}`:''}
-      ${wfAnalytics(wfJobs.filter(j=>j.teamLeaderId===me.id))}`;
+    const tabs=[
+      {key:'queue',label:'⚡ My Queue',n:myAction.length||null},
+      {key:'team',label:'⏳ My Team',n:withTeam.length||null},
+      {key:'done',label:'✅ Completed',n:doneJobs.length||null}
+    ];
+    const tab=_pickTab(tabs,_wfTab);_wfTab=tab;
+    let content='';
+    if(tab==='queue'){
+      content=myAction.length?myAction.map(j=>wfCard(j,true)).join(''):'<div class="empty" style="padding:1.25rem;">Nothing waiting on you 🎉</div>';
+    }else if(tab==='team'){
+      content=withTeam.length?withTeam.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No jobs currently with your team.</div>';
+    }else{
+      // pass showAction=true so Reopen for Release button appears in completed tab
+      content=doneJobs.length?doneJobs.map(j=>wfCard(j,true)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
+    }
+    root.innerHTML=_tabBar(tabs,tab)+`<div class="wf-tab-content">${content}</div>`;
     return;
   }
 
-  // ── MANAGER / SUPERVISOR / DIRECTOR (read-only oversight) ──
+  // ── MANAGER / SUPERVISOR / DIRECTOR ──
   if(r==='manager'||r==='supervisor'||amDirector()){
     const active=wfJobs.filter(j=>j.stage!=='completed').sort((a,b)=>(a.deadline||9e15)-(b.deadline||9e15));
     const doneJobs=wfJobs.filter(j=>j.stage==='completed');
-    root.innerHTML=`
-      <div class="wf-an-hd">🧺 All Workflow Jobs <span class="wf-count">${active.length} active</span></div>
-      ${active.length?active.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No active workflow jobs.</div>'}
-      ${doneJobs.length?`<div class="wf-an-hd" style="margin-top:1.1rem;">✅ Completed <span class="tc-muted">${doneJobs.length}</span></div>${doneJobs.map(j=>wfCard(j,false)).join('')}`:''}
-      ${wfAnalytics(wfJobs)}`;
+    const tabs=[
+      {key:'overview',label:'🧺 Overview',n:active.length||null},
+      {key:'done',label:'✅ Completed',n:doneJobs.length||null}
+    ];
+    const tab=_pickTab(tabs,_wfTab);_wfTab=tab;
+    let content='';
+    if(tab==='overview'){
+      content=active.length?active.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No active workflow jobs.</div>';
+    }else{
+      content=doneJobs.length?doneJobs.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
+    }
+    root.innerHTML=_tabBar(tabs,tab)+`<div class="wf-tab-content">${content}</div>`;
     return;
   }
 
   // ── EMPLOYEE / DRAFTER ──
-  const action=wfJobs.filter(j=>j.drafterId===me.id&&wfActionFor(j)).sort((a,b)=>(a.deadline||9e15)-(b.deadline||9e15));
-  const waiting=wfJobs.filter(j=>j.drafterId===me.id&&!wfActionFor(j)&&j.stage!=='completed');
+  const myAction=wfJobs.filter(j=>j.drafterId===me.id&&wfActionFor(j)).sort((a,b)=>(a.deadline||9e15)-(b.deadline||9e15));
+  const submitted=wfJobs.filter(j=>j.drafterId===me.id&&!wfActionFor(j)&&j.stage!=='completed');
   const doneJobs=wfJobs.filter(j=>j.drafterId===me.id&&j.stage==='completed');
-  root.innerHTML=`
-    <div class="wf-an-hd">⚡ My Tasks <span class="wf-count">${action.length}</span></div>
-    ${action.length?action.map(j=>wfCard(j,true)).join(''):'<div class="empty" style="padding:1.25rem;">No workflow tasks waiting on you 🎉</div>'}
-    ${waiting.length?`<div class="wf-an-hd" style="margin-top:1.1rem;">⏳ Waiting / Submitted <span class="tc-muted">${waiting.length}</span></div>${waiting.map(j=>wfCard(j,false)).join('')}`:''}
-    ${doneJobs.length?`<div class="wf-an-hd" style="margin-top:1.1rem;">✅ Completed <span class="tc-muted">${doneJobs.length}</span></div>${doneJobs.map(j=>wfCard(j,false)).join('')}`:''}`;
+  const tabs=[
+    {key:'tasks',label:'⚡ My Tasks',n:myAction.length||null},
+    {key:'submitted',label:'⏳ Submitted',n:submitted.length||null},
+    {key:'done',label:'✅ Completed',n:doneJobs.length||null}
+  ];
+  const tab=_pickTab(tabs,_wfTab);_wfTab=tab;
+  let content='';
+  if(tab==='tasks'){
+    content=myAction.length?myAction.map(j=>wfCard(j,true)).join(''):'<div class="empty" style="padding:1.25rem;">No workflow tasks waiting on you 🎉</div>';
+  }else if(tab==='submitted'){
+    content=submitted.length?submitted.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">Nothing submitted awaiting review.</div>';
+  }else{
+    content=doneJobs.length?doneJobs.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
+  }
+  root.innerHTML=_tabBar(tabs,tab)+`<div class="wf-tab-content">${content}</div>`;
 }
