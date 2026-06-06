@@ -42,6 +42,8 @@ global and called across modules without imports.
 | `team_leader` | Own team only (always scoped, `viewAll` does not override) |
 | `supervisor` | Assign + all jobs |
 | `manager` | Full access |
+| `managing_director` | Read-only oversight — sees Dashboard, Analytics, Teams, Account (own + read-only user directory). Views everything, changes nothing. Hidden from all staff team/board/assign/calendar lists. |
+| `executive_director` | Identical to `managing_director` (different title/badge only). |
 
 ---
 

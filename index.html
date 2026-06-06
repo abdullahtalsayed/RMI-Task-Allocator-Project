@@ -5,7 +5,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RMI Task Allocator & Progress Tracker v2.5.0</title>
+<title>RMI Task Allocator & Progress Tracker v2.6.0</title>
 <link rel="icon" type="image/png" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_32,h_32,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <link rel="apple-touch-icon" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_180,h_180,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <meta name="theme-color" content="#07080c"/>
@@ -79,7 +79,7 @@
     <div class="hl">
       <button id="sb-toggle" class="sb-toggle-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
       <img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/>
-      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.5.0</div><div id="clock"></div></div>
+      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.6.0</div><div id="clock"></div></div>
     </div>
     <div class="hr">
       <span id="synced"></span>
@@ -435,7 +435,7 @@
       <h2 style="margin:0;">⚙️ Team</h2>
       <div class="an-controls">
         <input id="user-search" class="log-search" type="text" placeholder="🔍 Search users..." oninput="renderUList()"/>
-        <button class="bp" onclick="openAddUserModal()">+ Add User</button>
+        <button class="bp" id="add-user-btn" onclick="openAddUserModal()">+ Add User</button>
       </div>
     </div>
     <div id="user-summary" class="user-summary"></div>
@@ -549,7 +549,7 @@
       <label>Name<input id="edit-uname" placeholder="Full name"/></label>
       <label>Email<input id="edit-uemail" type="email" placeholder="email@example.com"/></label>
       <label>New Password <span style="color:var(--text2);font-weight:400;text-transform:none;">(leave blank to keep current)</span><input id="edit-upw" type="password" placeholder="••••••••"/></label>
-      <label>Role<select id="edit-urole" onchange="onRoleChange('edit')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option></select></label>
+      <label>Role<select id="edit-urole" onchange="onRoleChange('edit')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option><option value="managing_director">Managing Director</option><option value="executive_director">Executive Director</option></select></label>
       <label id="edit-teamlead-wrap">Team Leader<select id="edit-uteamlead"><option value="">— None —</option></select></label>
       <label>Can view all jobs?<select id="edit-uviewall"><option value="no">No — own jobs only</option><option value="yes">Yes — all jobs</option></select></label>
     </div>
@@ -568,7 +568,7 @@
       <label>Name<input id="uname" placeholder="e.g. Ahmed"/></label>
       <label>Work email<input id="uemail" type="email" placeholder="employee@example.com"/></label>
       <label>Temporary password<input id="upw" type="password" placeholder="For first-time setup"/></label>
-      <label>Role<select id="urole" onchange="onRoleChange('add')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option></select></label>
+      <label>Role<select id="urole" onchange="onRoleChange('add')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option><option value="managing_director">Managing Director</option><option value="executive_director">Executive Director</option></select></label>
       <label id="add-teamlead-wrap">Team Leader<select id="u-teamlead"><option value="">— None —</option></select></label>
       <label>Can view all jobs?<select id="uviewall"><option value="no">No — own jobs only</option><option value="yes">Yes — all jobs</option></select></label>
     </div>

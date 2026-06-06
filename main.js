@@ -352,9 +352,13 @@ function detachFirebaseListeners(){
   fbUnsubs=[];
 }
 function canSeeAllJobs(){
-  return me&&(me.role==='manager'||me.role==='supervisor'||me.viewAll==='yes');
+  return me&&(me.role==='manager'||me.role==='supervisor'||amDirector()||me.viewAll==='yes');
 }
 // ── TEAMS / SCOPE ────────────────────────────────────────────────────────────
+// Read-only oversight roles. See everything, change nothing, hidden from staff.
+export const DIRECTOR_ROLES=['managing_director','executive_director'];
+export function isDirectorRole(role){return DIRECTOR_ROLES.includes(role);}
+export function amDirector(){return me&&isDirectorRole(me.role);}
 export function isTeamLeader(){return me&&me.role==='team_leader';}
 function teamMemberIds(leaderId){
   // members assigned to this leader + the leader themselves
@@ -382,15 +386,17 @@ export function isLead(){return me&&['manager','supervisor','team_leader'].inclu
 // users visible in board/assign/calendar/analytics dropdowns
 export function teamUsersForView(){
   if(!me)return[];
-  if(me.role==='manager'||me.role==='supervisor')return users;
-  if(isTeamLeader()){const ids=new Set(myTeamIds());return users.filter(u=>ids.has(u.id));}
+  // directors are hidden from all team/board/calendar/analytics people lists
+  const staff=users.filter(u=>!isDirectorRole(u.role));
+  if(me.role==='manager'||me.role==='supervisor'||amDirector())return staff;
+  if(isTeamLeader()){const ids=new Set(myTeamIds());return staff.filter(u=>ids.has(u.id));}
   return users.filter(u=>u.id===me.id);
 }
 // employees a lead may assign to
 export function assignableUsers(){
   if(!me)return[];
-  if(me.role==='manager')return users;
-  if(me.role==='supervisor')return users.filter(u=>u.role!=='manager');
+  if(me.role==='manager')return users.filter(u=>!isDirectorRole(u.role));
+  if(me.role==='supervisor')return users.filter(u=>u.role!=='manager'&&!isDirectorRole(u.role));
   if(isTeamLeader())return users.filter(u=>u.teamLeaderId===me.id||u.id===me.id);
   return [];
 }
@@ -533,7 +539,7 @@ function populateReassignDrops(){
   // adv search emp filter
   const sf=document.getElementById('sf-emp');
   sf.innerHTML='<option value="">All Employees</option>';
-  users.forEach(u=>{const o=document.createElement('option');o.value=u.id;o.textContent=u.name;sf.appendChild(o);});
+  users.filter(u=>!isDirectorRole(u.role)).forEach(u=>{const o=document.createElement('option');o.value=u.id;o.textContent=u.name;sf.appendChild(o);});
 }
 
 function doLegacyLogin(){
@@ -2389,7 +2395,7 @@ window.exportEmployeeCSV=function(uid){
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard(){
-  if(!me||!['manager','supervisor','team_leader'].includes(me.role))return;
+  if(!me||!(['manager','supervisor','team_leader'].includes(me.role)||amDirector()))return;
   const root=document.getElementById('dash-root');
   if(!root)return;
   const dj=visibleJobs();
@@ -2685,6 +2691,14 @@ const SB_TO_HUB={
 };
 function applyMainNav(){
   const r=me?.role||'';
+  // Directors: read-only oversight. Only Dashboard, Analytics, Teams, Account, Accounts directory.
+  if(isDirectorRole(r)){
+    const allow=new Set(['dashboard','analytics','teams-overview','account','users']);
+    document.querySelectorAll('.sb-item').forEach(el=>{el.style.display=allow.has(el.dataset.sb)?'flex':'none';});
+    const teamGrp=document.getElementById('sbg-team');if(teamGrp)teamGrp.style.display='none';
+    const topbar=document.querySelector('.topbar');if(topbar)topbar.style.display='none';
+    return;
+  }
   const isManager=r==='manager';
   const isTeam=['manager','supervisor','team_leader'].includes(r);
   const isLeadNav=['manager','supervisor','team_leader'].includes(r);
@@ -3178,6 +3192,8 @@ loginAs=function(u){
     const bar=document.getElementById('reports-export-bar');
     if(bar)bar.style.display='flex';
   }
+  // directors land on Dashboard (their default tab — My Jobs is hidden for them)
+  if(amDirector())goHub('insights','overview');
 };
 
 
@@ -3506,7 +3522,7 @@ renderAnalyticsContent=function(){
   // teams view
   if(analyticsView==='teams'){renderTeamsAnalytics(el);return;}
   anPopulateEmp();anPopulateType();
-  const isMgr=isLead();
+  const isMgr=isLead()||amDirector();
   const now=Date.now();
   const scope=analyticsScope();
   const total=scope.length;
@@ -3814,7 +3830,7 @@ renderCal=function(){
 // ── TEAMS OVERVIEW (manager-only) ─────────────────────────────────────────────
 function renderTeamsOverview(){
   const root=document.getElementById('teams-overview-root');if(!root)return;
-  if(!me||me.role!=='manager'){root.innerHTML='<div class="empty" style="padding:2rem;">Manager access only.</div>';return;}
+  if(!me||!(me.role==='manager'||amDirector())){root.innerHTML='<div class="empty" style="padding:2rem;">Manager access only.</div>';return;}
   const tls=users.filter(u=>u.role==='team_leader');
   if(!tls.length){root.innerHTML='<div class="empty" style="padding:2rem;">No team leaders yet. Add team leaders in Manage Users.</div>';return;}
 

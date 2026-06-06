@@ -6,7 +6,7 @@ import { me, users, broadcasts, jobs, setBroadcasts } from './state.js';
 import { uid, toMillis, fmt, escapeHtml } from './helpers.js';
 import { uAdd, uUpdate, uDelete } from './jobs.js';
 import { showConfirm } from './modals.js';
-import { bcastCol, isTeamLeader, logActivity, refreshBroadcastsRemote, pushNotif, dashRelTime, showToastMsg, localSave } from './main.js';
+import { bcastCol, isTeamLeader, logActivity, refreshBroadcastsRemote, pushNotif, dashRelTime, showToastMsg, localSave, amDirector, isDirectorRole } from './main.js';
 
 // ── BROADCAST ─────────────────────────────────────────────────────────────────
 window.sendBroadcast=async function(){
@@ -25,7 +25,7 @@ window.sendBroadcast=async function(){
   if(to==='employees')targets=users.filter(u=>u.role==='employee'||u.role==='team_leader');
   else if(to==='supervisors')targets=users.filter(u=>u.role==='supervisor');
   else if(to.startsWith('team:')){const lid=to.slice(5);targets=users.filter(u=>u.teamLeaderId===lid||u.id===lid);}
-  targets.filter(u=>u.id!==me.id).forEach(u=>pushNotif(u.id,'📢 Message from '+me.name,msg));
+  targets.filter(u=>u.id!==me.id&&!isDirectorRole(u.role)).forEach(u=>pushNotif(u.id,'📢 Message from '+me.name,msg));
   document.getElementById('bcast-msg').value='';
   showToastMsg('Message sent!');
 };
@@ -196,6 +196,8 @@ window.removeUser=async function(id){
 };
 // role display meta
 export function roleMeta(role){
+  if(role==='managing_director')return{icon:'🎩',bdg:'md',label:'Managing Director'};
+  if(role==='executive_director')return{icon:'🎖️',bdg:'ed',label:'Executive Director'};
   if(role==='manager')return{icon:'👔',bdg:'m',label:'Manager'};
   if(role==='supervisor')return{icon:'🔰',bdg:'sup',label:'Supervisor'};
   if(role==='team_leader')return{icon:'🧭',bdg:'tl',label:'Team Leader'};
@@ -226,6 +228,8 @@ window.openAddUserModal=function(){
 window.closeAddUserModal=function(){document.getElementById('add-user-modal').classList.remove('open');};
 export function renderUList(){
   const el=document.getElementById('ulist');if(!el)return;
+  const ro=amDirector(); // directors get a read-only directory (no add/edit/remove)
+  const addBtn=document.getElementById('add-user-btn');if(addBtn)addBtn.style.display=ro?'none':'';
   const q=(document.getElementById('user-search')?.value||'').toLowerCase();
   // summary
   const sumEl=document.getElementById('user-summary');
@@ -253,7 +257,7 @@ export function renderUList(){
     const initial=(u.name||'?').trim().charAt(0).toUpperCase();
     const active=jobs.filter(j=>j.owner===u.id&&j.status!=='completed').length;
     const status=u.authUid?'<span class="user-status us-active">● Active</span>':(u.needsActivation?'<span class="user-status us-pending">● Setup pending</span>':'<span class="user-status us-active">● Active</span>');
-    const rm=u.id!==me?.id?`<button class="user-act user-act-danger" onclick="removeUser('${u.id}')" title="Remove">Remove</button>`:'';
+    const rm=(!ro&&u.id!==me?.id)?`<button class="user-act user-act-danger" onclick="removeUser('${u.id}')" title="Remove">Remove</button>`:'';
     // extra meta: employee → their team leader; team_leader → member count
     let teamMeta='';
     if(u.role==='employee'&&u.teamLeaderId){const tl=users.find(x=>x.id===u.teamLeaderId);if(tl)teamMeta=` · 🧭 ${escapeHtml(tl.name)}`;}
@@ -267,7 +271,7 @@ export function renderUList(){
       <div class="user-stat"><span class="user-stat-n">${active}</span><span class="user-stat-l">active</span></div>
       ${status}
       <div class="user-actions">
-        <button class="user-act" onclick="openEditUserModal('${u.id}')" title="Edit">✏️ Edit</button>
+        ${ro?'':`<button class="user-act" onclick="openEditUserModal('${u.id}')" title="Edit">✏️ Edit</button>`}
         ${rm}
       </div>
     </div>`;

@@ -29,7 +29,7 @@ service cloud.firestore {
 
     function isManagerOrSupervisor() {
       return profile() != null
-        && profile().data.role in ['manager', 'supervisor'];
+        && profile().data.role in ['manager', 'supervisor', 'managing_director', 'executive_director'];
     }
 
     function canViewAllJobs() {
