@@ -29,6 +29,7 @@ export const NOTIF_TOAST_MAX=12;
 export let jobs=[], users=[], events=[], notifications=[], extRequests=[], broadcasts=[], activityLogs=[];
 export let me=null, myFilter='all', lastDel=null, isDark=true, currentATab='overview';
 export let userSettings={...DEFAULT_SETTINGS};
+export let tagStores={jtags:[],etags:[],mtags:[]};  // job-form tag inputs (property-mutated, never rebound)
 
 // ── SETTERS (enable cross-module reassignment) ────────────────────────────────
 export function setMe(v){me=v;}

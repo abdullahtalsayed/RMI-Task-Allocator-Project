@@ -5,6 +5,8 @@ import { initializeApp, getFirestore, collection, doc, setDoc, addDoc, updateDoc
 import { JOB_TYPES, ACTIVITY_TYPE_LABELS, FB_LIMITS, JOBS_PAGE_SIZE, ARCHIVE_AFTER_MS, DEFAULT_SETTINGS, NOTIF_BUBBLE_TTL, NOTIF_TOAST_MAX, jobs, users, events, notifications, extRequests, broadcasts, activityLogs, me, myFilter, lastDel, isDark, currentATab, userSettings, setMe, setJobs, setUsers, setEvents, setNotifications, setExtRequests, setBroadcasts, setActivityLogs, setMyFilter, setLastDel, setIsDark, setCurrentATab, setUserSettings } from './state.js';
 import { lsub, toMillis, escapeHtml, fmt, fmtShort, tdiff, getJobPausedMs, getJobDurationBreakdown, formatJobDurationHtml, jobPauseDefaults, uid, timeAgo } from './helpers.js';
 import { sendEmail, emailPref, emailUser, emailJobOwner, emailManagersAndSupervisors, emailTeamLeaderOf, emailAllOversight } from './email.js';
+import { tagStores } from './state.js';
+import { renderTags, setTags, showConfirm } from './modals.js';
 
 // ── MAIN-LOCAL STATE (firebase handles + UI-only mutables) ────────────────────
 let db, auth, storage, jCol, uCol, evCol, notifCol, extCol, bcastCol, logCol, authMapCol, archiveCol;
@@ -15,8 +17,6 @@ let chartPrefs={bytype:{mode:'bar',showPct:true,showNum:true},bypriority:{mode:'
 let knownNotifIds=new Set(), notifSoundReady=false, notifSnapshotReady=false, notifBulkClearing=false;
 let fbUnsubs=[];
 let notifToastTimers=new Map();
-let confirmCallback=null, completeJobId=null;
-let tagStores={jtags:[],etags:[],mtags:[]};
 
 window.setF=function(f){
   setMyFilter(f);
@@ -28,110 +28,6 @@ window.toggleTheme=function(){
   setIsDark(!isDark);
   document.body.classList.toggle('light-mode',!isDark);
   localStorage.setItem('rmi_theme',isDark?'dark':'light');
-};
-
-// ── TAGS ─────────────────────────────────────────────────────────────────────
-window.handleTagInput=function(e,store,inputId,wrapId){
-  if(e.key==='Enter'||e.key===','){
-    e.preventDefault();
-    const val=document.getElementById(inputId).value.trim().replace(/,$/,'');
-    if(val&&!tagStores[store].includes(val)){
-      tagStores[store].push(val);
-      renderTags(store,inputId,wrapId);
-    }
-    document.getElementById(inputId).value='';
-  }
-};
-function renderTags(store,inputId,wrapId){
-  const wrap=document.getElementById(wrapId);
-  const inp=document.getElementById(inputId);
-  wrap.innerHTML='';
-  tagStores[store].forEach((t,i)=>{
-    const chip=document.createElement('span');
-    chip.className='tag-chip';
-    chip.innerHTML=`${t}<button onclick="removeTag('${store}','${inputId}','${wrapId}',${i})">×</button>`;
-    wrap.appendChild(chip);
-  });
-  wrap.appendChild(inp);
-}
-window.removeTag=function(store,inputId,wrapId,i){tagStores[store].splice(i,1);renderTags(store,inputId,wrapId);};
-function setTags(store,inputId,wrapId,arr){tagStores[store]=arr?[...arr]:[];renderTags(store,inputId,wrapId);}
-
-// ── CONFIRM MODAL ─────────────────────────────────────────────────────────────
-function showConfirm(title,msg,cb,btnLabel='Confirm',danger=true){
-  document.getElementById('confirm-title').textContent=title;
-  document.getElementById('confirm-msg').textContent=msg;
-  const ok=document.getElementById('confirm-ok');
-  ok.textContent=btnLabel;
-  ok.className='btn-confirm'+(danger?'':' green');
-  confirmCallback=cb;
-  document.getElementById('confirm-modal').classList.add('open');
-}
-window.closeConfirm=function(){document.getElementById('confirm-modal').classList.remove('open');confirmCallback=null;};
-document.getElementById('confirm-ok').onclick=function(){if(confirmCallback)confirmCallback();closeConfirm();};
-
-// ── COMPLETE MODAL ────────────────────────────────────────────────────────────
-window.openCompleteModal=function(id){completeJobId=id;document.getElementById('complete-note').value='';document.getElementById('complete-modal').classList.add('open');};
-window.closeCompleteModal=function(){document.getElementById('complete-modal').classList.remove('open');completeJobId=null;};
-window.submitComplete=async function(){
-  if(!completeJobId)return;
-  const note=document.getElementById('complete-note').value.trim();
-  const j=jobs.find(x=>x.id===completeJobId);
-  if(!j)return;
-  let totalPausedMs=j.totalPausedMs||0;
-  if(j.status==='paused'&&j.pausedAt)totalPausedMs+=Date.now()-toMillis(j.pausedAt);
-  const completed=Date.now();
-  const {totalMs,pausedMs,activeMs}=getJobDurationBreakdown({...j,status:'completed',completed,totalPausedMs,pausedAt:null});
-  await updateJob(completeJobId,{
-    status:'completed',completed,completionNote:note||null,
-    totalPausedMs,pausedAt:null,
-    durationTotalMs:totalMs,durationPausedMs:pausedMs,durationActiveMs:activeMs
-  });
-  const durMsg=pausedMs>0?` — job took ${tdiff(0,totalMs)} (${tdiff(0,pausedMs)} paused, ${tdiff(0,activeMs)} active work)`:` — ${tdiff(0,totalMs)} total`;
-  await addEvent(completeJobId,'completed',`${me.name} marked job complete${durMsg}${note?' — '+note:''}`,'green');
-  closeCompleteModal();
-};
-
-// ── EXTENSION MODAL ───────────────────────────────────────────────────────────
-window.openExtModal=function(id){document.getElementById('ext-job-id').value=id;document.getElementById('ext-new-dl').value='';document.getElementById('ext-reason').value='';document.getElementById('ext-modal').classList.add('open');};
-window.closeExtModal=function(){document.getElementById('ext-modal').classList.remove('open');};
-window.submitExtRequest=async function(){
-  const id=document.getElementById('ext-job-id').value;
-  const dl=document.getElementById('ext-new-dl').value;
-  const reason=document.getElementById('ext-reason').value.trim();
-  if(!dl||!reason){alert('Please fill in both fields.');return;}
-  const j=jobs.find(x=>x.id===id);if(!j)return;
-  const req={jobId:id,jobNum:j.jobNum,client:j.client,requestedBy:me.id,requestedByName:me.name,oldDeadline:j.deadline||null,newDeadline:new Date(dl).getTime(),reason,status:'pending',created:Date.now()};
-  await extAdd(req);
-  await addEvent(id,'extension_request',`${me.name} requested deadline extension: ${reason}`,'orange');
-  showToastMsg('Extension request sent to manager.');
-  closeExtModal();
-};
-
-// ── REASSIGN MODAL ────────────────────────────────────────────────────────────
-window.openReassignModal=function(id){
-  document.getElementById('reassign-job-id').value=id;
-  document.getElementById('reassign-reason').value='';
-  const sel=document.getElementById('reassign-to');
-  sel.innerHTML='<option value="">-- Select employee --</option>';
-  assignableUsers().filter(u=>u.id!==me.id).forEach(u=>{const o=document.createElement('option');o.value=u.id;o.textContent=u.name+(u.role==='supervisor'?' (Supervisor)':u.role==='team_leader'?' (Team Leader)':'');sel.appendChild(o);});
-  document.getElementById('reassign-modal').classList.add('open');
-};
-window.closeReassignModal=function(){document.getElementById('reassign-modal').classList.remove('open');};
-window.submitReassign=async function(){
-  const id=document.getElementById('reassign-job-id').value;
-  const toId=document.getElementById('reassign-to').value;
-  const reason=document.getElementById('reassign-reason').value.trim();
-  if(!toId){alert('Select an employee.');return;}
-  const j=jobs.find(x=>x.id===id);if(!j)return;
-  if(!canManageJob(j)){showToastMsg('Not authorized.');return;}
-  const fromName=users.find(u=>u.id===j.owner)?.name||j.owner;
-  const toName=users.find(u=>u.id===toId)?.name||toId;
-  await updateJob(id,{owner:toId,reassignedBy:me.name,reassignedAt:Date.now()});
-  await addEvent(id,'reassigned',`${me.name} reassigned from ${fromName} to ${toName}${reason?' — '+reason:''}`, 'purple');
-  notifyReassign(j,j.owner,toId,me.name);
-  showToastMsg(`Job reassigned to ${toName}.`);
-  closeReassignModal();
 };
 
 // ── LOCAL FALLBACK ────────────────────────────────────────────────────────────
@@ -379,7 +275,7 @@ function visibleJobs(){
   return jobs.filter(j=>j.owner===me.id);
 }
 // can current user manage (edit/assign/reassign/extend) this job?
-function canManageJob(j){
+export function canManageJob(j){
   if(!me||!j)return false;
   if(me.role==='manager'||me.role==='supervisor')return true;
   if(me.id===j.owner)return true;
@@ -396,7 +292,7 @@ function teamUsersForView(){
   return users.filter(u=>u.id===me.id);
 }
 // employees a lead may assign to
-function assignableUsers(){
+export function assignableUsers(){
   if(!me)return[];
   if(me.role==='manager')return users;
   if(me.role==='supervisor')return users.filter(u=>u.role!=='manager');
@@ -940,7 +836,7 @@ function notifyTeamLeaderOf(ownerId,title,body,exceptIds=[]){
 function notifyJobOwner(j,title,body,exceptIds=[]){
   if(j?.owner)pushNotifExcept(exceptIds,j.owner,title,body);
 }
-function notifyReassign(j,fromId,toId,byName){
+export function notifyReassign(j,fromId,toId,byName){
   if(!j)return;
   const label=jobLabel(j);
   const ex=exceptActor(me?.id);
@@ -1385,7 +1281,7 @@ window.exportActivityLogCSV=function(){
 };
 
 // ── EVENTS / AUDIT TRAIL ──────────────────────────────────────────────────────
-async function addEvent(jobId,type,desc,color='blue'){
+export async function addEvent(jobId,type,desc,color='blue'){
   const e={jobId,type,desc,by:me?.name||'System',byId:me?.id||'',ts:Date.now(),color};
   if(USE_FIREBASE){
     await addDoc(evCol,e);
@@ -1490,7 +1386,7 @@ function populateCalEmpPills(){
   wrap.innerHTML=`<button class="cal-emp-pill${!calFilterEmp?' cep-on':''}" onclick="setCalFilter('')">All</button>`
     +pool.map(u=>`<button class="cal-emp-pill${calFilterEmp===u.id?' cep-on':''}" onclick="setCalFilter('${u.id}')">${escapeHtml(u.name.split(' ')[0])}</button>`).join('');
 }
-async function extAdd(data){
+export async function extAdd(data){
   if(USE_FIREBASE){const r=await addDoc(extCol,data);return r.id;}
   else{data.id=uid();extRequests.unshift(data);localSave();return data.id;}
 }
@@ -1552,7 +1448,7 @@ window.resumeJob=async function(id){
 };
 window.doneJob=function(id){openCompleteModal(id);};
 
-async function updateJob(id,data){
+export async function updateJob(id,data){
   // Build audit entry
   const j=jobs.find(x=>x.id===id);
   if(j&&data.status&&data.status!==j.status){
@@ -3217,7 +3113,7 @@ function renderExtensionsPage(){
 }
 
 // ── MISC ──────────────────────────────────────────────────────────────────────
-function showToastMsg(msg){
+export function showToastMsg(msg){
   const t=document.getElementById('toast');
   t.innerHTML=msg;
   t.style.display='block';
