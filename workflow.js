@@ -612,7 +612,8 @@ export function wfAnalyticsSection(){
 
 // ── TAB STATE ─────────────────────────────────────────────────────────────────
 let _wfTab=null;
-window.wfSetTab=function(key){_wfTab=key;renderJobBasket();};
+window.getWfTab=()=>_wfTab;
+window.wfSetTab=function(key){_wfTab=key;renderJobBasket();window.renderSbBasketSubs?.();};
 function _tabBar(tabs,cur){
   return`<div class="wf-tabs">${tabs.map(t=>`<button class="wf-tab${t.key===cur?' active':''}" onclick="wfSetTab('${t.key}')">${t.label}${t.n?` <span class="wf-tab-count">${t.n}</span>`:''}</button>`).join('')}</div>`;
 }
@@ -654,7 +655,7 @@ export function renderJobBasket(){
     }else{
       content=done.length?done.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.5rem;">No completed jobs yet.</div>';
     }
-    root.innerHTML=_tabBar(tabs,tab)+`<div class="wf-tab-content">${content}</div>`;
+    root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
     return;
   }
 
@@ -679,7 +680,7 @@ export function renderJobBasket(){
       // pass showAction=true so Reopen for Release button appears in completed tab
       content=doneJobs.length?doneJobs.map(j=>wfCard(j,true)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
     }
-    root.innerHTML=_tabBar(tabs,tab)+`<div class="wf-tab-content">${content}</div>`;
+    root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
     return;
   }
 
@@ -698,7 +699,7 @@ export function renderJobBasket(){
     }else{
       content=doneJobs.length?doneJobs.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
     }
-    root.innerHTML=_tabBar(tabs,tab)+`<div class="wf-tab-content">${content}</div>`;
+    root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
     return;
   }
 
@@ -720,5 +721,6 @@ export function renderJobBasket(){
   }else{
     content=doneJobs.length?doneJobs.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
   }
-  root.innerHTML=_tabBar(tabs,tab)+`<div class="wf-tab-content">${content}</div>`;
+  root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
+  window.renderSbBasketSubs?.();
 }

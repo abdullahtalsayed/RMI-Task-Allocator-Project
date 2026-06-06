@@ -5,7 +5,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RMI Task Allocator & Progress Tracker v2.15.5</title>
+<title>RMI Task Allocator & Progress Tracker v2.15.6</title>
 <link rel="icon" type="image/png" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_32,h_32,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <link rel="apple-touch-icon" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_180,h_180,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <meta name="theme-color" content="#07080c"/>
@@ -79,7 +79,7 @@
     <div class="hl">
       <button id="sb-toggle" class="sb-toggle-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
       <img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/>
-      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.15.5</div><div id="clock"></div></div>
+      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.15.6</div><div id="clock"></div></div>
     </div>
     <div class="hr">
       <span id="synced"></span>
@@ -106,6 +106,7 @@
       <nav class="sb-nav">
         <a class="sb-item" data-sb="dashboard" href="#" onclick="goHub('insights','overview')">🏠 <span>Dashboard</span></a>
         <a class="sb-item sb-work" data-sb="job-basket" href="#">🧺 <span>Job Basket</span></a>
+        <div class="sb-subs" id="sb-basket-subs"></div>
 
         <!-- Team group -->
         <div class="sb-group sb-team" id="sbg-team" style="display:none;">
@@ -122,6 +123,7 @@
 
         <a class="sb-item sb-ext" data-sb="extensions-review" href="#" style="display:none;">📬 <span>Extensions</span><span id="sb-ext-badge" class="sb-badge" style="display:none;"></span></a>
         <a class="sb-item sb-lead" data-sb="analytics" href="#" style="display:none;">📊 <span>Analytics</span></a>
+        <div class="sb-subs sb-subs-lead" id="sb-analytics-subs" style="display:none;"></div>
         <a class="sb-item sb-manager" data-sb="teams-overview" href="#" style="display:none;">👥 <span>Teams</span></a>
         <a class="sb-item sb-manager" data-sb="adv-search" href="#" style="display:none;">🔍 <span>Search</span></a>
         <a class="sb-item sb-manager" data-sb="email-control" href="#" style="display:none;">📧 <span>Email Control</span><span id="sb-email-badge" class="sb-badge" style="display:none;">off</span></a>

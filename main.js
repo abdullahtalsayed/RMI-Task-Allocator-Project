@@ -2253,7 +2253,34 @@ function allJobTypesForAnalytics(scope){
   return [...fromJobs];
 }
 let _anSubTab='overview';
-window.setAnSubTab=function(t){_anSubTab=t;renderAnalyticsContent();};
+window.setAnSubTab=function(t){_anSubTab=t;renderAnalyticsContent();renderSbAnalyticsSubs();};
+
+function renderSbAnalyticsSubs(){
+  const el=document.getElementById('sb-analytics-subs');if(!el)return;
+  const mgr=isLead();
+  const hasWf=jobs.some(j=>j.workflow);
+  const tabs=[
+    {k:'overview',label:'📊 Overview'},
+    {k:'jobs',label:'🗂 Jobs'},
+    ...(mgr?[{k:'team',label:'👥 Team'}]:[]),
+    ...(hasWf?[{k:'workflow',label:'🧺 Workflow'}]:[])
+  ];
+  el.innerHTML=tabs.map(t=>`<button class="sb-sub-btn${t.k===_anSubTab?' active':''}" onclick="goHub('insights','reports');setAnSubTab('${t.k}')">${t.label}</button>`).join('');
+  el.style.display=el.innerHTML?'flex':'none';
+}
+window.renderSbAnalyticsSubs=renderSbAnalyticsSubs;
+
+window.renderSbBasketSubs=function(){
+  const el=document.getElementById('sb-basket-subs');if(!el||!me)return;
+  const r=me.role;
+  const cur=window.getWfTab?.()||'';
+  let tabs=[];
+  if(r==='sales_operation')tabs=[{k:'submit',label:'📤 Submit'},{k:'active',label:'🔄 Active'},{k:'done',label:'✅ Done'}];
+  else if(r==='team_leader')tabs=[{k:'queue',label:'⚡ My Queue'},{k:'team',label:'⏳ My Team'},{k:'done',label:'✅ Completed'}];
+  else if(r==='manager'||r==='supervisor'||amDirector())tabs=[{k:'overview',label:'🧺 Overview'},{k:'done',label:'✅ Completed'}];
+  else tabs=[{k:'tasks',label:'⚡ My Tasks'},{k:'submitted',label:'⏳ Submitted'},{k:'done',label:'✅ Completed'}];
+  el.innerHTML=tabs.map(t=>`<button class="sb-sub-btn${t.k===cur?' active':''}" onclick="goHub('work','job-basket');window.wfSetTab('${t.k}')">${t.label}</button>`).join('');
+};
 
 function renderAnalyticsContent(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
@@ -2265,17 +2292,9 @@ function renderAnalyticsContent(){
   const ws=new Date(now);ws.setDate(now.getDate()-now.getDay());ws.setHours(0,0,0,0);
   const total=myJobs.length||1;
   const hasWf=jobs.some(j=>j.workflow);
-
-  // sub-tabs (always visible)
-  const subTabs=[
-    {k:'overview',label:'📊 Overview'},
-    {k:'jobs',label:'🗂 Jobs'},
-    ...(mgr?[{k:'team',label:'👥 Team'}]:[]),
-    ...(hasWf?[{k:'workflow',label:'🧺 Workflow'}]:[])
-  ];
   // guard: if current tab not available for this role, reset
-  if(!subTabs.find(t=>t.k===_anSubTab))_anSubTab='overview';
-  const tabBar=`<div class="an-subtabs">${subTabs.map(t=>`<button class="an-subtab${t.k===_anSubTab?' active':''}" onclick="setAnSubTab('${t.k}')">${t.label}</button>`).join('')}</div>`;
+  if(_anSubTab==='team'&&!mgr)_anSubTab='overview';
+  if(_anSubTab==='workflow'&&!hasWf)_anSubTab='overview';
 
   // ── shared data ──
   const pending=myJobs.filter(j=>j.status==='pending').length;
@@ -2383,7 +2402,7 @@ function renderAnalyticsContent(){
     body=wfAnalyticsSection()||'<div class="empty" style="padding:2rem;">No workflow data yet.</div>';
   }
 
-  el.innerHTML=tabBar+`<div class="an-sub-body">${body}</div>`;
+  el.innerHTML=`<div class="an-sub-body">${body}</div>`;
   bindChartInteractions(el);
 }
 
@@ -2932,6 +2951,7 @@ function applyMainNav(){
     const teamGrp=document.getElementById('sbg-team');if(teamGrp)teamGrp.style.display='none';
     document.querySelectorAll('.sb-admin').forEach(el=>el.style.display='none');
     const topbar=document.querySelector('.topbar');if(topbar)topbar.style.display='none';
+    window.renderSbBasketSubs?.();
     return;
   }
   // Directors: read-only oversight. Only Dashboard, Analytics, Teams, Account, Accounts directory.
@@ -2944,6 +2964,7 @@ function applyMainNav(){
     const t=document.getElementById('my-jobs-title');if(t)t.textContent='Jobs';
     const nb=document.getElementById('new-job-btn');if(nb)nb.style.display='none';
     const topbar=document.querySelector('.topbar');if(topbar)topbar.style.display=currentHub==='jobs'?'flex':'none';
+    renderSbAnalyticsSubs();window.renderSbBasketSubs?.();
     return;
   }
   const isManager=r==='manager';
@@ -2958,6 +2979,10 @@ function applyMainNav(){
   document.querySelectorAll('.sb-work').forEach(el=>el.style.display='flex'); // Job Basket for all staff
   const topbar=document.querySelector('.topbar');
   if(topbar)topbar.style.display=currentHub==='jobs'?'flex':'none';
+  const anSubs=document.getElementById('sb-analytics-subs');
+  if(anSubs)anSubs.style.display=isLeadNav?'flex':'none';
+  renderSbAnalyticsSubs();
+  window.renderSbBasketSubs?.();
 }
 function updateSidebarActive(sectionId){
   const sbKey=SECTION_TO_SB[sectionId]||sectionId;
@@ -3086,6 +3111,8 @@ window.renderAll=function(){
   if(['manager','supervisor','team_leader'].includes(me.role)){
     if(document.getElementById('login-log')?.classList.contains('on'))renderActivityLog();
   }
+  renderSbAnalyticsSubs();
+  window.renderSbBasketSubs?.();
 };
 
 // Click outside to close notif panel

@@ -1506,6 +1506,12 @@ textarea.af-input{resize:vertical;min-height:72px;}
 }
 .sb-divider{height:1px;background:var(--border);margin:0.4rem 10px;}
 
+/* sidebar dynamic sub-items */
+.sb-subs{display:flex;flex-direction:column;gap:0;}
+.sb-sub-btn{display:flex;align-items:center;padding:0.28rem 0.75rem 0.28rem 2rem;font-size:0.78rem;font-weight:500;color:var(--text3);background:transparent;border:none;cursor:pointer;font-family:var(--font);text-align:left;transition:color var(--t-fast),background var(--t-fast);border-radius:6px;width:100%;}
+.sb-sub-btn:hover{color:var(--text2);background:rgba(255,255,255,0.04);}
+.sb-sub-btn.active{color:var(--text);background:rgba(255,255,255,0.07);font-weight:600;}
+
 /* sub-items (indented inside groups) */
 .sb-item.sb-sub{
   padding-left:2rem;font-size:0.82rem;color:var(--text3);
