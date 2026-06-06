@@ -35,7 +35,7 @@ service cloud.firestore {
     function canViewAllJobs() {
       return profile() != null
         && (profile().data.viewAll == 'yes'
-            || profile().data.role in ['manager', 'supervisor']);
+            || profile().data.role in ['manager', 'supervisor', 'managing_director', 'executive_director']);
     }
 
     function managerDocExists() {

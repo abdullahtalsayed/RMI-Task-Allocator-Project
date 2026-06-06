@@ -497,7 +497,7 @@ export function wfAnalyticsSection(){
   if(!me)return'';
   let pool=jobs.filter(j=>j.workflow);
   if(me.role==='team_leader')pool=pool.filter(j=>j.teamLeaderId===me.id);
-  else if(!['manager','supervisor'].includes(me.role))return'';
+  else if(!['manager','supervisor'].includes(me.role)&&!amDirector())return'';
   if(!pool.length)return'';
   const done=pool.filter(j=>j.stage==='completed'&&Array.isArray(j.wfHistory));
   const active=pool.filter(j=>j.stage!=='completed');
@@ -567,8 +567,8 @@ export function renderJobBasket(){
     return;
   }
 
-  // ── MANAGER / SUPERVISOR (oversight) ──
-  if(r==='manager'||r==='supervisor'){
+  // ── MANAGER / SUPERVISOR / DIRECTOR (read-only oversight) ──
+  if(r==='manager'||r==='supervisor'||amDirector()){
     const active=wfJobs.filter(j=>j.stage!=='completed').sort((a,b)=>(a.deadline||9e15)-(b.deadline||9e15));
     const doneJobs=wfJobs.filter(j=>j.stage==='completed');
     root.innerHTML=`

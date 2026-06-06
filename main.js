@@ -387,10 +387,12 @@ export function canManageJob(j){
 // is current user a "lead" (manager/supervisor/team_leader) — gets assign, board, notes
 export function isLead(){return me&&['manager','supervisor','team_leader'].includes(me.role);}
 // users visible in board/assign/calendar/analytics dropdowns
+// roles that never appear in staff/assign/board/calendar/analytics people lists
+export function isNonStaffRole(role){return isDirectorRole(role)||role==='sales_operation';}
 export function teamUsersForView(){
   if(!me)return[];
-  // directors are hidden from all team/board/calendar/analytics people lists
-  const staff=users.filter(u=>!isDirectorRole(u.role));
+  // directors + sales operation are hidden from all team/board/calendar/analytics lists
+  const staff=users.filter(u=>!isNonStaffRole(u.role));
   if(me.role==='manager'||me.role==='supervisor'||amDirector())return staff;
   if(isTeamLeader()){const ids=new Set(myTeamIds());return staff.filter(u=>ids.has(u.id));}
   return users.filter(u=>u.id===me.id);
@@ -398,8 +400,8 @@ export function teamUsersForView(){
 // employees a lead may assign to
 export function assignableUsers(){
   if(!me)return[];
-  if(me.role==='manager')return users.filter(u=>!isDirectorRole(u.role));
-  if(me.role==='supervisor')return users.filter(u=>u.role!=='manager'&&!isDirectorRole(u.role));
+  if(me.role==='manager')return users.filter(u=>!isNonStaffRole(u.role));
+  if(me.role==='supervisor')return users.filter(u=>u.role!=='manager'&&!isNonStaffRole(u.role));
   if(isTeamLeader())return users.filter(u=>u.teamLeaderId===me.id||u.id===me.id);
   return [];
 }
@@ -559,7 +561,7 @@ function populateReassignDrops(){
   // adv search emp filter
   const sf=document.getElementById('sf-emp');
   sf.innerHTML='<option value="">All Employees</option>';
-  users.filter(u=>!isDirectorRole(u.role)).forEach(u=>{const o=document.createElement('option');o.value=u.id;o.textContent=u.name;sf.appendChild(o);});
+  users.filter(u=>!isNonStaffRole(u.role)).forEach(u=>{const o=document.createElement('option');o.value=u.id;o.textContent=u.name;sf.appendChild(o);});
 }
 
 function doLegacyLogin(){
@@ -2378,7 +2380,7 @@ window.runAdvSearch=function(){
   const from=document.getElementById('sf-from').value;
   const to=document.getElementById('sf-to').value;
   const overdue=document.getElementById('sf-overdue').value;
-  let res=jobs;
+  let res=jobs.filter(j=>!j.workflow); // workflow jobs live in Job Basket, not search
   if(emp)res=res.filter(j=>j.owner===emp);
   if(status)res=res.filter(j=>j.status===status);
   if(priority)res=res.filter(j=>j.priority===priority);
@@ -2889,7 +2891,7 @@ function applyMainNav(){
   }
   // Directors: read-only oversight. Only Dashboard, Analytics, Teams, Account, Accounts directory.
   if(isDirectorRole(r)){
-    const allow=new Set(['dashboard','analytics','teams-overview','account','users','my-jobs']);
+    const allow=new Set(['dashboard','analytics','teams-overview','account','users','my-jobs','job-basket']);
     document.querySelectorAll('.sb-item').forEach(el=>{el.style.display=allow.has(el.dataset.sb)?'flex':'none';});
     const teamGrp=document.getElementById('sbg-team');if(teamGrp)teamGrp.style.display='none';
     // directors get a read-only "Jobs" view: rename the item + page title, hide "add job"
@@ -3315,7 +3317,7 @@ function checkScheduledWeeklyExport(){
 window.archiveOldJobs=async function(){
   if(!isManager())return;
   const cut=Date.now()-ARCHIVE_AFTER_MS;
-  const old=jobs.filter(j=>j.status==='completed'&&j.completed&&toMillis(j.completed)<cut);
+  const old=jobs.filter(j=>j.status==='completed'&&j.completed&&toMillis(j.completed)<cut&&!j.workflow); // keep workflow jobs (reopen-for-release)
   if(!old.length){showToastMsg('No jobs old enough to archive (90+ days).');return;}
   showConfirm('Archive old jobs',`Move ${old.length} completed job(s) to archive? They leave the active list.`,async()=>{
     for(const j of old){
