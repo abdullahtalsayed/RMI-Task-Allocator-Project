@@ -459,20 +459,21 @@ function _wfTlVisual(j){
     const checks=_checksHtml(e.checklist);
     const noteHtml=e.note?`<div class="wf-htl-tt-note">${esc(e.note)}</div>`:'';
     // edge-align tooltip so it doesn't clip
-    const ttAlign=i===0?'left:0;transform:none;':i===h.length-1?'right:0;left:auto;transform:none;':'left:50%;transform:translateX(-50%);';
-    const tooltip=`<div class="wf-htl-tooltip" style="${ttAlign}">
+    // tooltip lives on .wf-htl-event (position:relative), not inside the dot
+    const ttEdge=i===0?'left:0;transform:none;':i===h.length-1?'right:0;left:auto;transform:none;':'left:50%;transform:translateX(-50%);';
+    const tooltip=`<div class="wf-htl-tooltip" style="${ttEdge}">
       <div class="wf-htl-tt-stage">${icon} ${esc(wfStageMeta(e.to).label)}</div>
-      <div class="wf-htl-tt-meta">${esc(e.by)}</div>
-      <div class="wf-htl-tt-ts">${fmt(e.at)}</div>
+      <div class="wf-htl-tt-meta">${esc(e.by)} · ${fmt(e.at)}</div>
       <div class="wf-htl-tt-dur">${esc(dur)}</div>
       ${noteHtml}${checks}
     </div>`;
-    return`<div class="wf-htl-event">
+    return`<div class="wf-htl-event" tabindex="0">
       <div class="wf-htl-above">${above?shortLabel:''}</div>
       <div class="wf-htl-stem ${above?'wf-htl-stem-down':'wf-htl-stem-up'}"></div>
-      <div class="wf-htl-dot wf-htl-dot-${col}" tabindex="0">${i+1}${tooltip}</div>
+      <div class="wf-htl-dot wf-htl-dot-${col}">${i+1}</div>
       <div class="wf-htl-stem ${above?'wf-htl-stem-up':'wf-htl-stem-down'}"></div>
       <div class="wf-htl-below">${above?'':shortLabel}</div>
+      ${tooltip}
     </div>`;
   }).join('');
   return`<div class="wf-htl"><div class="wf-htl-track">

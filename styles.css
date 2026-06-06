@@ -1737,7 +1737,9 @@ textarea.af-input{resize:vertical;min-height:72px;}
 .wf-htl-track{position:relative;min-width:480px;padding:72px 1rem;}
 .wf-htl-line{position:absolute;top:50%;left:1rem;right:1rem;height:3px;background:var(--border);transform:translateY(-50%);border-radius:2px;z-index:0;}
 .wf-htl-events{display:flex;align-items:center;justify-content:space-between;position:relative;}
-.wf-htl-event{display:flex;flex-direction:column;align-items:center;position:relative;flex:1;min-width:52px;}
+.wf-htl-event{display:flex;flex-direction:column;align-items:center;position:relative;flex:1;min-width:52px;cursor:default;}
+.wf-htl-events{overflow:visible;}
+.wf-htl-track{overflow:visible;}
 .wf-htl-above,.wf-htl-below{height:58px;display:flex;flex-direction:column;align-items:center;text-align:center;width:100%;}
 .wf-htl-above{justify-content:flex-end;padding-bottom:4px;}
 .wf-htl-below{justify-content:flex-start;padding-top:4px;}
@@ -1754,14 +1756,13 @@ textarea.af-input{resize:vertical;min-height:72px;}
 .wf-htl-dot-purple{background:#bf5af2;}
 .wf-htl-dot-orange{background:#ff9f0a;}
 .wf-htl-dot-yellow{background:#ffd60a;color:#1c1c1e;}
-/* hover tooltip */
-.wf-htl-tooltip{display:none;position:absolute;bottom:calc(100% + 14px);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0.6rem 0.75rem;width:210px;z-index:100;box-shadow:0 8px 28px rgba(0,0,0,0.45);pointer-events:none;}
-.wf-htl-dot:hover .wf-htl-tooltip,.wf-htl-dot:focus-visible .wf-htl-tooltip{display:block;}
-.wf-htl-tt-stage{font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:0.15rem;}
-.wf-htl-tt-meta{font-size:0.71rem;color:var(--text2);}
-.wf-htl-tt-ts{font-size:0.67rem;color:var(--text3);margin-bottom:0.2rem;}
-.wf-htl-tt-dur{display:inline-block;font-size:0.65rem;font-family:var(--mono);background:var(--bg2);border:1px solid var(--border);color:var(--blue);padding:1px 7px;border-radius:var(--radius-pill);margin-bottom:0.25rem;}
-.wf-htl-tt-note{font-size:0.72rem;color:var(--text2);padding:0.25rem 0.45rem;background:var(--bg2);border-radius:5px;margin-top:0.3rem;border-left:2px solid var(--border);}
+/* hover tooltip — lives on .wf-htl-event, appears above entire event */
+.wf-htl-tooltip{display:none;position:absolute;bottom:calc(100% + 6px);background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.45rem 0.6rem;width:160px;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,0.5);pointer-events:none;}
+.wf-htl-event:hover .wf-htl-tooltip,.wf-htl-event:focus-within .wf-htl-tooltip{display:block;}
+.wf-htl-tt-stage{font-size:0.75rem;font-weight:700;color:var(--text);margin-bottom:0.1rem;line-height:1.25;}
+.wf-htl-tt-meta{font-size:0.67rem;color:var(--text3);margin-bottom:0.18rem;}
+.wf-htl-tt-dur{display:inline-block;font-size:0.62rem;font-family:var(--mono);background:var(--bg2);border:1px solid var(--border);color:var(--blue);padding:1px 6px;border-radius:var(--radius-pill);margin-bottom:0.2rem;}
+.wf-htl-tt-note{font-size:0.68rem;color:var(--text2);padding:0.2rem 0.4rem;background:var(--bg2);border-radius:4px;margin-top:0.25rem;border-left:2px solid var(--border);}
 /* job basket sub-tabs */
 .wf-tabs{display:flex;gap:0.35rem;margin-bottom:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;flex-wrap:wrap;}
 .wf-tab{padding:0.35rem 0.9rem;border-radius:var(--radius-pill);border:1px solid transparent;background:transparent;color:var(--text3);font-size:0.78rem;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:0.35rem;transition:all var(--t-fast);}
