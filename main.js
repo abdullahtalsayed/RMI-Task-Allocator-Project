@@ -640,8 +640,7 @@ function loginAs(u){
   attachFirebaseListeners();
   refreshUsersRemote();
   applyMainNav();
-  if(['manager','supervisor','team_leader'].includes(u.role))goHub('insights','overview');
-  else goHub('jobs','my-jobs');
+  goHub('insights','overview');
   showDeadlineBanner();
   seedNotifTracking();
   applyUserSettings();
@@ -2398,11 +2397,170 @@ window.exportEmployeeCSV=function(uid){
   exportCSV(scope.filter(j=>j.owner===uid),users.find(u=>u.id===uid)?.name||uid);
 };
 
+// ── EMPLOYEE DASHBOARD ────────────────────────────────────────────────────────
+function renderEmpDashboard(root){
+  const now=new Date(),nowMs=now.getTime();
+  const todayStart=new Date(now);todayStart.setHours(0,0,0,0);
+  const todayEnd=new Date(now);todayEnd.setHours(23,59,59,999);
+  const weekEnd=new Date(now);weekEnd.setDate(now.getDate()+7);
+  const ws=new Date(now);ws.setDate(now.getDate()-now.getDay());ws.setHours(0,0,0,0);
+  const lastWs=new Date(ws);lastWs.setDate(ws.getDate()-7);
+
+  const myJobs=jobs.filter(j=>j.owner===me.id);
+  const active=myJobs.filter(j=>j.status!=='completed');
+  const overdue=myJobs.filter(j=>isOverdue(j));
+  const dueToday=active.filter(j=>j.deadline&&toMillis(j.deadline)<=todayEnd.getTime()&&toMillis(j.deadline)>=nowMs);
+  const dueWeek=active.filter(j=>j.deadline&&toMillis(j.deadline)>nowMs&&toMillis(j.deadline)<=weekEnd.getTime());
+  const doneThisWeek=myJobs.filter(j=>j.completed&&toMillis(j.completed)>=ws.getTime());
+  const doneLastWeek=myJobs.filter(j=>j.completed&&toMillis(j.completed)>=lastWs.getTime()&&toMillis(j.completed)<ws.getTime());
+  const sla=computeSlaStats(myJobs);
+
+  const hr=now.getHours();
+  const greet=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
+  const dateStr=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  const weekDelta=doneThisWeek.length-doneLastWeek.length;
+  const trendStr=weekDelta>0?`<span class="kpi-trend up">▲ ${weekDelta} vs last wk</span>`
+    :weekDelta<0?`<span class="kpi-trend down">▼ ${Math.abs(weekDelta)} vs last wk</span>`
+    :`<span class="kpi-trend">— same as last wk</span>`;
+
+  const allClear=!overdue.length&&!dueToday.length;
+  const healthBits=[`<strong>${active.length}</strong> active`];
+  if(overdue.length)healthBits.push(`<strong class="tc-red">${overdue.length}</strong> overdue`);
+  if(dueToday.length)healthBits.push(`<strong class="tc-yellow">${dueToday.length}</strong> due today`);
+
+  const kpis=[
+    {icon:'📋',label:'Active',value:active.length,sub:`${myJobs.filter(j=>j.status==='pending').length} pending · ${myJobs.filter(j=>j.status==='ongoing').length} ongoing`,accent:'var(--blue)'},
+    {icon:'⚠️',label:'Overdue',value:overdue.length,sub:overdue.length?'needs attention':'all on track',accent:overdue.length?'var(--red)':'var(--text3)'},
+    {icon:'📅',label:'Due This Week',value:dueToday.length+dueWeek.length,sub:`${dueToday.length} today · ${dueWeek.length} upcoming`,accent:'var(--orange)'},
+    {icon:'✅',label:'Done This Week',value:doneThisWeek.length,sub:trendStr,accent:'var(--green)'},
+    {icon:'🎯',label:'On-Time Rate',value:sla.onTimePct+'%',sub:`${sla.doneWithDl} completed with deadlines`,accent:sla.onTimePct>=70?'var(--green)':sla.onTimePct>=40?'var(--yellow)':'var(--red)'},
+  ];
+
+  // status donut
+  const pending=myJobs.filter(j=>j.status==='pending').length;
+  const ongoing=myJobs.filter(j=>j.status==='ongoing').length;
+  const paused=myJobs.filter(j=>j.status==='paused').length;
+  const completed=myJobs.filter(j=>j.status==='completed').length;
+  const donutData=[{label:'Pending',value:pending,color:'#ffd60a'},{label:'Ongoing',value:ongoing,color:'#0a84ff'},{label:'Paused',value:paused,color:'#6e6e73'},{label:'Completed',value:completed,color:'#32d74b'}];
+  const donutTotal=myJobs.length||1;let donutSvg='',dstart=0;
+  const dnz=donutData.filter(s=>s.value>0);
+  if(dnz.length===1){donutSvg=`<circle cx="60" cy="60" r="50" fill="${dnz[0].color}"/>`;}
+  else{donutData.forEach(s=>{if(!s.value)return;const frac=s.value/donutTotal,ang=frac*2*Math.PI;const x1=60+50*Math.sin(dstart),y1=60-50*Math.cos(dstart);const x2=60+50*Math.sin(dstart+ang),y2=60-50*Math.cos(dstart+ang);const large=ang>Math.PI?1:0;donutSvg+=`<path d="M60,60 L${x1},${y1} A50,50 0 ${large} 1 ${x2},${y2} Z" fill="${s.color}"/>`;dstart+=ang;});}
+
+  // recent activity — my jobs only
+  const myJobIds=new Set(myJobs.map(j=>j.id));
+  const recent=[...activityLogs].filter(e=>myJobIds.has(e.jobId)||e.userId===me.id).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,8);
+
+  // upcoming deadlines
+  const upcoming=[...active].filter(j=>j.deadline&&toMillis(j.deadline)>=nowMs&&toMillis(j.deadline)<=weekEnd.getTime()).sort((a,b)=>toMillis(a.deadline)-toMillis(b.deadline)).slice(0,6);
+
+  // my extension requests
+  const myExts=extRequests.filter(r=>r.requestedBy===me.id).sort((a,b)=>toMillis(b.created)-toMillis(a.created)).slice(0,5);
+
+  // completion progress bar (done / total)
+  const totalJobs=myJobs.length||1;
+  const compPct=Math.round(completed/totalJobs*100);
+  const pausedJobs=myJobs.filter(j=>j.status==='paused');
+
+  root.innerHTML=`
+  <div class="dash-hero">
+    <div>
+      <div class="dash-greet">${greet}, ${escapeHtml((me.name||'').split(' ')[0])}</div>
+      <div class="dash-date">${dateStr}</div>
+    </div>
+    <div class="dash-health${allClear?' dash-health-ok':''}">
+      ${allClear?'✓ Everything on track':healthBits.join('<span class="dash-health-sep">·</span>')}
+    </div>
+  </div>
+
+  <div class="dash-kpis">
+    ${kpis.map(k=>`<div class="kpi-card">
+      <div class="kpi-top"><span class="kpi-icon">${k.icon}</span><span class="kpi-label">${k.label}</span></div>
+      <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>`).join('')}
+  </div>
+
+  <div class="dash-main">
+    <div class="dash-col-left">
+      <div class="dash-widget">
+        <div class="dash-widget-hd">My Progress</div>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.6rem;">
+          <div style="flex:1;background:var(--card2);border-radius:var(--radius-pill);height:8px;overflow:hidden;">
+            <div style="width:${compPct}%;height:8px;background:${compPct>=80?'var(--green)':compPct>=50?'var(--blue)':'var(--yellow)'};border-radius:var(--radius-pill);transition:width 0.6s;"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:0.82rem;font-weight:700;color:var(--text);flex-shrink:0;">${compPct}%</span>
+        </div>
+        <div style="font-size:0.72rem;color:var(--text3);">${completed} of ${myJobs.length} jobs completed</div>
+        <div class="dash-donut-wrap" style="margin-top:0.85rem;">
+          <svg width="100" height="100" viewBox="0 0 120 120">${donutSvg}<circle cx="60" cy="60" r="28" fill="var(--card)"/><text x="60" y="56" text-anchor="middle" class="donut-center-num">${myJobs.length}</text><text x="60" y="72" text-anchor="middle" class="donut-center-lbl">total</text></svg>
+          <div class="dash-donut-legend">
+            ${donutData.map(s=>`<div class="ddl-row"><span class="ddl-dot" style="background:${s.color}"></span>${s.label}<span class="ddl-val">${s.value}</span></div>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      ${pausedJobs.length?`<div class="dash-widget">
+        <div class="dash-widget-hd">⏸ Paused Jobs <span class="dash-count-badge">${pausedJobs.length}</span></div>
+        ${pausedJobs.slice(0,4).map(j=>`<div class="dash-att-row" onclick="goHub('jobs','my-jobs')" style="cursor:pointer;">
+          <div class="dash-att-main"><strong>${escapeHtml(j.client)}</strong> <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></div>
+          <div class="dash-att-sub tc-muted">Paused · ${j.deadline?fmt(j.deadline):'no deadline'}</div>
+        </div>`).join('')}
+      </div>`:''}
+
+      <div class="dash-widget">
+        <div class="dash-widget-hd">Recent Activity <a class="dash-widget-link" onclick="goHub('account','activity-log')">Full log →</a></div>
+        <div class="dash-activity-feed">
+          ${recent.length?recent.map(e=>`<div class="daf-item"><span class="daf-dot daf-${e.color||'blue'}"></span><div class="daf-body"><div class="daf-what">${escapeHtml(e.desc||'')}</div><div class="daf-time">${dashRelTime(e.ts)}</div></div></div>`).join(''):'<div class="empty" style="padding:1rem;">No recent activity.</div>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-col-right">
+      <div class="dash-widget dash-attention${overdue.length?' has-items':''}">
+        <div class="dash-widget-hd">⚠️ My Overdue Jobs <span class="dash-count-badge">${overdue.length}</span></div>
+        ${overdue.length?overdue.slice(0,5).map(j=>`<div class="dash-att-row" onclick="goHub('jobs','my-jobs')" style="cursor:pointer;">
+          <div class="dash-att-main"><strong>${escapeHtml(j.client)}</strong> <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></div>
+          <div class="dash-att-sub tc-red">${j.deadline?fmt(j.deadline):'no deadline'} · ${escapeHtml(j.type||'')}</div>
+        </div>`).join('')+(overdue.length>5?`<div class="dash-att-more">+${overdue.length-5} more</div>`:''):'<div class="empty" style="padding:0.75rem;">No overdue jobs 🎉</div>'}
+      </div>
+
+      <div class="dash-widget">
+        <div class="dash-widget-hd">📅 Upcoming Deadlines <a class="dash-widget-link" onclick="goHub('team','cal')">Calendar →</a></div>
+        ${upcoming.length?upcoming.map(j=>{
+          const diff=toMillis(j.deadline)-nowMs;
+          const cls=diff<86400000?'tc-yellow':'tc-muted';
+          return`<div class="dash-att-row">
+            <div class="dash-att-main"><strong>${escapeHtml(j.client)}</strong> <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></div>
+            <div class="dash-att-sub ${cls}">${fmt(j.deadline)} · in ${tdiff(nowMs,toMillis(j.deadline))}</div>
+          </div>`;
+        }).join(''):'<div class="empty" style="padding:0.75rem;">Nothing due this week.</div>'}
+      </div>
+
+      <div class="dash-widget">
+        <div class="dash-widget-hd">📬 My Extension Requests</div>
+        ${myExts.length?myExts.map(r=>{
+          const statusCol=r.status==='approved'?'var(--green)':r.status==='rejected'?'var(--red)':'var(--yellow)';
+          const statusIcon=r.status==='approved'?'✅':r.status==='rejected'?'❌':'⏳';
+          return`<div class="dash-att-row">
+            <div class="dash-att-main"><strong>${escapeHtml(r.client)}</strong> <span class="tc-muted">#${escapeHtml(String(r.jobNum))}</span></div>
+            <div class="dash-att-sub" style="color:${statusCol};">${statusIcon} ${r.status} · ${fmt(r.newDeadline)}</div>
+          </div>`;
+        }).join(''):'<div class="empty" style="padding:0.75rem;">No extension requests.</div>'}
+      </div>
+    </div>
+  </div>`;
+}
+
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard(){
-  if(!me||!(['manager','supervisor','team_leader'].includes(me.role)||amDirector()))return;
+  if(!me)return;
   const root=document.getElementById('dash-root');
   if(!root)return;
+  // ── EMPLOYEE personal dashboard ───────────────────────────────────────────
+  if(me.role==='employee'){renderEmpDashboard(root);return;}
+
   const dj=visibleJobs();
   const teamIds=isTeamLeader()?new Set(myTeamIds()):null;
   const now=new Date();
@@ -2841,8 +2999,8 @@ window.closeSidebar=function(){
 window.renderAll=function(){
   if(!me)return;
   renderJobs();updateSummary();renderAnalyticsContent();showDeadlineBanner();
+  if(document.getElementById('dashboard')?.classList.contains('on'))renderDashboard();
   if(['manager','supervisor','team_leader'].includes(me.role)){
-    if(document.getElementById('dashboard')?.classList.contains('on'))renderDashboard();
     if(document.getElementById('login-log')?.classList.contains('on'))renderActivityLog();
   }
 };
