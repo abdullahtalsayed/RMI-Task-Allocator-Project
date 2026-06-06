@@ -173,7 +173,8 @@ async function init(){
     bcastCol=collection(db,'broadcasts');
     logCol=collection(db,'loginlogs');
     cfgCol=collection(db,'config');
-    listenEmailConfig();
+    // NOTE: listenEmailConfig() must run AFTER auth (config reads require signedIn) —
+    // attached in attachFirebaseListeners(), not here.
 
     lsub('Checking users...');
     try{
@@ -351,6 +352,7 @@ function softLogoutUI(){
 function detachFirebaseListeners(){
   fbUnsubs.forEach(fn=>{try{fn();}catch(e){}});
   fbUnsubs=[];
+  if(emailCfgUnsub){try{emailCfgUnsub();}catch(e){}emailCfgUnsub=null;} // allow re-attach next login
 }
 function canSeeAllJobs(){
   return me&&(me.role==='manager'||me.role==='supervisor'||amDirector()||me.viewAll==='yes');
@@ -460,6 +462,7 @@ function applyMergedJobs(){
 function attachFirebaseListeners(){
   detachFirebaseListeners();
   if(!USE_FIREBASE||!me||!db)return;
+  listenEmailConfig(); // now signed-in → config read allowed
   _primaryJobs=[];_wfTeamJobs=[];
   const jq=jobsQueryForUser();
   fbUnsubs.push(onSnapshot(jq,snap=>{
