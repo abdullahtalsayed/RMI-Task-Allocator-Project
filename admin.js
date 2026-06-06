@@ -249,35 +249,65 @@ export function renderUList(){
       <div class="ext-sum-card"><div class="ext-sum-n" style="color:var(--blue)">${emp}</div><div class="ext-sum-l">Employees</div></div>
       ${pending?`<div class="ext-sum-card"><div class="ext-sum-n" style="color:var(--orange)">${pending}</div><div class="ext-sum-l">Pending setup</div></div>`:''}`;
   }
-  const order={manager:0,supervisor:1,team_leader:2,employee:3};
-  let list=[...users].sort((a,b)=>(order[a.role]??9)-(order[b.role]??9)||(a.name||'').localeCompare(b.name||''));
-  if(q)list=list.filter(u=>(u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q));
-  if(!list.length){el.innerHTML='<div class="empty" style="padding:2rem;">No users match.</div>';return;}
-  el.innerHTML=`<div class="user-list">${list.map(u=>{
+  const order={managing_director:0,executive_director:1,manager:2,supervisor:3,team_leader:4,employee:5};
+  const roleGroups=[
+    {roles:['managing_director','executive_director'],label:'Directors',grid:false},
+    {roles:['manager'],label:'Managers',grid:false},
+    {roles:['supervisor'],label:'Supervisors',grid:false},
+    {roles:['team_leader'],label:'Team Leaders',grid:false},
+    {roles:['employee'],label:'Employees',grid:true},
+  ];
+  function branchBdg(branch){
+    if(!branch)return'';
+    let cls='';
+    if(branch.includes('Syria'))cls='bdg-br-sy';
+    else if(branch.includes('UAE'))cls='bdg-br-uae';
+    else if(branch.includes('India'))cls='bdg-br-in';
+    else cls='bdg-br-sy';
+    return`<span class="bdg-br ${cls}">${escapeHtml(branch)}</span>`;
+  }
+  function userCard(u){
     const rmeta=roleMeta(u.role);
     const bdg=rmeta.bdg;
     const initial=(u.name||'?').trim().charAt(0).toUpperCase();
     const active=jobs.filter(j=>j.owner===u.id&&j.status!=='completed').length;
-    const status=u.authUid?'<span class="user-status us-active">● Active</span>':(u.needsActivation?'<span class="user-status us-pending">● Setup pending</span>':'<span class="user-status us-active">● Active</span>');
-    const rm=(!ro&&u.id!==me?.id)?`<button class="user-act user-act-danger" onclick="removeUser('${u.id}')" title="Remove">Remove</button>`:'';
-    // extra meta: employee → their team leader; team_leader → member count
+    const status=u.authUid?'<span class="user-status us-active">● Active</span>':(u.needsActivation?'<span class="user-status us-pending">● Pending</span>':'<span class="user-status us-active">● Active</span>');
+    const rm=(!ro&&u.id!==me?.id)?`<button class="user-act user-act-danger" onclick="removeUser('${u.id}')">Remove</button>`:'';
     let teamMeta='';
     if(u.role==='employee'&&u.teamLeaderId){const tl=users.find(x=>x.id===u.teamLeaderId);if(tl)teamMeta=` · 🧭 ${escapeHtml(tl.name)}`;}
     else if(u.role==='team_leader'){const n=users.filter(x=>x.teamLeaderId===u.id).length;teamMeta=` · 👥 ${n} member${n!==1?'s':''}`;}
     return`<div class="user-row">
       <div class="user-avatar user-av-${bdg}">${escapeHtml(initial)}</div>
       <div class="user-info">
-        <div class="user-name-row">${escapeHtml(u.name)} <span class="bdg bdg-${bdg}">${rmeta.label}</span></div>
-        <div class="user-meta">${u.email?`✉️ ${escapeHtml(u.email)}`:'<span class="tc-muted">no email</span>'} · ${u.viewAll==='yes'?'All jobs':'Own only'}${u.branch?` · 🏢 ${escapeHtml(u.branch)}`:''}${teamMeta}</div>
+        <div class="user-name-row">${escapeHtml(u.name)} <span class="bdg bdg-${bdg}">${rmeta.label}</span>${branchBdg(u.branch)}</div>
+        <div class="user-meta">${u.email?`✉️ ${escapeHtml(u.email)}`:'<span class="tc-muted">no email</span>'} · ${u.viewAll==='yes'?'All jobs':'Own only'}${teamMeta}</div>
       </div>
       <div class="user-stat"><span class="user-stat-n">${active}</span><span class="user-stat-l">active</span></div>
       ${status}
       <div class="user-actions">
-        ${ro?'':`<button class="user-act" onclick="openEditUserModal('${u.id}')" title="Edit">✏️ Edit</button>`}
+        ${ro?'':`<button class="user-act" onclick="openEditUserModal('${u.id}')">✏️ Edit</button>`}
         ${rm}
       </div>
     </div>`;
-  }).join('')}</div>`;
+  }
+  let allList=[...users].sort((a,b)=>(order[a.role]??9)-(order[b.role]??9)||(a.name||'').localeCompare(b.name||''));
+  if(q)allList=allList.filter(u=>(u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q));
+  if(!allList.length){el.innerHTML='<div class="empty" style="padding:2rem;">No users match.</div>';return;}
+  const groupsHtml=roleGroups.map(g=>{
+    const members=allList.filter(u=>g.roles.includes(u.role));
+    if(!members.length)return'';
+    const gid='ug-'+g.roles[0];
+    return`<div class="user-group">
+      <div class="user-group-hdr" onclick="(function(el){const b=el.nextElementSibling;b.style.display=b.style.display==='none'?'':'none';el.querySelector('.user-group-chevron').style.transform=b.style.display==='none'?'rotate(-90deg)':''})(this)">
+        ${g.label}<span class="user-group-count">${members.length}</span>
+        <span class="user-group-chevron">▾</span>
+      </div>
+      <div class="user-group-body${g.grid?' grid2':''}" id="${gid}">
+        ${members.map(u=>userCard(u)).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div class="user-list">${groupsHtml}</div>`;
 }
 window.openEditUserModal=function(id){
   const u=users.find(x=>x.id===id);if(!u)return;
