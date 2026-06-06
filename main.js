@@ -3245,6 +3245,7 @@ let analyticsRange='month',analyticsEmp='',analyticsType='',analyticsBranch='';
 function branchOf(ownerId){return users.find(u=>u.id===ownerId)?.branch||'';}
 function analyticsRangeStart(range){
   const n=new Date();
+  if(range==='today'){const d=new Date(n);d.setHours(0,0,0,0);return d.getTime();}
   if(range==='week'){const d=new Date(n);d.setDate(n.getDate()-n.getDay());d.setHours(0,0,0,0);return d.getTime();}
   if(range==='month')return new Date(n.getFullYear(),n.getMonth(),1).getTime();
   if(range==='quarter')return new Date(n.getFullYear(),Math.floor(n.getMonth()/3)*3,1).getTime();
