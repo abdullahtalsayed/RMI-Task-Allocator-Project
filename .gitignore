@@ -1,1 +1,4 @@
 .claude/
+node_modules/
+_*.cjs
+_t.mjs

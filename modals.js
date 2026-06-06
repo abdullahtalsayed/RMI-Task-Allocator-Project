@@ -2,7 +2,8 @@
 // Confirm / Complete / Extension / Reassign dialogs + the tag-chip input widget.
 import { jobs, me, users, tagStores } from './state.js';
 import { toMillis, tdiff, getJobDurationBreakdown } from './helpers.js';
-import { updateJob, addEvent, extAdd, showToastMsg, assignableUsers, canManageJob, notifyReassign } from './main.js';
+import { addEvent, showToastMsg, assignableUsers, canManageJob, notifyReassign } from './main.js';
+import { updateJob, extAdd } from './jobs.js';
 
 // modal-only state
 let confirmCallback=null, completeJobId=null;
