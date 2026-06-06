@@ -10,7 +10,7 @@ import { EMAIL_EVENTS, EMAIL_RECIPS, defaultEmailConfig, emailConfig, setEmailCo
 import { renderTags, setTags, showConfirm } from './modals.js';
 import { populateCalEmpDrop, populateCalEmpPills, jobsForCalendarDay, empOverdueJobs, renderCommentSection, uAdd, uUpdate, uDelete, jUpdate, jDelete, jRestore } from './jobs.js';
 import { renderUList, renderBroadcasts, updateBroadcastUI, roleMeta, markBroadcastsSeen } from './admin.js';
-import { renderJobBasket } from './workflow.js';
+import { renderJobBasket, wfAnalyticsSection } from './workflow.js';
 
 // ── MAIN-LOCAL STATE (firebase handles + UI-only mutables) ────────────────────
 export let db, auth, storage, jCol, uCol, evCol, notifCol, extCol, bcastCol, logCol, authMapCol, archiveCol, cfgCol;
@@ -445,17 +445,33 @@ async function refreshJobEventsRemote(jobId){
   setEvents(events.filter(e=>e.jobId!==jobId));
   snap.docs.forEach(d=>events.push({id:d.id,...d.data()}));
 }
+let _primaryJobs=[], _wfTeamJobs=[];
+function applyMergedJobs(){
+  const map=new Map();
+  for(const j of _primaryJobs)map.set(j.id,j);
+  for(const j of _wfTeamJobs)if(!map.has(j.id))map.set(j.id,j); // team workflow jobs not already in primary
+  setJobs([...map.values()].sort((a,b)=>(b.created||0)-(a.created||0)));
+  renderAll();
+  if(isLead())renderBoard();
+  updateSynced();
+}
 function attachFirebaseListeners(){
   detachFirebaseListeners();
   if(!USE_FIREBASE||!me||!db)return;
+  _primaryJobs=[];_wfTeamJobs=[];
   const jq=jobsQueryForUser();
   fbUnsubs.push(onSnapshot(jq,snap=>{
-    setJobs(snap.docs.map(d=>({id:d.id,...d.data()})));
-    jobs.sort((a,b)=>(b.created||0)-(a.created||0));
-    renderAll();
-    if(isLead())renderBoard();
-    updateSynced();
+    _primaryJobs=snap.docs.map(d=>({id:d.id,...d.data()}));
+    applyMergedJobs();
   }));
+  // Team Leaders without full visibility: second listener for their team's workflow
+  // jobs (any owner) so the basket shows in-progress jobs sitting with drafters.
+  if(me.role==='team_leader'&&!canSeeAllJobs()){
+    fbUnsubs.push(onSnapshot(query(jCol,where('teamLeaderId','==',me.id)),snap=>{
+      _wfTeamJobs=snap.docs.map(d=>({id:d.id,...d.data()}));
+      applyMergedJobs();
+    }));
+  }
   fbUnsubs.push(onSnapshot(query(notifCol,where('userId','==',me.id),limit(FB_LIMITS.notifications)),snap=>{
     setNotifications(snap.docs.map(d=>({id:d.id,...d.data()})));
     onNotificationsUpdated();
@@ -3968,6 +3984,7 @@ renderAnalyticsContent=function(){
         ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
       </div>
       ${anOverdueTrendWidget(visibleJobs(),buckets)}
+      ${wfAnalyticsSection()}
       ${perfHtml}
       ${jobAnalysisHtml}`;
     return;
@@ -3990,6 +4007,7 @@ renderAnalyticsContent=function(){
       </div>
       ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
       ${anBranchSection()}
+      ${wfAnalyticsSection()}
       ${perfHtml}
       ${jobAnalysisHtml}`;
     return;
@@ -4008,6 +4026,7 @@ renderAnalyticsContent=function(){
     </div>
     ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
     ${anBranchSection()}
+    ${wfAnalyticsSection()}
     ${perfHtml}
     ${jobAnalysisHtml}`;
 }

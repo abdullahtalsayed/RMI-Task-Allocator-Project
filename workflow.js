@@ -307,13 +307,15 @@ async function wfProceedAssignCard(jobId,drafterId){
 }
 
 // ── STAGE 7: DRAFTER SUBMIT JOB CARDS ─────────────────────────────────────────
-window.wfSubmitJobCard=async function(jobId){
+window.wfSubmitJobCard=function(jobId){
   const j=jobs.find(x=>x.id===jobId);if(!j)return;
-  await wfAdvance(jobId,'tl_jobcard_review',{action:'jobcard_submitted',owner:j.teamLeaderId,note:'Job cards submitted for review'});
-  await addEvent(jobId,'wf_tl_jobcard_review',`🗂 ${me.name} submitted job cards for review`,'purple');
-  pushNotif(j.teamLeaderId,'🗂 Job Cards Ready',`${j.client} (#${j.jobNum}) — final review to close.`);
-  showToastMsg('✅ Job cards sent to team leader.');
-  renderJobBasket();
+  wfAsk('Submit Job Cards — Self Check',QC5,async(ans)=>{
+    await wfAdvance(jobId,'tl_jobcard_review',{action:'jobcard_submitted',checklist:ans,owner:j.teamLeaderId,note:'Job cards self-checked & submitted for review'});
+    await addEvent(jobId,'wf_tl_jobcard_review',`🗂 ${me.name} self-checked & submitted job cards`,'purple');
+    pushNotif(j.teamLeaderId,'🗂 Job Cards Ready',`${j.client} (#${j.jobNum}) — final review to close.`);
+    showToastMsg('✅ Job cards sent to team leader.');
+    renderJobBasket();
+  },(q)=>{showToastMsg('Complete every check before submitting job cards.');});
 };
 
 // 5-point final QC checklist (reused for job card close AND release submit)
@@ -488,6 +490,43 @@ function wfAnalytics(pool){
     ${rows.map(r=>`<div class="an-bar-row"><span class="an-bar-label">${esc(r.k)}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(Math.round(r.avg/max*100),3)}%;background:${r.avg===max?'var(--red)':'var(--blue)'}"></div></div><span class="an-bar-val">${tdiff(0,r.avg)}</span></div>`).join('')}
     <div class="wf-an-foot">🔴 Sample rejections: <strong>${rejects}</strong> · Bottleneck: <strong>${esc(rows[0].k)}</strong></div>
   </div>`;
+}
+
+// ── ANALYTICS-PAGE SECTION (stage timing, cycle, bottleneck, throughput) ──────
+export function wfAnalyticsSection(){
+  if(!me)return'';
+  let pool=jobs.filter(j=>j.workflow);
+  if(me.role==='team_leader')pool=pool.filter(j=>j.teamLeaderId===me.id);
+  else if(!['manager','supervisor'].includes(me.role))return'';
+  if(!pool.length)return'';
+  const done=pool.filter(j=>j.stage==='completed'&&Array.isArray(j.wfHistory));
+  const active=pool.filter(j=>j.stage!=='completed');
+  // full cycle time (first entry → completion)
+  const cycles=done.map(j=>{const h=j.wfHistory;return h.length>1?h[h.length-1].at-h[0].at:0;}).filter(x=>x>0);
+  const avgCycle=cycles.length?cycles.reduce((a,b)=>a+b,0)/cycles.length:0;
+  // stage durations
+  const trans={};
+  done.forEach(j=>{const h=j.wfHistory;for(let i=1;i<h.length;i++){const k=wfStageMeta(h[i].to).short;const d=h[i].at-h[i-1].at;if(d>0)(trans[k]=trans[k]||[]).push(d);}});
+  const rows=Object.entries(trans).map(([k,a])=>({k,avg:a.reduce((x,y)=>x+y,0)/a.length})).sort((a,b)=>b.avg-a.avg);
+  const max=rows.length?Math.max(...rows.map(r=>r.avg)):1;
+  const rejects=pool.reduce((a,j)=>a+(Array.isArray(j.wfHistory)?j.wfHistory.filter(e=>e.action==='sample_rejected').length:0),0);
+  // throughput per drafter (completed)
+  const byDrafter={};
+  done.forEach(j=>{if(j.drafterId){const u=users.find(x=>x.id===j.drafterId);const nm=u?.name||'?';byDrafter[nm]=(byDrafter[nm]||0)+1;}});
+  const draftRows=Object.entries(byDrafter).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v);
+  const maxD=draftRows.length?Math.max(...draftRows.map(r=>r.v)):1;
+  const kpi=(l,v,c)=>`<div class="an-kpi"><div class="an-kpi-label">${l}</div><div class="an-kpi-value" style="color:${c}">${v}</div></div>`;
+  return`<div class="an-section-title">🧺 Job Basket Workflow</div>
+    <div class="an-kpis">
+      ${kpi('Active',active.length,'var(--blue)')}
+      ${kpi('Completed',done.length,'var(--green)')}
+      ${kpi('Avg Cycle',avgCycle?tdiff(0,avgCycle):'—','var(--text)')}
+      ${kpi('Sample Rejections',rejects,rejects?'var(--red)':'var(--text3)')}
+    </div>
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Stage Durations <span class="an-hd-note">avg · slowest = bottleneck</span></div>${rows.length?rows.map(r=>`<div class="an-bar-row"><span class="an-bar-label">${esc(r.k)}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(Math.round(r.avg/max*100),3)}%;background:${r.avg===max?'var(--red)':'var(--blue)'}"></div></div><span class="an-bar-val">${tdiff(0,r.avg)}</span></div>`).join(''):'<div class="empty" style="padding:0.5rem 0;">No completed workflow jobs yet.</div>'}</div>
+      <div class="an-widget"><div class="an-widget-hd">Workflow Throughput <span class="an-hd-note">completed per drafter</span></div>${draftRows.length?draftRows.map(r=>`<div class="an-bar-row"><span class="an-bar-label">${esc(r.k)}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(Math.round(r.v/maxD*100),3)}%;background:var(--purple)"></div></div><span class="an-bar-val">${r.v}</span></div>`).join(''):'<div class="empty" style="padding:0.5rem 0;">No data.</div>'}</div>
+    </div>`;
 }
 
 // ── MAIN RENDER ───────────────────────────────────────────────────────────────

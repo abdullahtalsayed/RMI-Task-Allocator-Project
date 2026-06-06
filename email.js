@@ -10,6 +10,8 @@ const EJS_KEY='N_HEKFKra4RbkbfFA';
 export function sendEmail(toEmail,subject,message,prefKey){
   if(!toEmail||!USE_FIREBASE)return;
   if(typeof emailjs==='undefined')return;
+  // HARD KILL-SWITCH: master off → nothing sends, regardless of caller path.
+  if(emailConfig?.master===false)return;
   // check sender's own pref — only block if the email is TO the current user
   if(prefKey&&toEmail===me?.email&&userSettings[prefKey]===false)return;
   emailjs.send(EJS_SERVICE,EJS_TEMPLATE,{to_email:toEmail,subject,message},EJS_KEY).catch(()=>{});
