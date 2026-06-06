@@ -446,29 +446,39 @@ function _wfTlList(j){
   }).join('')}</div>`;
 }
 
-// Visual mode (connected vertical timeline)
+// Visual mode (horizontal interactive timeline)
 function _wfTlVisual(j){
   const h=Array.isArray(j.wfHistory)?j.wfHistory:[];
   if(!h.length)return'<div class="tc-muted" style="font-size:0.78rem;">No history yet.</div>';
-  return`<div class="wf-vtl">${h.map((e,i)=>{
+  const events=h.map((e,i)=>{
     const col=_evtColor(e);
-    const isLast=i===h.length-1;
-    const dur=i>0?`<div class="wf-vtl-dur">+${tdiff(h[i-1].at,e.at)} from previous</div>`:'<div class="wf-vtl-dur">Start</div>';
-    const noteHtml=e.note?`<div class="wf-vtl-note">${esc(e.note)}</div>`:'';
-    return`<div class="wf-vtl-item">
-      <div class="wf-vtl-left">
-        <div class="wf-vtl-dot wf-dot-${col}"></div>
-        ${isLast?'':'<div class="wf-vtl-line"></div>'}
-      </div>
-      <div class="wf-vtl-body">
-        <div class="wf-vtl-stage">${_evtIcon(e)} <strong>${esc(wfStageMeta(e.to).label)}</strong></div>
-        <div class="wf-vtl-actor">${esc(e.by)} · ${fmt(e.at)}</div>
-        ${dur}
-        ${noteHtml}
-        ${_checksHtml(e.checklist)}
-      </div>
+    const icon=_evtIcon(e);
+    const dur=i>0?`+${tdiff(h[i-1].at,e.at)}`:'Start';
+    const above=i%2===0;
+    const shortLabel=`<div class="wf-htl-label">${icon} ${esc(wfStageMeta(e.to).short)}</div><div class="wf-htl-sublabel">${esc(dur)}</div>`;
+    const checks=_checksHtml(e.checklist);
+    const noteHtml=e.note?`<div class="wf-htl-tt-note">${esc(e.note)}</div>`:'';
+    // edge-align tooltip so it doesn't clip
+    const ttAlign=i===0?'left:0;transform:none;':i===h.length-1?'right:0;left:auto;transform:none;':'left:50%;transform:translateX(-50%);';
+    const tooltip=`<div class="wf-htl-tooltip" style="${ttAlign}">
+      <div class="wf-htl-tt-stage">${icon} ${esc(wfStageMeta(e.to).label)}</div>
+      <div class="wf-htl-tt-meta">${esc(e.by)}</div>
+      <div class="wf-htl-tt-ts">${fmt(e.at)}</div>
+      <div class="wf-htl-tt-dur">${esc(dur)}</div>
+      ${noteHtml}${checks}
     </div>`;
-  }).join('')}</div>`;
+    return`<div class="wf-htl-event">
+      <div class="wf-htl-above">${above?shortLabel:''}</div>
+      <div class="wf-htl-stem ${above?'wf-htl-stem-down':'wf-htl-stem-up'}"></div>
+      <div class="wf-htl-dot wf-htl-dot-${col}" tabindex="0">${i+1}${tooltip}</div>
+      <div class="wf-htl-stem ${above?'wf-htl-stem-up':'wf-htl-stem-down'}"></div>
+      <div class="wf-htl-below">${above?'':shortLabel}</div>
+    </div>`;
+  }).join('');
+  return`<div class="wf-htl"><div class="wf-htl-track">
+    <div class="wf-htl-line"></div>
+    <div class="wf-htl-events">${events}</div>
+  </div></div>`;
 }
 
 // Public export used by analytics section
