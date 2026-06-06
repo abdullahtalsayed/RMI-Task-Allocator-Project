@@ -67,7 +67,7 @@ window.wfSubmitToBasket=async function(){
   if(!tl){alert('No team leaders available to receive the job.');return;}
   const now=Date.now();
   const id=await jAdd({
-    client:c,jobNum:n,projectName:p||'',type:'Shop Drawing',priority:'Medium',
+    client:c,jobNum:n,projectName:p||'',type:null,priority:'Medium',
     workflow:true,source:'sales',stage:'intake',
     owner:tl.id,teamLeaderId:tl.id,drafterId:null,
     wfCreatedBy:me.id,wfCreatedByName:me.name,
