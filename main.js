@@ -504,8 +504,8 @@ export function renderAssignEmpGrid(){
   const pool=assignableUsers();
   const selected=document.getElementById('mat')?.value||'';
   grid.innerHTML=pool.map(u=>{
-    const active=jobs.filter(j=>j.owner===u.id&&j.status!=='completed').length;
-    const overdue=jobs.filter(j=>j.owner===u.id&&isOverdue(j)).length;
+    const active=jobs.filter(j=>j.owner===u.id&&j.status!=='completed'&&!j.workflow).length;
+    const overdue=jobs.filter(j=>j.owner===u.id&&isOverdue(j)&&!j.workflow).length;
     const loadCls=overdue>0?'load-red':active>=5?'load-red':active>=3?'load-yellow':'load-green';
     const loadLbl=overdue>0?`⚠ ${overdue} overdue`:active>=5?'Overloaded':active>=3?'Busy':'Available';
     const roleIcon=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':u.role==='team_leader'?'🧭':'👤';
@@ -537,7 +537,7 @@ window.selectAssignEmp=function(id){
   if(!preview)return;
   const u=users.find(x=>x.id===id);
   if(!u){preview.style.display='none';return;}
-  const uj=jobs.filter(j=>j.owner===id&&j.status!=='completed');
+  const uj=jobs.filter(j=>j.owner===id&&j.status!=='completed'&&!j.workflow);
   nameEl.textContent=u.name+"'s current jobs";
   jobsEl.innerHTML=uj.length
     ?uj.map(j=>{
@@ -738,8 +738,16 @@ function renderAccountProfile(){
   const el=document.getElementById('account-pane-profile');if(!el||!me)return;
   const bdg=roleMeta(me.role).bdg;
   const initial=(me.name||'?').trim().charAt(0).toUpperCase();
-  const myActive=jobs.filter(j=>j.owner===me.id&&j.status!=='completed').length;
-  const myDone=jobs.filter(j=>j.owner===me.id&&j.status==='completed').length;
+  const isSalesOp=me.role==='sales_operation';
+  let statA,statB,labA,labB;
+  if(isSalesOp){
+    const my=jobs.filter(j=>j.wfCreatedBy===me.id);
+    statA=my.filter(j=>j.stage!=='completed').length;labA='in basket';
+    statB=my.filter(j=>j.stage==='completed').length;labB='completed';
+  }else{
+    statA=jobs.filter(j=>j.owner===me.id&&j.status!=='completed'&&!j.workflow).length;labA='active';
+    statB=jobs.filter(j=>j.owner===me.id&&j.status==='completed'&&!j.workflow).length;labB='done';
+  }
   el.innerHTML=`
   <div class="acct-profile">
     <div class="acct-avatar acct-av-${bdg}">${escapeHtml(initial)}</div>
@@ -749,8 +757,8 @@ function renderAccountProfile(){
       ${me.viewAll==='yes'?'<div class="acct-viewall">👁 Can view all team jobs</div>':''}
     </div>
     <div class="acct-mini-stats">
-      <div><span class="acct-ms-n">${myActive}</span><span class="acct-ms-l">active</span></div>
-      <div><span class="acct-ms-n">${myDone}</span><span class="acct-ms-l">done</span></div>
+      <div><span class="acct-ms-n">${statA}</span><span class="acct-ms-l">${labA}</span></div>
+      <div><span class="acct-ms-n">${statB}</span><span class="acct-ms-l">${labB}</span></div>
     </div>
   </div>
   <div class="acct-actions-card">
@@ -1182,7 +1190,7 @@ window.clearAllNotifs=async function(){
 function showDeadlineBanner(){
   if(!me)return;
   const now=Date.now();
-  const due=jobs.filter(j=>j.owner===me.id&&j.deadline&&j.status!=='completed'&&(j.deadline-now)<86400000&&(j.deadline-now)>-86400000*7);
+  const due=jobs.filter(j=>j.owner===me.id&&j.deadline&&j.status!=='completed'&&!j.workflow&&(j.deadline-now)<86400000&&(j.deadline-now)>-86400000*7);
   const banner=document.getElementById('dl-banner');
   if(!due.length){banner.style.display='none';return;}
   banner.style.display='block';
@@ -1881,9 +1889,9 @@ function updateSummary(){
 }
 function updateTabBadges(){
   if(!me)return;
-  const mine=jobs.filter(j=>j.owner===me.id&&j.status!=='completed');
+  const mine=jobs.filter(j=>j.owner===me.id&&j.status!=='completed'&&!j.workflow);
   setTabBadge('my-jobs',mine.length);
-  const overdue=jobs.filter(j=>isOverdue(j)).length;
+  const overdue=jobs.filter(j=>isOverdue(j)&&!j.workflow).length;
   if(overdue)setTabBadge('board',overdue,'⚠');
 }
 function setTabBadge(tab,count,prefix=''){
@@ -1907,7 +1915,7 @@ export function renderBoard(){
     <div class="sc"><div class="n" style="color:var(--red)">${bj.filter(j=>j.completed&&new Date(j.completed)>=ws).length}</div><div class="l">Done This Week</div></div>
     <div class="sc"><div class="n" style="color:var(--red)">${overdue.length}</div><div class="l">⚠ Overdue</div></div>`;
   document.getElementById('wload').innerHTML=emps.length?emps.map(u=>{
-    const a=jobs.filter(j=>j.owner===u.id&&j.status!=='completed').length;
+    const a=jobs.filter(j=>j.owner===u.id&&j.status!=='completed'&&!j.workflow).length;
     const od=empOverdueJobs(u.id).length;
     const col=od>0?'var(--red)':a>=5?'var(--red)':a>=3?'var(--yellow)':'var(--green)';
     const lbl=od>0?`⚠ ${od} overdue`:a>=5?'🔴 Overloaded':a>=3?'🟡 Busy':'🟢 OK';
@@ -3568,7 +3576,7 @@ function renderTeamsAnalytics(el){
   const teamData=tls.map(tl=>{
     const members=users.filter(u=>u.teamLeaderId===tl.id);
     const memberIds=new Set([tl.id,...members.map(u=>u.id)]);
-    const tj=jobs.filter(j=>memberIds.has(j.owner));
+    const tj=jobs.filter(j=>memberIds.has(j.owner)&&!j.workflow);
     const active=tj.filter(j=>j.status!=='completed').length;
     const overdue=tj.filter(j=>isOverdue(j)).length;
     const completed=tj.filter(j=>j.status==='completed').length;
@@ -3588,7 +3596,7 @@ function renderTeamsAnalytics(el){
   const teamWidgets=teamData.map(t=>{
     const slaCol=t.sla.onTimePct>=70?'var(--green)':t.sla.onTimePct>=40?'var(--yellow)':'var(--red)';
     const memberHtml=t.members.map(m=>{
-      const mj=jobs.filter(j=>j.owner===m.id);
+      const mj=jobs.filter(j=>j.owner===m.id&&!j.workflow);
       const ma=mj.filter(j=>j.status!=='completed').length;
       const mo=mj.filter(j=>isOverdue(j)).length;
       const md=mj.filter(j=>j.status==='completed').length;
@@ -4111,7 +4119,7 @@ function renderTeamsOverview(){
   const teams=tls.map(tl=>{
     const members=users.filter(u=>u.teamLeaderId===tl.id);
     const memberIds=new Set([tl.id,...members.map(u=>u.id)]);
-    const tj=jobs.filter(j=>memberIds.has(j.owner));
+    const tj=jobs.filter(j=>memberIds.has(j.owner)&&!j.workflow);
     const active=tj.filter(j=>j.status!=='completed');
     const overdueJobs=tj.filter(j=>isOverdue(j));
     const doneWk=tj.filter(j=>j.completed&&new Date(j.completed)>=ws);
@@ -4150,9 +4158,9 @@ function renderTeamsOverview(){
 
     // member rows with full detail
     const memberRows=t.members.map(m=>{
-      const mj=jobs.filter(j=>j.owner===m.id&&j.status!=='completed');
-      const mOd=jobs.filter(j=>j.owner===m.id&&isOverdue(j));
-      const mDone=jobs.filter(j=>j.owner===m.id&&j.status==='completed').length;
+      const mj=jobs.filter(j=>j.owner===m.id&&j.status!=='completed'&&!j.workflow);
+      const mOd=jobs.filter(j=>j.owner===m.id&&isOverdue(j)&&!j.workflow);
+      const mDone=jobs.filter(j=>j.owner===m.id&&j.status==='completed'&&!j.workflow).length;
       const col=mOd.length?'var(--red)':mj.length>=5?'var(--red)':mj.length>=3?'var(--yellow)':'var(--green)';
       const pct=Math.min(100,Math.round(mj.length/6*100));
       const statusDots=[

@@ -22,7 +22,7 @@ window.sendBroadcast=async function(){
   await logActivity({type:'broadcast',category:'broadcast',desc:`${me.name} sent message to ${toLabel}: ${msg.slice(0,120)}${msg.length>120?'…':''}`,userId:me.id,userName:me.name,role:me.role});
   // Push notifications
   let targets=users;
-  if(to==='employees')targets=users.filter(u=>u.role==='employee'||u.role==='team_leader');
+  if(to==='employees')targets=users.filter(u=>u.role==='employee'||u.role==='team_leader'||u.role==='sales_operation');
   else if(to==='supervisors')targets=users.filter(u=>u.role==='supervisor');
   else if(to.startsWith('team:')){const lid=to.slice(5);targets=users.filter(u=>u.teamLeaderId===lid||u.id===lid);}
   targets.filter(u=>u.id!==me.id&&!isDirectorRole(u.role)).forEach(u=>pushNotif(u.id,'📢 Message from '+me.name,msg));
@@ -34,7 +34,7 @@ export function broadcastsForUser(u){
   if(u.role==='manager')return broadcasts;
   return broadcasts.filter(b=>{
     if(b.to==='all')return true;
-    if(b.to==='employees'&&(u.role==='employee'||u.role==='team_leader'))return true;
+    if(b.to==='employees'&&(u.role==='employee'||u.role==='team_leader'||u.role==='sales_operation'))return true;
     if(b.to==='supervisors'&&u.role==='supervisor')return true;
     // team-scoped: team:${leaderId}
     if(b.to&&b.to.startsWith('team:')){
