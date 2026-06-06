@@ -400,32 +400,101 @@ function wfActionFor(j){
   return null;
 }
 
-// ── TIMELINE ──────────────────────────────────────────────────────────────────
-export function wfTimeline(j){
+// ── TIMELINE HELPERS ──────────────────────────────────────────────────────────
+function _evtColor(e){
+  const a=e.action||'';
+  if(a.includes('reject'))return'red';
+  if(a.includes('approv')||a==='completed'||a==='release_completed')return'green';
+  if(e.to==='client_wait'||a.includes('client'))return'orange';
+  if(a==='assigned'||a==='release_assigned')return'blue';
+  return wfStageMeta(e.to).color;
+}
+function _evtIcon(e){
+  const a=e.action||'';
+  if(a.includes('reject'))return'🔴';
+  if(a.includes('approv'))return'🟢';
+  if(a==='completed'||a==='release_completed')return'✅';
+  if(a.includes('submit'))return'📤';
+  if(a==='assigned'||a==='release_assigned')return'🧭';
+  if(e.to==='client_wait')return'📨';
+  if(a==='submitted')return'📥';
+  return'📌';
+}
+function _checksHtml(checklist){
+  if(!checklist)return'';
+  return`<div class="wf-tl-checks">${Object.entries(checklist).map(([k,v])=>`<span class="wf-chk ${v?'ok':'no'}">${v?'✓':'✗'} ${esc(k)}</span>`).join('')}</div>`;
+}
+
+// List mode (compact)
+function _wfTlList(j){
   const h=Array.isArray(j.wfHistory)?j.wfHistory:[];
-  if(!h.length)return'<div class="tc-muted" style="font-size:0.78rem;">No workflow history.</div>';
+  if(!h.length)return'<div class="tc-muted" style="font-size:0.78rem;">No history yet.</div>';
   let prev=null;
-  const rows=h.map(e=>{
+  return`<div class="wf-timeline">${h.map(e=>{
+    const col=_evtColor(e);
     const dur=prev?` <span class="wf-tl-dur">(+${tdiff(prev.at,e.at)})</span>`:'';
     prev=e;
-    const meta=wfStageMeta(e.to);
-    const checks=e.checklist?`<div class="wf-tl-checks">${Object.entries(e.checklist).map(([k,v])=>`<span class="wf-chk ${v?'ok':'no'}">${v?'✓':'✗'} ${esc(k)}</span>`).join('')}</div>`:'';
     const noteHtml=e.note?`<div class="wf-tl-note">${esc(e.note)}</div>`:'';
     return`<div class="wf-tl-row">
-      <span class="wf-tl-dot wf-dot-${meta.color}"></span>
+      <span class="wf-tl-dot wf-dot-${col}"></span>
       <div class="wf-tl-body">
-        <div class="wf-tl-head"><strong>${esc(meta.label)}</strong>${dur}</div>
+        <div class="wf-tl-head"><strong>${_evtIcon(e)} ${esc(wfStageMeta(e.to).label)}</strong>${dur}</div>
         <div class="wf-tl-meta">${esc(e.by)} · ${fmt(e.at)}</div>
-        ${noteHtml}${checks}
+        ${noteHtml}${_checksHtml(e.checklist)}
       </div>
     </div>`;
-  }).join('');
-  return`<div class="wf-timeline">${rows}</div>`;
+  }).join('')}</div>`;
+}
+
+// Visual mode (connected vertical timeline)
+function _wfTlVisual(j){
+  const h=Array.isArray(j.wfHistory)?j.wfHistory:[];
+  if(!h.length)return'<div class="tc-muted" style="font-size:0.78rem;">No history yet.</div>';
+  return`<div class="wf-vtl">${h.map((e,i)=>{
+    const col=_evtColor(e);
+    const isLast=i===h.length-1;
+    const dur=i>0?`<div class="wf-vtl-dur">+${tdiff(h[i-1].at,e.at)} from previous</div>`:'<div class="wf-vtl-dur">Start</div>';
+    const noteHtml=e.note?`<div class="wf-vtl-note">${esc(e.note)}</div>`:'';
+    return`<div class="wf-vtl-item">
+      <div class="wf-vtl-left">
+        <div class="wf-vtl-dot wf-dot-${col}"></div>
+        ${isLast?'':'<div class="wf-vtl-line"></div>'}
+      </div>
+      <div class="wf-vtl-body">
+        <div class="wf-vtl-stage">${_evtIcon(e)} <strong>${esc(wfStageMeta(e.to).label)}</strong></div>
+        <div class="wf-vtl-actor">${esc(e.by)} · ${fmt(e.at)}</div>
+        ${dur}
+        ${noteHtml}
+        ${_checksHtml(e.checklist)}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// Public export used by analytics section
+export function wfTimeline(j){return _wfTlList(j);}
+
+// ── TIMELINE TOGGLE ───────────────────────────────────────────────────────────
+const _tlMode={};
+function _renderTl(id){
+  const el=document.getElementById('wf-tl-'+id);
+  if(!el||el.style.display==='none')return;
+  const j=jobs.find(x=>x.id===id);if(!j)return;
+  const mode=_tlMode[id]||'list';
+  const modeTabs=`<div class="wf-tl-modetabs">
+    <button class="wf-tl-mtab${mode==='list'?' active':''}" onclick="wfSetTlMode('${id}','list')">☰ List</button>
+    <button class="wf-tl-mtab${mode==='visual'?' active':''}" onclick="wfSetTlMode('${id}','visual')">📊 Visual</button>
+  </div>`;
+  el.innerHTML=modeTabs+(mode==='visual'?_wfTlVisual(j):_wfTlList(j));
 }
 window.wfToggleTimeline=function(id){
   const el=document.getElementById('wf-tl-'+id);
-  if(el)el.style.display=el.style.display==='none'?'block':'none';
+  if(!el)return;
+  const hidden=el.style.display==='none'||!el.style.display;
+  el.style.display=hidden?'block':'none';
+  if(hidden)_renderTl(id);
 };
+window.wfSetTlMode=function(id,mode){_tlMode[id]=mode;_renderTl(id);};
 
 // ── STAGE PROGRESS PIPELINE (visual) ──────────────────────────────────────────
 const PIPELINE=['intake','drafting','tl_sample_review','detailing','tl_sd_review','client_wait','jobcard','tl_jobcard_review','completed'];
