@@ -84,9 +84,9 @@ gantt
     Doc cleanup                        :done,    p1d, 2026-06-01, 2026-06-05
 
     section Phase 2 · Notifications (v3.0)
-    Browser push notifications         :active,  p2a, 2026-06-06, 2026-07-01
-    Email alerts                       :         p2b, 2026-06-15, 2026-07-01
-    Per-user notification prefs        :         p2c, 2026-06-20, 2026-07-01
+    Email alerts (EmailJS)             :done,    p2a, 2026-06-06, 2026-06-06
+    Analytics overhaul (v2.4.0)        :done,    p2b, 2026-06-06, 2026-06-06
+    Per-user notification prefs        :active,  p2c, 2026-06-06, 2026-07-01
 
     section Phase 3 · Jobs++ (v3.5)
     Recurring jobs                     :         p3a, 2026-07-01, 2026-08-01
@@ -107,15 +107,15 @@ gantt
 ## Feature completion
 
 ```mermaid
-pie title Feature Completion (v2.2.0)
-    "Shipped" : 20
-    "Planned"  : 9
+pie title Feature Completion (v2.4.0)
+    "Shipped" : 24
+    "Planned"  : 6
 ```
 
 | Status | Features |
 |--------|----------|
-| ✅ Shipped | Job CRUD, Roles & auth, Firebase auth, Analytics, Calendar, Board, Extensions, Broadcasts, In-app notifications, Attachments, Comments, @mentions (all users), Deadline reminders, Dark/light mode, Team leader role, Advanced search, CSV export, Activity log, PWA/SW, Auth guards |
-| 🔲 Planned | Browser push, Email alerts, Notification prefs, Recurring jobs, Job templates, Time-tracking export, PDF reports, Scheduled reports, Offline + mobile PWA |
+| ✅ Shipped | Job CRUD, Roles & auth, Firebase auth, Analytics (role-specific layouts), Calendar, Board, Extensions, Broadcasts, In-app notifications, Email alerts (EmailJS), Attachments, Comments, @mentions (all users), Deadline reminders, Dark/light mode, Team leader role, Advanced search, CSV export, Activity log, PWA/SW, Auth guards, Type-filtered analytics, 6 new analytics charts, App rename |
+| 🔲 Planned | Notification prefs, Recurring jobs, Job templates, Time-tracking export, PDF reports, Offline + mobile PWA |
 
 ---
 
