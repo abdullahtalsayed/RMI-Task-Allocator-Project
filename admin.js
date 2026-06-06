@@ -200,6 +200,7 @@ export function roleMeta(role){
   if(role==='managing_director')return{icon:'🎩',bdg:'md',label:'Managing Director'};
   if(role==='executive_director')return{icon:'🎖️',bdg:'ed',label:'Executive Director'};
   if(role==='manager')return{icon:'👔',bdg:'m',label:'Manager'};
+  if(role==='sales_operation')return{icon:'💼',bdg:'so',label:'Sales Operation'};
   if(role==='supervisor')return{icon:'🔰',bdg:'sup',label:'Supervisor'};
   if(role==='team_leader')return{icon:'🧭',bdg:'tl',label:'Team Leader'};
   return{icon:'👤',bdg:'l',label:'Employee'};
@@ -249,10 +250,11 @@ export function renderUList(){
       <div class="ext-sum-card"><div class="ext-sum-n" style="color:var(--blue)">${emp}</div><div class="ext-sum-l">Employees</div></div>
       ${pending?`<div class="ext-sum-card"><div class="ext-sum-n" style="color:var(--orange)">${pending}</div><div class="ext-sum-l">Pending setup</div></div>`:''}`;
   }
-  const order={managing_director:0,executive_director:1,manager:2,supervisor:3,team_leader:4,employee:5};
+  const order={managing_director:0,executive_director:1,manager:2,sales_operation:3,supervisor:4,team_leader:5,employee:6};
   const roleGroups=[
     {roles:['managing_director','executive_director'],label:'Directors',grid:false},
     {roles:['manager'],label:'Managers',grid:false},
+    {roles:['sales_operation'],label:'Sales Operation',grid:false},
     {roles:['supervisor'],label:'Supervisors',grid:false},
     {roles:['team_leader'],label:'Team Leaders',grid:false},
     {roles:['employee'],label:'Employees',grid:true},

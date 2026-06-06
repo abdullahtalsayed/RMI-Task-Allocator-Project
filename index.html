@@ -5,7 +5,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RMI Task Allocator & Progress Tracker v2.9.0</title>
+<title>RMI Task Allocator & Progress Tracker v2.10.0</title>
 <link rel="icon" type="image/png" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_32,h_32,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <link rel="apple-touch-icon" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_180,h_180,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <meta name="theme-color" content="#07080c"/>
@@ -79,7 +79,7 @@
     <div class="hl">
       <button id="sb-toggle" class="sb-toggle-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
       <img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/>
-      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.9.0</div><div id="clock"></div></div>
+      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.10.0</div><div id="clock"></div></div>
     </div>
     <div class="hr">
       <span id="synced"></span>
@@ -105,6 +105,7 @@
       <button class="sb-collapse-btn" onclick="toggleSidebarCollapse()" title="Toggle sidebar" id="sb-collapse-btn">◀</button>
       <nav class="sb-nav">
         <a class="sb-item" data-sb="dashboard" href="#" onclick="goHub('insights','overview')">🏠 <span>Dashboard</span></a>
+        <a class="sb-item sb-work" data-sb="job-basket" href="#">🧺 <span>Job Basket</span></a>
 
         <!-- Team group -->
         <div class="sb-group sb-team" id="sbg-team" style="display:none;">
@@ -189,6 +190,12 @@
   <!-- MANAGER DASHBOARD -->
   <section id="dashboard">
     <div id="dash-root"></div>
+  </section>
+
+  <!-- JOB BASKET / WORKFLOW -->
+  <section id="job-basket">
+    <div class="an-header"><h2 style="margin:0;">🧺 Job Basket</h2></div>
+    <div id="job-basket-root"></div>
   </section>
 
   <!-- MY JOBS -->
@@ -499,6 +506,13 @@
 <div id="overlay" class="overlay" style="display:none;" onclick="closePopup()"></div>
 <div id="popup" class="popup"></div>
 
+<!-- WORKFLOW MODAL (sequential questions / assign / decision) -->
+<div id="wf-modal" class="modal-overlay" onclick="if(event.target===this)wfCloseModal()">
+  <div class="modal wf-modal-inner">
+    <div id="wf-modal-body"></div>
+  </div>
+</div>
+
 <!-- CONFIRM MODAL -->
 <div id="confirm-modal" class="modal-overlay">
   <div class="modal">
@@ -551,7 +565,7 @@
       <label>Name<input id="edit-uname" placeholder="Full name"/></label>
       <label>Email<input id="edit-uemail" type="email" placeholder="email@example.com"/></label>
       <label>New Password <span style="color:var(--text2);font-weight:400;text-transform:none;">(leave blank to keep current)</span><input id="edit-upw" type="password" placeholder="••••••••"/></label>
-      <label>Role<select id="edit-urole" onchange="onRoleChange('edit')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option><option value="managing_director">Managing Director</option><option value="executive_director">Executive Director</option></select></label>
+      <label>Role<select id="edit-urole" onchange="onRoleChange('edit')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option><option value="sales_operation">Sales Operation</option><option value="managing_director">Managing Director</option><option value="executive_director">Executive Director</option></select></label>
       <label id="edit-teamlead-wrap">Team Leader<select id="edit-uteamlead"><option value="">— None —</option></select></label>
       <label>Can view all jobs?<select id="edit-uviewall"><option value="no">No — own jobs only</option><option value="yes">Yes — all jobs</option></select></label>
       <label>Branch<select id="edit-ubranch"><option value="">— None —</option><option value="RMI - Syria">RMI - Syria</option><option value="RMI - UAE">RMI - UAE</option><option value="RMI - India">RMI - India</option></select></label>
@@ -571,7 +585,7 @@
       <label>Name<input id="uname" placeholder="e.g. Ahmed"/></label>
       <label>Work email<input id="uemail" type="email" placeholder="employee@example.com"/></label>
       <label>Temporary password<input id="upw" type="password" placeholder="For first-time setup"/></label>
-      <label>Role<select id="urole" onchange="onRoleChange('add')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option><option value="managing_director">Managing Director</option><option value="executive_director">Executive Director</option></select></label>
+      <label>Role<select id="urole" onchange="onRoleChange('add')"><option value="employee">Employee</option><option value="team_leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option><option value="sales_operation">Sales Operation</option><option value="managing_director">Managing Director</option><option value="executive_director">Executive Director</option></select></label>
       <label id="add-teamlead-wrap">Team Leader<select id="u-teamlead"><option value="">— None —</option></select></label>
       <label>Can view all jobs?<select id="uviewall"><option value="no">No — own jobs only</option><option value="yes">Yes — all jobs</option></select></label>
       <label>Branch<select id="ubranch"><option value="">— None —</option><option value="RMI - Syria">RMI - Syria</option><option value="RMI - UAE">RMI - UAE</option><option value="RMI - India">RMI - India</option></select></label>

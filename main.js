@@ -10,6 +10,7 @@ import { EMAIL_EVENTS, EMAIL_RECIPS, defaultEmailConfig, emailConfig, setEmailCo
 import { renderTags, setTags, showConfirm } from './modals.js';
 import { populateCalEmpDrop, populateCalEmpPills, jobsForCalendarDay, empOverdueJobs, renderCommentSection, uAdd, uUpdate, uDelete, jUpdate, jDelete, jRestore } from './jobs.js';
 import { renderUList, renderBroadcasts, updateBroadcastUI, roleMeta, markBroadcastsSeen } from './admin.js';
+import { renderJobBasket } from './workflow.js';
 
 // ── MAIN-LOCAL STATE (firebase handles + UI-only mutables) ────────────────────
 export let db, auth, storage, jCol, uCol, evCol, notifCol, extCol, bcastCol, logCol, authMapCol, archiveCol, cfgCol;
@@ -368,10 +369,12 @@ function myTeamIds(){return me?teamMemberIds(me.id):[];}
 // central visibility: which jobs current user may see
 export function visibleJobs(){
   if(!me)return[];
+  // workflow (Job Basket) jobs live in their own section — exclude from manual views
+  const pool=jobs.filter(j=>!j.workflow);
   // TL scope takes priority — viewAll='yes' on a TL should not expose all jobs
-  if(isTeamLeader()){const ids=new Set(myTeamIds());return jobs.filter(j=>ids.has(j.owner));}
-  if(canSeeAllJobs())return jobs;
-  return jobs.filter(j=>j.owner===me.id);
+  if(isTeamLeader()){const ids=new Set(myTeamIds());return pool.filter(j=>ids.has(j.owner));}
+  if(canSeeAllJobs())return pool;
+  return pool.filter(j=>j.owner===me.id);
 }
 // can current user manage (edit/assign/reassign/extend) this job?
 export function canManageJob(j){
@@ -402,6 +405,7 @@ export function assignableUsers(){
 }
 function jobsQueryForUser(){
   if(!me)return jCol;
+  if(me.role==='sales_operation')return query(jCol,where('wfCreatedBy','==',me.id));
   if(canSeeAllJobs())return jCol;
   return query(jCol,where('owner','==',me.id));
 }
@@ -640,7 +644,8 @@ function loginAs(u){
   attachFirebaseListeners();
   refreshUsersRemote();
   applyMainNav();
-  goHub('insights','overview');
+  if(u.role==='sales_operation')goHub('work','job-basket');
+  else goHub('insights','overview');
   showDeadlineBanner();
   seedNotifTracking();
   applyUserSettings();
@@ -2208,9 +2213,10 @@ function renderChartBlock(title,key,rows,isRate,wide){
 function renderAnalytics(){renderAnalyticsContent();}
 function analyticsJobs(){
   if(!me)return[];
-  if(canSeeAllJobs())return jobs;
-  if(isTeamLeader()){const ids=new Set(myTeamIds());return jobs.filter(j=>ids.has(j.owner));}
-  return jobs.filter(j=>j.owner===me.id);
+  const pool=jobs.filter(j=>!j.workflow);
+  if(canSeeAllJobs())return pool;
+  if(isTeamLeader()){const ids=new Set(myTeamIds());return pool.filter(j=>ids.has(j.owner));}
+  return pool.filter(j=>j.owner===me.id);
 }
 function allJobTypesForAnalytics(scope){
   const fromJobs=new Set(scope.map(j=>j.type).filter(Boolean));
@@ -2406,7 +2412,7 @@ function renderEmpDashboard(root){
   const ws=new Date(now);ws.setDate(now.getDate()-now.getDay());ws.setHours(0,0,0,0);
   const lastWs=new Date(ws);lastWs.setDate(ws.getDate()-7);
 
-  const myJobs=jobs.filter(j=>j.owner===me.id);
+  const myJobs=jobs.filter(j=>j.owner===me.id&&!j.workflow);
   const active=myJobs.filter(j=>j.status!=='completed');
   const overdue=myJobs.filter(j=>isOverdue(j));
   const dueToday=active.filter(j=>j.deadline&&toMillis(j.deadline)<=todayEnd.getTime()&&toMillis(j.deadline)>=nowMs);
@@ -2558,6 +2564,7 @@ function renderDashboard(){
   if(!me)return;
   const root=document.getElementById('dash-root');
   if(!root)return;
+  if(me.role==='sales_operation')return; // sales op uses Job Basket, not dashboard
   // ── EMPLOYEE personal dashboard ───────────────────────────────────────────
   if(me.role==='employee'){renderEmpDashboard(root);return;}
 
@@ -2828,12 +2835,12 @@ setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocal
 
 // ── TABS / HUB NAV ────────────────────────────────────────────────────────────
 let currentHub='jobs',currentSub='my-jobs',lastAccountSub='profile';
-const HUB_DEFAULTS={jobs:'my-jobs',team:'board',insights:'overview',messages:'broadcast',account:'profile'};
+const HUB_DEFAULTS={jobs:'my-jobs',team:'board',insights:'overview',messages:'broadcast',account:'profile',work:'job-basket'};
 const SUB_TO_SECTION={
   'my-jobs':'my-jobs','add-job':'add-job',board:'board',cal:'cal',assign:'assign',
   overview:'dashboard',reports:'analytics',search:'adv-search',extensions:'extensions-review',activity:'login-log',
   broadcast:'broadcast',profile:'account',preferences:'account',users:'users','activity-log':'login-log',
-  teams:'teams-overview','email-control':'email-control'
+  teams:'teams-overview','email-control':'email-control','job-basket':'job-basket'
 };
 const SECTION_TO_SB={
   'my-jobs':'my-jobs','add-job':'my-jobs',
@@ -2841,7 +2848,7 @@ const SECTION_TO_SB={
   dashboard:'dashboard','extensions-review':'extensions-review',
   analytics:'analytics','adv-search':'adv-search',
   broadcast:'broadcast',account:'account',users:'users','login-log':'login-log',
-  'teams-overview':'teams-overview','email-control':'email-control'
+  'teams-overview':'teams-overview','email-control':'email-control','job-basket':'job-basket'
 };
 const SB_TO_HUB={
   'my-jobs':['jobs','my-jobs'],assign:['team','assign'],
@@ -2850,10 +2857,20 @@ const SB_TO_HUB={
   analytics:['insights','reports'],'adv-search':['insights','search'],
   broadcast:['messages','broadcast'],account:['account','profile'],
   users:['account','users'],'login-log':['account','activity-log'],
-  'teams-overview':['insights','teams'],'email-control':['insights','email-control']
+  'teams-overview':['insights','teams'],'email-control':['insights','email-control'],
+  'job-basket':['work','job-basket']
 };
 function applyMainNav(){
   const r=me?.role||'';
+  // Sales Operation: only Job Basket + Account. Nothing else.
+  if(r==='sales_operation'){
+    const allow=new Set(['job-basket','account']);
+    document.querySelectorAll('.sb-item').forEach(el=>{el.style.display=allow.has(el.dataset.sb)?'flex':'none';});
+    const teamGrp=document.getElementById('sbg-team');if(teamGrp)teamGrp.style.display='none';
+    document.querySelectorAll('.sb-admin').forEach(el=>el.style.display='none');
+    const topbar=document.querySelector('.topbar');if(topbar)topbar.style.display='none';
+    return;
+  }
   // Directors: read-only oversight. Only Dashboard, Analytics, Teams, Account, Accounts directory.
   if(isDirectorRole(r)){
     const allow=new Set(['dashboard','analytics','teams-overview','account','users','my-jobs']);
@@ -2875,6 +2892,7 @@ function applyMainNav(){
   document.querySelectorAll('.sb-lead').forEach(el=>el.style.display=isLeadNav?'flex':'none');
   document.querySelectorAll('.sb-manager').forEach(el=>el.style.display=isManager?'flex':'none');
   document.querySelectorAll('.sb-admin').forEach(el=>el.style.display=isManager?'flex':'none');
+  document.querySelectorAll('.sb-work').forEach(el=>el.style.display='flex'); // Job Basket for all staff
   const topbar=document.querySelector('.topbar');
   if(topbar)topbar.style.display=currentHub==='jobs'?'flex':'none';
 }
@@ -2935,6 +2953,7 @@ function runHubSideEffects(id){
   if(id==='teams-overview'){refreshUsersRemote();renderTeamsOverview();}
   if(id==='adv-search'){refreshUsersRemote();populateReassignDrops();}
   if(id==='email-control')renderEmailControl();
+  if(id==='job-basket')renderJobBasket();
   if(id==='users')refreshUsersRemote();
   if(id==='login-log')refreshActivityLogsRemote();
   if(id==='broadcast'){updateBroadcastUI();refreshBroadcastsRemote();setTimeout(markBroadcastsSeen,1200);}
@@ -2999,6 +3018,7 @@ window.closeSidebar=function(){
 window.renderAll=function(){
   if(!me)return;
   renderJobs();updateSummary();renderAnalyticsContent();showDeadlineBanner();
+  if(document.getElementById('job-basket')?.classList.contains('on'))renderJobBasket();
   if(document.getElementById('dashboard')?.classList.contains('on'))renderDashboard();
   if(['manager','supervisor','team_leader'].includes(me.role)){
     if(document.getElementById('login-log')?.classList.contains('on'))renderActivityLog();
@@ -3740,6 +3760,7 @@ function anBranchSection(){
 
 renderAnalyticsContent=function(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
+  if(me.role==='sales_operation')return; // sales op has no analytics
   // show Teams tab for managers only
   document.querySelectorAll('.sb-manager-tab').forEach(b=>b.style.display=me.role==='manager'?'':'none');
   // teams view

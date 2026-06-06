@@ -1,111 +1,114 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function profileId() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/usersByAuth/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/usersByAuth/$(request.auth.uid)).data.profileId
-        : null;
-    }
-
-    function profile() {
-      return profileId() != null
-        ? get(/databases/$(database)/documents/users/$(profileId()))
-        : null;
-    }
-
-    function isManager() {
-      return profile() != null && profile().data.role == 'manager';
-    }
-
-    function isSupervisor() {
-      return profile() != null && profile().data.role == 'supervisor';
-    }
-
-    function isManagerOrSupervisor() {
-      return profile() != null
-        && profile().data.role in ['manager', 'supervisor', 'managing_director', 'executive_director'];
-    }
-
-    function canViewAllJobs() {
-      return profile() != null
-        && (profile().data.viewAll == 'yes'
-            || profile().data.role in ['manager', 'supervisor']);
-    }
-
-    function managerDocExists() {
-      return exists(/databases/$(database)/documents/users/manager);
-    }
-
-    match /usersByAuth/{authUid} {
-      allow read: if signedIn() && request.auth.uid == authUid;
-      allow create: if signedIn() && request.auth.uid == authUid
-        && request.resource.data.profileId is string;
-      allow update: if signedIn() && request.auth.uid == authUid;
-      allow delete: if false;
-    }
-
-    // Signed-in: full user admin. Activation: read only profiles pending setup (no passwords in query from client ideally).
-    match /users/{userId} {
-      allow read: if signedIn()
-        || (resource.data.needsActivation == true);
-      allow create: if (signedIn() && isManager())
-        || (userId == 'manager' && !managerDocExists());
-      allow update: if signedIn() && (isManager() || profileId() == userId);
-      allow delete: if signedIn() && isManager();
-    }
-
-    match /jobs/{jobId} {
-      allow read: if signedIn() && (
-        canViewAllJobs()
-        || resource.data.owner == profileId()
-      );
-      allow create: if signedIn();
-      allow update, delete: if signedIn() && (
-        isManager()
-        || (isSupervisor() && resource.data.owner == profileId())
-        || resource.data.owner == profileId()
-      );
-    }
-
-    match /jobsArchive/{jobId} {
-      allow read, write: if signedIn() && isManager();
-    }
-
-    match /notifications/{id} {
-      allow read: if signedIn() && resource.data.userId == profileId();
-      allow create: if signedIn();
-      allow update, delete: if signedIn()
-        && resource.data.userId == profileId();
-    }
-
-    match /extensions/{id} {
-      allow read: if signedIn();
-      allow create: if signedIn();
-      allow update, delete: if signedIn() && isManagerOrSupervisor();
-    }
-
-    match /broadcasts/{id} {
-      allow read: if signedIn();
-      allow create, delete: if signedIn() && isManager();
-      allow update: if signedIn() && isManager();
-    }
-
-    match /events/{id} {
-      allow read: if signedIn();
-      allow create: if signedIn();
-      allow update, delete: if signedIn() && isManagerOrSupervisor();
-    }
-
-    match /loginlogs/{id} {
-      allow read: if signedIn() && isManagerOrSupervisor();
-      allow create: if signedIn();
-      allow update, delete: if signedIn() && isManager();
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profileId() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/usersByAuth/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/usersByAuth/$(request.auth.uid)).data.profileId
+        : null;
+    }
+
+    function profile() {
+      return profileId() != null
+        ? get(/databases/$(database)/documents/users/$(profileId()))
+        : null;
+    }
+
+    function isManager() {
+      return profile() != null && profile().data.role == 'manager';
+    }
+
+    function isSupervisor() {
+      return profile() != null && profile().data.role == 'supervisor';
+    }
+
+    function isManagerOrSupervisor() {
+      return profile() != null
+        && profile().data.role in ['manager', 'supervisor', 'managing_director', 'executive_director'];
+    }
+
+    function canViewAllJobs() {
+      return profile() != null
+        && (profile().data.viewAll == 'yes'
+            || profile().data.role in ['manager', 'supervisor']);
+    }
+
+    function managerDocExists() {
+      return exists(/databases/$(database)/documents/users/manager);
+    }
+
+    match /usersByAuth/{authUid} {
+      allow read: if signedIn() && request.auth.uid == authUid;
+      allow create: if signedIn() && request.auth.uid == authUid
+        && request.resource.data.profileId is string;
+      allow update: if signedIn() && request.auth.uid == authUid;
+      allow delete: if false;
+    }
+
+    // Signed-in: full user admin. Activation: read only profiles pending setup (no passwords in query from client ideally).
+    match /users/{userId} {
+      allow read: if signedIn()
+        || (resource.data.needsActivation == true);
+      allow create: if (signedIn() && isManager())
+        || (userId == 'manager' && !managerDocExists());
+      allow update: if signedIn() && (isManager() || profileId() == userId);
+      allow delete: if signedIn() && isManager();
+    }
+
+    match /jobs/{jobId} {
+      allow read: if signedIn() && (
+        canViewAllJobs()
+        || resource.data.owner == profileId()
+        || resource.data.wfCreatedBy == profileId()      // sales op: own basket jobs
+        || resource.data.teamLeaderId == profileId()     // TL: own team workflow jobs
+      );
+      allow create: if signedIn();
+      allow update, delete: if signedIn() && (
+        isManager()
+        || (isSupervisor() && resource.data.owner == profileId())
+        || resource.data.owner == profileId()
+        || resource.data.teamLeaderId == profileId()     // TL drives the workflow
+      );
+    }
+
+    match /jobsArchive/{jobId} {
+      allow read, write: if signedIn() && isManager();
+    }
+
+    match /notifications/{id} {
+      allow read: if signedIn() && resource.data.userId == profileId();
+      allow create: if signedIn();
+      allow update, delete: if signedIn()
+        && resource.data.userId == profileId();
+    }
+
+    match /extensions/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if signedIn() && isManagerOrSupervisor();
+    }
+
+    match /broadcasts/{id} {
+      allow read: if signedIn();
+      allow create, delete: if signedIn() && isManager();
+      allow update: if signedIn() && isManager();
+    }
+
+    match /events/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if signedIn() && isManagerOrSupervisor();
+    }
+
+    match /loginlogs/{id} {
+      allow read: if signedIn() && isManagerOrSupervisor();
+      allow create: if signedIn();
+      allow update, delete: if signedIn() && isManager();
     }
 
     // Org-wide config (e.g. email control). Everyone signed-in reads it so the
@@ -114,17 +117,17 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if signedIn() && isManager();
     }
-
-  }
-}
-
-// Firebase Storage: publish separately in Console → Storage → Rules:
-// rules_version = '2';
-// service firebase.storage {
-//   match /b/{bucket}/o {
-//     match /jobs/{jobId}/{file} {
-//       allow read: if request.auth != null;
-//       allow write: if request.auth != null && request.resource.size < 8 * 1024 * 1024;
-//     }
-//   }
-// }
+
+  }
+}
+
+// Firebase Storage: publish separately in Console → Storage → Rules:
+// rules_version = '2';
+// service firebase.storage {
+//   match /b/{bucket}/o {
+//     match /jobs/{jobId}/{file} {
+//       allow read: if request.auth != null;
+//       allow write: if request.auth != null && request.resource.size < 8 * 1024 * 1024;
+//     }
+//   }
+// }
