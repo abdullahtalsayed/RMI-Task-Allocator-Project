@@ -3536,6 +3536,49 @@ function anCrossTeamTypeWidget(){
   return`<div class="an-widget"><div class="an-widget-hd">Cross-Team Comparison by Type <span class="an-hd-note">completion rate %</span></div>${rows.map(r=>`<div style="margin-bottom:0.85rem;"><div style="font-size:0.78rem;font-weight:600;color:var(--text2);margin-bottom:0.35rem;">${escapeHtml(r.type)}</div><div class="an-bars">${r.teams.filter(t=>t.total>0).map((t,i)=>`<div class="an-bar-row"><span class="an-bar-label">${escapeHtml(t.name)}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${t.rate}%;background:${colors[i%colors.length]}"></div></div><span class="an-bar-val">${t.rate}% <span class="an-bar-sub">${t.done}/${t.total}</span></span></div>`).join('')}</div></div>`).join('')}</div>`;
 }
 
+// Branch-level analytics (RMI - Syria / UAE / India). Visible to oversight roles.
+// Always compares ALL branches (ignores the single-branch filter dropdown) over
+// the selected date range; jobs roll up to their owner's branch.
+function anBranchSection(){
+  const branches=BRANCHES.filter(b=>users.some(u=>u.branch===b));
+  if(branches.length<1)return'';
+  const start=analyticsRangeStart(analyticsRange);
+  const inRange=j=>!start||toMillis(j.created)>=start;
+  const all=visibleJobs();
+  const colors=['var(--blue)','var(--green)','var(--orange)','var(--purple)','var(--yellow)'];
+  const stat={};
+  branches.forEach((b,i)=>{
+    const bj=all.filter(j=>branchOf(j.owner)===b);
+    const withDl=bj.filter(j=>j.completed&&j.deadline);
+    const onTime=withDl.filter(j=>toMillis(j.completed)<=toMillis(j.deadline)).length;
+    const compDur=bj.filter(j=>j.completed&&j.created);
+    const avgMs=compDur.length?compDur.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/compDur.length:0;
+    stat[b]={i,
+      active:bj.filter(j=>j.status!=='completed').length,
+      done:bj.filter(j=>j.completed&&inRange(j)).length,
+      overdue:bj.filter(j=>isOverdue(j)).length,
+      onTimePct:withDl.length?Math.round(onTime/withDl.length*100):0,
+      onTimeN:withDl.length, avgMs};
+  });
+  const col=b=>colors[stat[b].i%colors.length];
+  const activeRows=branches.map(b=>({label:b,value:stat[b].active,color:col(b)}));
+  const doneRows=branches.map(b=>({label:b,value:stat[b].done,color:'var(--green)'}));
+  const odRows=branches.map(b=>({label:b,value:stat[b].overdue,color:'var(--red)'}));
+  const otRows=branches.map(b=>({label:b,value:stat[b].onTimePct,sub:`${stat[b].onTimeN} done`,color:stat[b].onTimePct>=70?'var(--green)':stat[b].onTimePct>=40?'var(--yellow)':'var(--red)'}));
+  const turnRows=branches.filter(b=>stat[b].avgMs>0).sort((a,b)=>stat[a].avgMs-stat[b].avgMs)
+    .map(b=>({label:b,value:Math.round(stat[b].avgMs/3600000),sub:tdiff(0,stat[b].avgMs),color:'var(--blue)'}));
+  return`<div class="an-section-title">🏢 Branch Analytics</div>
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Active Jobs per Branch</div>${anBars(activeRows)}</div>
+      <div class="an-widget"><div class="an-widget-hd">Completed per Branch <span class="an-hd-note">in range</span></div>${anBars(doneRows)}</div>
+    </div>
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Overdue per Branch</div>${anBars(odRows)}</div>
+      <div class="an-widget"><div class="an-widget-hd">On-Time Rate per Branch</div>${anBars(otRows,{rate:true})}</div>
+    </div>
+    <div class="an-widget"><div class="an-widget-hd">Avg Turnaround per Branch <span class="an-hd-note">created → completed (hours, fastest first)</span></div>${anBars(turnRows)}</div>`;
+}
+
 renderAnalyticsContent=function(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
   // show Teams tab for managers only
@@ -3762,6 +3805,7 @@ renderAnalyticsContent=function(){
       </div>
       ${anOverdueTrendWidget(visibleJobs(),buckets)}
       ${anCrossTeamTypeWidget()}
+      ${anBranchSection()}
       ${perfHtml}
       ${jobAnalysisHtml}`;
     return;
@@ -3780,6 +3824,7 @@ renderAnalyticsContent=function(){
     </div>
     ${anOverdueTrendWidget(visibleJobs(),buckets)}
     ${anCrossTeamTypeWidget()}
+    ${anBranchSection()}
     ${perfHtml}
     ${jobAnalysisHtml}`;
 }
