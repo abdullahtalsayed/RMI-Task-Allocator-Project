@@ -300,11 +300,11 @@ export function renderUList(){
     if(!members.length)return'';
     const gid='ug-'+g.roles[0];
     return`<div class="user-group">
-      <div class="user-group-hdr" onclick="(function(el){const b=el.nextElementSibling;b.style.display=b.style.display==='none'?'':'none';el.querySelector('.user-group-chevron').style.transform=b.style.display==='none'?'rotate(-90deg)':''})(this)">
+      <div class="user-group-hdr" onclick="(function(el){const b=el.nextElementSibling;b.style.display=b.style.display==='none'?'':'none';el.querySelector('.user-group-chevron').style.transform=b.style.display==='none'?'rotate(-90deg)':'rotate(0deg)'})(this)">
         ${g.label}<span class="user-group-count">${members.length}</span>
-        <span class="user-group-chevron">▾</span>
+        <span class="user-group-chevron" style="transform:rotate(-90deg)">▾</span>
       </div>
-      <div class="user-group-body${g.grid?' grid2':''}" id="${gid}">
+      <div class="user-group-body${g.grid?' grid2':''}" id="${gid}" style="display:none;">
         ${members.map(u=>userCard(u)).join('')}
       </div>
     </div>`;
