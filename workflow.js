@@ -499,13 +499,59 @@ export function wfTimeline(j){return _wfTlList(j);}
 // ── TIMELINE TOGGLE ───────────────────────────────────────────────────────────
 window.wfToggleTimeline=function(id){
   const el=document.getElementById('wf-tl-'+id);
+  const gel=document.getElementById('wf-jg-'+id);
   if(!el)return;
+  if(gel)gel.style.display='none'; // close gantt if open
   const hidden=el.style.display==='none'||!el.style.display;
   el.style.display=hidden?'block':'none';
-  if(hidden){
-    const j=jobs.find(x=>x.id===id);
-    if(j)el.innerHTML=_wfTlVisual(j);
-  }
+  if(hidden){const j=jobs.find(x=>x.id===id);if(j)el.innerHTML=_wfTlVisual(j);}
+};
+
+// Per-job Gantt: stages as horizontal time bars
+function _wfJobGantt(j){
+  const h=Array.isArray(j.wfHistory)?j.wfHistory:[];
+  if(!h.length)return'<div class="tc-muted" style="font-size:0.78rem;padding:0.5rem;">No history yet.</div>';
+  const now=Date.now();
+  const jStart=toMillis(j.created)||now;
+  const jEnd=j.completed?toMillis(j.completed):now;
+  const totalMs=Math.max(jEnd-jStart,1);
+  const pct=ts=>Math.max(0,Math.min(100,(toMillis(ts)-jStart)/totalMs*100));
+  // build stage spans
+  const spans=h.map((e,i)=>{
+    const sStart=i===0?jStart:toMillis(h[i-1].at)||jStart;
+    const sEnd=i===h.length-1?jEnd:toMillis(h[i].at)||jEnd;
+    const dur=sEnd-sStart;
+    const l=pct(sStart);
+    const w=Math.max((sEnd-sStart)/totalMs*100,0.8);
+    const col=_WF_STAGE_COLORS[e.to]||'#8e8e93';
+    return{e,l,w,dur,col,sStart,sEnd};
+  });
+  // x axis: build week ticks
+  const weeks=[];let d=new Date(jStart);d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);
+  while(d.getTime()<jEnd+7*864e5){weeks.push(new Date(d));d=new Date(d);d.setDate(d.getDate()+7);}
+  const weekTicks=weeks.map(w=>{const l=(w.getTime()-jStart)/totalMs*100;if(l<0||l>105)return'';return`<div class="wfjg-tick" style="left:${l.toFixed(1)}%"><span>${w.toLocaleString('en-GB',{day:'numeric',month:'short'})}</span></div>`;}).join('');
+  const rows=spans.map(s=>`<div class="wfjg-row">
+    <div class="wfjg-lbl">${esc(wfStageMeta(s.e.to).short)}</div>
+    <div class="wfjg-track">
+      <div class="wfjg-bar" style="left:${s.l.toFixed(2)}%;width:${s.w.toFixed(2)}%;background:${s.col};" title="${esc(wfStageMeta(s.e.to).label)} · ${tdiff(0,s.dur)}">
+        <span class="wfjg-bar-lbl">${tdiff(0,s.dur)}</span>
+      </div>
+    </div>
+  </div>`).join('');
+  const todayPct=((now-jStart)/totalMs*100).toFixed(2);
+  return`<div class="wfjg">
+    <div class="wfjg-axis">${weekTicks}<div class="wfjg-today-line" style="left:${todayPct}%" title="Today"></div></div>
+    ${rows}
+  </div>`;
+}
+window.wfToggleJobGantt=function(id){
+  const el=document.getElementById('wf-tl-'+id);
+  const gel=document.getElementById('wf-jg-'+id);
+  if(!gel)return;
+  if(el)el.style.display='none'; // close timeline if open
+  const hidden=gel.style.display==='none'||!gel.style.display;
+  gel.style.display=hidden?'block':'none';
+  if(hidden){const j=jobs.find(x=>x.id===id);if(j)gel.innerHTML=_wfJobGantt(j);}
 };
 
 // ── STAGE PROGRESS PIPELINE (visual) ──────────────────────────────────────────
@@ -543,8 +589,10 @@ function wfCard(j,showAction){
     <div class="wf-card-actions">
       ${act?`<button class="wf-act ${act.cls}" onclick="${act.fn}">${act.label}</button>`:''}
       <button class="wf-act sec" onclick="wfToggleTimeline('${j.id}')">🕐 Timeline</button>
+      <button class="wf-act sec" onclick="wfToggleJobGantt('${j.id}')">📊 Gantt</button>
     </div>
     <div class="wf-tl-wrap" id="wf-tl-${j.id}" style="display:none;">${wfTimeline(j)}</div>
+    <div class="wf-jg-wrap" id="wf-jg-${j.id}" style="display:none;"></div>
   </div>`;
 }
 

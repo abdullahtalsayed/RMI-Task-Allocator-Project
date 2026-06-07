@@ -1873,6 +1873,18 @@ textarea.af-input{resize:vertical;min-height:72px;}
 .wf-gantt-bar-btn{display:flex;justify-content:flex-end;margin-bottom:0.65rem;}
 .wf-gantt-btn{border:1px solid var(--border)!important;}
 .wf-gantt-btn.active{background:rgba(50,215,75,0.15)!important;color:var(--green)!important;border-color:var(--green)!important;}
+/* Per-job Gantt */
+.wf-jg-wrap{margin-top:0.5rem;}
+.wfjg{background:var(--card-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:0.75rem;}
+.wfjg-axis{position:relative;height:22px;background:var(--sidebar-bg);border-bottom:1px solid var(--border);}
+.wfjg-tick{position:absolute;top:0;height:100%;border-left:1px solid var(--border);padding-left:3px;color:var(--muted);font-size:0.68rem;display:flex;align-items:center;white-space:nowrap;}
+.wfjg-today-line{position:absolute;top:0;bottom:0;width:2px;background:var(--red);opacity:0.8;}
+.wfjg-row{display:flex;align-items:center;border-bottom:1px solid var(--border);min-height:30px;}
+.wfjg-row:last-child{border-bottom:none;}
+.wfjg-lbl{flex:0 0 110px;padding:0 8px;color:var(--muted);font-size:0.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wfjg-track{flex:1;position:relative;height:30px;}
+.wfjg-bar{position:absolute;top:5px;height:20px;border-radius:4px;display:flex;align-items:center;padding:0 5px;min-width:4px;opacity:0.88;cursor:default;}
+.wfjg-bar-lbl{color:#fff;font-size:0.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,0.4);}
 .wf-tab-content{min-height:80px;}
 /* ── Gantt chart ─────────────────────────────────────────────── */
 .wf-gantt{font-size:0.78rem;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--card);}
