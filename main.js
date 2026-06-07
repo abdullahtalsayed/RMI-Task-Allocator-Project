@@ -4206,6 +4206,7 @@ function _mysInitDrag(grid){
   if(_mysSortable){try{_mysSortable.destroy();}catch(e){}}
   _mysSortable=new window.Sortable(grid,{
     animation:180,
+    handle:'.mys-drag-handle',
     ghostClass:'mys-drag-ghost',
     chosenClass:'mys-drag-chosen',
     dragClass:'mys-drag-active',
@@ -4226,7 +4227,7 @@ function renderMySpace(){
     if(!def||!def.roles(me.role))return'';
     let body='';
     try{body=def.render()||'';}catch(e){body=_mysW('Widget Error',`<div style="color:var(--red);font-size:0.78rem;">${e.message||'render failed'}</div>`);}
-    return`<div class="mys-widget${def.size==='full'?' full':''}" data-key="${key}"><button class="mys-remove-btn" onclick="removeMysWidget('${key}')" title="Remove">✕</button>${body}</div>`;
+    return`<div class="mys-widget${def.size==='full'?' full':''}" data-key="${key}"><div class="mys-drag-handle" title="Drag to reorder">⠿</div><button class="mys-remove-btn" onclick="removeMysWidget('${key}')" title="Remove">✕</button>${body}</div>`;
   }).join('');
   const groups={};
   Object.entries(MYS_WIDGETS).forEach(([key,def])=>{
