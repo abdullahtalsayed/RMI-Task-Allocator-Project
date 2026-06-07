@@ -1223,7 +1223,7 @@ function showDeadlineBanner(){
   const banner=document.getElementById('dl-banner');
   if(!due.length){banner.style.display='none';return;}
   banner.style.display='block';
-  banner.innerHTML='⏰ <strong>Upcoming deadlines:</strong> '+due.map(j=>`${j.client} (#${j.jobNum}) — ${fmt(j.deadline)}`).join(' | ');
+  banner.innerHTML='⏰ <strong>Upcoming deadlines:</strong> '+due.map(j=>`${escapeHtml(String(j.client))} (#${escapeHtml(String(j.jobNum))}) — ${fmt(j.deadline)}`).join(' | ');
 }
 
 // ── ACTIVITY LOG ──────────────────────────────────────────────────────────────
