@@ -4132,7 +4132,7 @@ renderAnalyticsContent=function(){
     ${wrap('perf',perfHtml)}
     ${wrap('branches',sec('📋 Jobs & Branches')+anBranchSection())}
     ${wrap('jobs',jobAnalysisHtml)}
-    ${hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>`):''}
+    ${hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>'):''}
     ${wrap('teams_overview',sec('👥 Teams Overview')+'<div id="an-teams-inline"></div>')}`);
   if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'';}
   const teamsEl=el.querySelector('#an-teams-inline');if(teamsEl)renderTeamsAnalytics(teamsEl);
