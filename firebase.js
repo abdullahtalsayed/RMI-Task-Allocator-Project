@@ -13,6 +13,6 @@ export const CFG = {
   messagingSenderId: "420212187802",
   appId:             "1:420212187802:web:d1bc5b9478eb808d347523"
 };
-export const MGR_PW = "manager123";
+// MGR_PW removed — bootstrap uses crypto.randomUUID() so no hardcoded secret in source
 export const USE_FIREBASE = CFG.apiKey !== "PASTE_apiKey_HERE";
 export const USE_AUTH = USE_FIREBASE;

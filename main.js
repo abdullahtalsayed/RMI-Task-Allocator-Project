@@ -1,7 +1,7 @@
 ﻿// ── RMI Task Allocator — main module ──────────────────────────────────────────
 // Entry point. Imports shared leaves (firebase / state / helpers / email),
 // holds all app logic + bootstrap. Loaded via <script type="module" src="main.js">.
-import { initializeApp, getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, getDocs, getDoc, query, where, limit, writeBatch, getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, getStorage, ref, uploadBytes, getDownloadURL, deleteObject, CFG, MGR_PW, USE_FIREBASE, USE_AUTH } from './firebase.js';
+import { initializeApp, getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, getDocs, getDoc, query, where, limit, writeBatch, getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, getStorage, ref, uploadBytes, getDownloadURL, deleteObject, CFG, USE_FIREBASE, USE_AUTH } from './firebase.js';
 import { JOB_TYPES, ACTIVITY_TYPE_LABELS, FB_LIMITS, JOBS_PAGE_SIZE, ARCHIVE_AFTER_MS, DEFAULT_SETTINGS, NOTIF_BUBBLE_TTL, NOTIF_TOAST_MAX, jobs, users, events, notifications, extRequests, broadcasts, activityLogs, me, myFilter, lastDel, isDark, currentATab, userSettings, setMe, setJobs, setUsers, setEvents, setNotifications, setExtRequests, setBroadcasts, setActivityLogs, setMyFilter, setLastDel, setIsDark, setCurrentATab, setUserSettings } from './state.js';
 import { lsub, toMillis, escapeHtml, fmt, fmtShort, tdiff, getJobPausedMs, getJobDurationBreakdown, formatJobDurationHtml, jobPauseDefaults, uid, timeAgo } from './helpers.js';
 import { sendEmail, emailPref, emailUser, emailJobOwner, emailManagersAndSupervisors, emailTeamLeaderOf, emailAllOversight, emailEventOwner, emailEventOwnerId, emailEventTeamLeader, emailEventManagers, emailEventSupervisors, emailEventOversight } from './email.js';
@@ -142,7 +142,7 @@ function localLoad(){
   setExtRequests(JSON.parse(localStorage.getItem('rmi_exts')||'[]'));
   setBroadcasts(JSON.parse(localStorage.getItem('rmi_bcasts')||'[]'));
   setActivityLogs(JSON.parse(localStorage.getItem('rmi_activitylogs')||localStorage.getItem('rmi_loginlogs')||'[]'));
-  if(!users.find(u=>u.role==='manager'))users.push({id:'manager',name:'Manager',role:'manager',password:MGR_PW,email:'',viewAll:'yes'});
+  if(!users.find(u=>u.role==='manager'))users.push({id:'manager',name:'Manager',role:'manager',password:crypto.randomUUID(),email:'',viewAll:'yes'});
   localSave();
 }
 
@@ -181,8 +181,10 @@ async function init(){
       const uSnap=await getDocs(uCol);
       if(uSnap.empty){
         lsub('Creating manager account...');
-        await setDoc(doc(uCol,'manager'),{name:'Manager',role:'manager',email:'',viewAll:'yes',needsActivation:true,tempPassword:MGR_PW});
-        setUsers([{id:'manager',name:'Manager',role:'manager',email:'',viewAll:'yes',needsActivation:true,tempPassword:MGR_PW}]);
+        const _mgrTmp=crypto.randomUUID(); // random — shown once in console, never hardcoded
+        console.info('[RMI] Manager bootstrap temp password (one-time):',_mgrTmp);
+        await setDoc(doc(uCol,'manager'),{name:'Manager',role:'manager',email:'',viewAll:'yes',needsActivation:true,tempPassword:_mgrTmp});
+        setUsers([{id:'manager',name:'Manager',role:'manager',email:'',viewAll:'yes',needsActivation:true,tempPassword:_mgrTmp}]);
       }else{
         setUsers(uSnap.docs.map(d=>({id:d.id,...d.data()})));
       }
