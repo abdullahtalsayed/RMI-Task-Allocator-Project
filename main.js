@@ -2273,6 +2273,66 @@ window.renderSbBasketSubs=function(){
   el.innerHTML=tabs.map(t=>`<button class="sb-sub-btn${t.k===cur?' active':''}" onclick="goHub('work','job-basket');window.wfSetTab('${t.k}')">${t.label}</button>`).join('');
 };
 
+// ── Analytics widget visibility ────────────────────────────────────────────
+const AN_VIS_KEYS=['kpis','status_trend','my_rank','team','perf','jobs','branches','workflow','teams_overview'];
+let _anVis={};
+function loadAnVis(){
+  if(!me)return;
+  try{const s=localStorage.getItem('an-vis-'+me.id);const saved=s?JSON.parse(s):{};_anVis=AN_VIS_KEYS.reduce((o,k)=>{o[k]=k in saved?saved[k]:true;return o;},{});}
+  catch(e){_anVis=AN_VIS_KEYS.reduce((o,k)=>{o[k]=true;return o;},{});}
+}
+function saveAnVis(){if(me)localStorage.setItem('an-vis-'+me.id,JSON.stringify(_anVis));}
+function applyAnVis(root){
+  if(!root)return;
+  root.querySelectorAll('.an-section-wrap[data-vis]').forEach(el=>{
+    el.style.display=_anVis[el.dataset.vis]===false?'none':'';
+  });
+}
+window.setAnVis=function(key,val){_anVis[key]=val;saveAnVis();applyAnVis(document.getElementById('analytics-content'));};
+window.anVisSetAll=function(val){AN_VIS_KEYS.forEach(k=>_anVis[k]=val);saveAnVis();applyAnVis(document.getElementById('analytics-content'));renderAnVisPanel();};
+window.toggleAnVisPanel=function(){
+  const p=document.getElementById('an-vis-panel');
+  const btn=document.getElementById('an-vis-toggle');
+  if(!p)return;
+  const open=p.style.display==='none'||!p.style.display;
+  p.style.display=open?'block':'none';
+  if(btn)btn.classList.toggle('open',open);
+  if(open)renderAnVisPanel();
+};
+function renderAnVisPanel(){
+  const p=document.getElementById('an-vis-panel');if(!p||!me)return;
+  loadAnVis();
+  const r=me.role;
+  const isMgrRole=['manager','supervisor','team_leader'].includes(r)||amDirector();
+  const isEmpRole=r==='employee';
+  const isSupRole=r==='supervisor'||r==='manager'||amDirector();
+  const isMgrOnly=r==='manager'||amDirector();
+  const hasWf=jobs.some(j=>j.workflow);
+  const chk=(key,lbl)=>`<div class="an-vis-row"><input type="checkbox" id="anv-${key}" ${_anVis[key]!==false?'checked':''}  onchange="setAnVis('${key}',this.checked)"><label for="anv-${key}">${lbl}</label></div>`;
+  const grp=lbl=>`<div class="an-vis-grp-lbl">${lbl}</div>`;
+  let h=`<div class="an-vis-panel-hd"><span>📊 Widget Visibility</span><button onclick="toggleAnVisPanel()">✕</button></div>`;
+  h+=grp('Overview');
+  h+=chk('kpis','Key Metrics');
+  h+=chk('status_trend','Status & Trend');
+  if(isEmpRole){h+=grp('Personal');h+=chk('my_rank','My Rank & Speed');}
+  if(isMgrRole){h+=grp('Team');h+=chk('team','Team Health');h+=chk('perf','Performance Leaderboard');}
+  h+=grp('Jobs');
+  h+=chk('jobs','Job Analysis');
+  if(isSupRole)h+=chk('branches','Branch Analytics');
+  if(hasWf)h+=chk('workflow','Workflow');
+  if(isMgrOnly)h+=chk('teams_overview','Teams Overview');
+  h+=`<div class="an-vis-footer"><button class="bp sec" style="flex:1;font-size:0.72rem;padding:0.28rem;" onclick="anVisSetAll(true)">Show All</button><button class="bp sec" style="flex:1;font-size:0.72rem;padding:0.28rem;" onclick="anVisSetAll(false)">Hide All</button></div>`;
+  p.innerHTML=h;
+}
+// close panel when clicking outside
+document.addEventListener('click',function(e){
+  const p=document.getElementById('an-vis-panel');
+  const btn=document.getElementById('an-vis-toggle');
+  if(p&&p.style.display!=='none'&&!p.contains(e.target)&&e.target!==btn&&!btn?.contains(e.target)){
+    p.style.display='none';if(btn)btn.classList.remove('open');
+  }
+});
+
 function renderAnalyticsContent(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
   if(analyticsView==='teams'){renderTeamsAnalytics(el);bindChartInteractions(el);return;}
@@ -3838,6 +3898,7 @@ function anBranchSection(){
 renderAnalyticsContent=function(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
   if(me.role==='sales_operation')return;
+  loadAnVis();
   anPopulateEmp();anPopulateType();anPopulateBranch();
   const isMgr=isLead()||amDirector();
   const now=Date.now();
@@ -4014,84 +4075,65 @@ renderAnalyticsContent=function(){
   const overdueTrend=anOverdueTrendWidget(visibleJobs(),buckets);
   const hasWf=jobs.some(j=>j.workflow);
 
-  const set=html=>{el.innerHTML=`<div class="an-sub-body">${html}</div>`;bindChartInteractions(el);};
+  const set=html=>{el.innerHTML=`<div class="an-sub-body">${html}</div>`;bindChartInteractions(el);applyAnVis(el);};
   const sec=lbl=>`<div class="an-section-lbl">${lbl}</div>`;
+  const wrap=(key,html)=>`<div class="an-section-wrap" data-vis="${key}">${html}</div>`;
 
   // ── EMPLOYEE ──────────────────────────────────────────────────────────────
   if(isEmp){
-    set(`${kpiHtml}
-      <div class="an-row-2">
+    set(`${wrap('kpis',kpiHtml)}
+      ${wrap('status_trend',`<div class="an-row-2">
         <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
         <div class="an-widget"><div class="an-widget-hd">Completion Trend <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anTrendChart(trendPts)}</div>
-      </div>
-      ${anMyRankCard(me.id,visibleJobs())}
-      ${anSpeedVsTeam(me.id,visibleJobs())}
-      ${sec('📋 Job Analysis')}
-      ${jobAnalysisHtml}`);
+      </div>`)}
+      ${wrap('my_rank',anMyRankCard(me.id,visibleJobs())+anSpeedVsTeam(me.id,visibleJobs()))}
+      ${wrap('jobs',sec('📋 Job Analysis')+jobAnalysisHtml)}`);
     return;
   }
 
   // ── TEAM LEADER ───────────────────────────────────────────────────────────
   if(isTL_){
-    set(`${kpiHtml}
-      <div class="an-row-2">
+    set(`${wrap('kpis',kpiHtml)}
+      ${wrap('status_trend',`<div class="an-row-2">
         <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
         ${throughputHtml}
-      </div>
-      ${sec('👥 Team')}
-      <div class="an-row-2">
-        ${anTeamHealthWidget(leadEmps,visibleJobs())}
-        ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
-      </div>
-      ${anOverdueTrendWidget(visibleJobs(),buckets)}
-      ${perfHtml}
-      ${sec('📋 Job Analysis')}
-      ${jobAnalysisHtml}
-      ${hasWf?`${sec('🧺 Workflow')}<div id="an-wf-inline"></div>`:''}`);
+      </div>`)}
+      ${wrap('team',sec('👥 Team')+`<div class="an-row-2">${anTeamHealthWidget(leadEmps,visibleJobs())}${anActiveVsPausedWidget(leadEmps,visibleJobs())}</div>`+anOverdueTrendWidget(visibleJobs(),buckets))}
+      ${wrap('perf',perfHtml)}
+      ${wrap('jobs',sec('📋 Job Analysis')+jobAnalysisHtml)}
+      ${hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>'):''}`);
     if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'<div class="empty" style="padding:1rem;">No workflow data yet.</div>';}
     return;
   }
 
   // ── SUPERVISOR ────────────────────────────────────────────────────────────
   if(isSup){
-    set(`${kpiHtml}
-      <div class="an-row-2">
+    set(`${wrap('kpis',kpiHtml)}
+      ${wrap('status_trend',`<div class="an-row-2">
         <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
         ${throughputHtml}
-      </div>
-      ${sec('👥 Team')}
-      <div class="an-row-2">
-        ${anTeamHealthWidget(leadEmps,visibleJobs())}
-        ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
-      </div>
-      ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
-      ${perfHtml}
-      ${sec('📋 Jobs & Branches')}
-      ${anBranchSection()}
-      ${jobAnalysisHtml}
-      ${hasWf?`${sec('🧺 Workflow')}<div id="an-wf-inline"></div>`:''}`);
+      </div>`)}
+      ${wrap('team',sec('👥 Team')+`<div class="an-row-2">${anTeamHealthWidget(leadEmps,visibleJobs())}${anActiveVsPausedWidget(leadEmps,visibleJobs())}</div>`+(crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend))}
+      ${wrap('perf',perfHtml)}
+      ${wrap('branches',sec('📋 Jobs & Branches')+anBranchSection())}
+      ${wrap('jobs',jobAnalysisHtml)}
+      ${hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>'):''}`);
     if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'<div class="empty" style="padding:1rem;">No workflow data yet.</div>';}
     return;
   }
 
   // ── MANAGER / DIRECTOR ────────────────────────────────────────────────────
-  set(`${kpiHtml}
-    <div class="an-row-2">
+  set(`${wrap('kpis',kpiHtml)}
+    ${wrap('status_trend',`<div class="an-row-2">
       <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
       ${throughputHtml}
-    </div>
-    ${sec('👥 Team')}
-    <div class="an-row-2">
-      ${anTeamHealthWidget(leadEmps,visibleJobs())}
-      ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
-    </div>
-    ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
-    ${perfHtml}
-    ${sec('📋 Jobs & Branches')}
-    ${anBranchSection()}
-    ${jobAnalysisHtml}
-    ${hasWf?`${sec('🧺 Workflow')}<div id="an-wf-inline"></div>`:''}
-    ${sec('👥 Teams Overview')}<div id="an-teams-inline"></div>`);
+    </div>`)}
+    ${wrap('team',sec('👥 Team')+`<div class="an-row-2">${anTeamHealthWidget(leadEmps,visibleJobs())}${anActiveVsPausedWidget(leadEmps,visibleJobs())}</div>`+(crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend))}
+    ${wrap('perf',perfHtml)}
+    ${wrap('branches',sec('📋 Jobs & Branches')+anBranchSection())}
+    ${wrap('jobs',jobAnalysisHtml)}
+    ${hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>`):''}
+    ${wrap('teams_overview',sec('👥 Teams Overview')+'<div id="an-teams-inline"></div>')}`);
   if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'';}
   const teamsEl=el.querySelector('#an-teams-inline');if(teamsEl)renderTeamsAnalytics(teamsEl);
 }
