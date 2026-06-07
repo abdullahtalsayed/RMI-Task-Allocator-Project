@@ -530,14 +530,23 @@ function _wfJobGantt(j){
   const weeks=[];let d=new Date(jStart);d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);
   while(d.getTime()<jEnd+7*864e5){weeks.push(new Date(d));d=new Date(d);d.setDate(d.getDate()+7);}
   const weekTicks=weeks.map(w=>{const l=(w.getTime()-jStart)/totalMs*100;if(l<0||l>105)return'';return`<div class="wfjg-tick" style="left:${l.toFixed(1)}%"><span>${w.toLocaleString('en-GB',{day:'numeric',month:'short'})}</span></div>`;}).join('');
-  const rows=spans.map(s=>`<div class="wfjg-row">
-    <div class="wfjg-lbl">${esc(wfStageMeta(s.e.to).short)}</div>
-    <div class="wfjg-track">
-      <div class="wfjg-bar" style="left:${s.l.toFixed(2)}%;width:${s.w.toFixed(2)}%;background:${s.col};" title="${esc(wfStageMeta(s.e.to).label)} · ${tdiff(0,s.dur)}">
-        <span class="wfjg-bar-lbl">${tdiff(0,s.dur)}</span>
+  const rows=spans.map((s,i)=>{
+    const tipKey=`jg_${j.id}_${i}`;
+    const startStr=s.sStart?new Date(s.sStart).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    const endStr=s.sEnd?new Date(s.sEnd).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    _htlTipData[tipKey]=`<div class="wf-htl-tt-stage" style="color:${s.col}">${esc(wfStageMeta(s.e.to).label)}</div>`+
+      `<div class="wf-htl-tt-meta">${startStr} → ${endStr}</div>`+
+      `<div class="wf-htl-tt-dur">Duration: ${tdiff(0,s.dur)}</div>`;
+    return`<div class="wfjg-row">
+      <div class="wfjg-lbl">${esc(wfStageMeta(s.e.to).short)}</div>
+      <div class="wfjg-track">
+        <div class="wfjg-bar" style="left:${s.l.toFixed(2)}%;width:${s.w.toFixed(2)}%;background:${s.col};"
+          onmouseenter="wfHtlShow(this,'${tipKey}')" onmouseleave="wfHtlHide()">
+          <span class="wfjg-bar-lbl">${tdiff(0,s.dur)}</span>
+        </div>
       </div>
-    </div>
-  </div>`).join('');
+    </div>`;
+  }).join('');
   const todayPct=((now-jStart)/totalMs*100).toFixed(2);
   return`<div class="wfjg">
     <div class="wfjg-axis">${weekTicks}<div class="wfjg-today-line" style="left:${todayPct}%" title="Today"></div></div>
