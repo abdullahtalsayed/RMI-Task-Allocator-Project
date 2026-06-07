@@ -1508,10 +1508,7 @@ textarea.af-input{resize:vertical;min-height:72px;}
 
 /* collapsible wrappers for Job Basket + Analytics */
 .sb-grp-wrap{display:block;}
-.sb-grp-chev{margin-left:auto;color:var(--text3);font-size:0.85rem;transition:transform var(--t-fast);cursor:pointer;padding:0 2px;flex-shrink:0;}
-.sb-grp-open>.sb-item .sb-grp-chev{transform:rotate(90deg);color:var(--text2);}
 .sb-grp-wrap:not(.sb-grp-open) .sb-subs{display:none!important;}
-#sidebar.sb-collapsed .sb-grp-chev{display:none;}
 
 /* sidebar dynamic sub-items */
 .sb-subs{display:flex;flex-direction:column;gap:0;}
