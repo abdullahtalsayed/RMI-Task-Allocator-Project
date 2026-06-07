@@ -602,18 +602,11 @@ window.doLogin=async function(){
   }
   doLegacyLogin();
 };
-async function ensureUsersLoaded(){
-  if(users.length||!USE_FIREBASE||!uCol)return;
-  const uSnap=await getDocs(query(uCol,where('needsActivation','==',true)));
-  setUsers(uSnap.docs.map(d=>({id:d.id,...d.data()})));
-}
 window.doActivate=async function(){
+  // Security: NO pre-auth user fetch. Create Firebase Auth account first,
+  // then read the user profile while authenticated. This eliminates the
+  // unauthenticated Firestore read that previously exposed tempPassword fields.
   if(!USE_AUTH){showLoginErr('Firebase not configured.',true);return;}
-  try{await ensureUsersLoaded();}catch(e){
-    const actErr=document.getElementById('login-err-act');
-    if(actErr){actErr.textContent='Cannot load team list right now. Try again later or ask your manager.';actErr.style.display='block';}
-    return;
-  }
   const name=document.getElementById('act-name').value.trim();
   const oldPw=document.getElementById('act-oldpw').value;
   const email=document.getElementById('act-email').value.trim().toLowerCase();
@@ -623,23 +616,43 @@ window.doActivate=async function(){
   const clearAct=()=>{const el=document.getElementById('login-err-act');if(el)el.style.display='none';};
   if(!name||!email||!pw){actErr('Fill name, email, and new password.');return;}
   if(pw!==pw2){actErr('Passwords do not match.');return;}
-  if(pw.length<6){actErr('Password must be at least 6 characters.');return;}
-  const u=users.find(x=>x.name.trim().toLowerCase()===name.toLowerCase());
-  if(!u){actErr('No profile found for that name. Ask your manager to add you.');return;}
-  if(u.authUid){actErr('Already activated — use Sign in with your email.');return;}
-  if(u.password){
-    if(u.password!==oldPw){actErr('Old password is incorrect.');return;}
-  }else if(u.tempPassword){
-    if(u.tempPassword!==oldPw){actErr('Temporary password is incorrect.');return;}
-  }else{
-    actErr('Ask your manager for a temporary password, or use your old password.');
-    return;
-  }
+  if(pw.length<8){actErr('Password must be at least 8 characters.');return;}
   clearAct();
   lfBtnLoading('activate-btn',true,'Setting up…');
+  let cred=null;
   try{
     authLoginInProgress=true;
-    const cred=await createUserWithEmailAndPassword(auth,email,pw);
+    // Step 1: create Firebase Auth account — user is now signed in
+    cred=await createUserWithEmailAndPassword(auth,email,pw);
+    // Step 2: now authenticated, read all user docs to find profile by name
+    const uSnap=await getDocs(uCol);
+    const allUsers=uSnap.docs.map(d=>({id:d.id,...d.data()}));
+    const u=allUsers.find(x=>x.name.trim().toLowerCase()===name.toLowerCase());
+    if(!u){
+      // No profile — delete the orphan Auth account and bail
+      await cred.user.delete();
+      authLoginInProgress=false;
+      actErr('No profile found for that name. Ask your manager to add you.');
+      lfBtnLoading('activate-btn',false);
+      return;
+    }
+    if(u.authUid){
+      await cred.user.delete();
+      authLoginInProgress=false;
+      actErr('Already activated — use Sign in with your email.');
+      lfBtnLoading('activate-btn',false);
+      return;
+    }
+    // Step 3: verify temp password while authenticated (safe read)
+    const storedPw=u.tempPassword||u.password||null;
+    if(!storedPw||storedPw!==oldPw){
+      await cred.user.delete();
+      authLoginInProgress=false;
+      actErr('Temporary password is incorrect.');
+      lfBtnLoading('activate-btn',false);
+      return;
+    }
+    // Step 4: link auth uid to profile, clear plaintext passwords
     await linkAuthToProfile(cred.user.uid,u.id,email);
     await refreshUsersRemote();
     authLoginInProgress=false;
@@ -647,6 +660,8 @@ window.doActivate=async function(){
     logActivity({type:'login',category:'auth',desc:`${u.name} activated account`,userId:u.id,userName:u.name,role:u.role});
     showToastMsg('Account activated!');
   }catch(e){
+    // If Auth account was created but something else failed, clean up the orphan
+    if(cred?.user){try{await cred.user.delete();}catch(_){}}
     authLoginInProgress=false;
     actErr(authErrorMessage(e));
     lfBtnLoading('activate-btn',false);

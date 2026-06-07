@@ -52,8 +52,9 @@ service cloud.firestore {
 
     // Signed-in: full user admin. Activation: read only profiles pending setup (no passwords in query from client ideally).
     match /users/{userId} {
-      allow read: if signedIn()
-        || (resource.data.needsActivation == true);
+      // Removed unauthenticated needsActivation bypass — activation flow now
+      // creates Firebase Auth account first, then reads profile while signed in.
+      allow read: if signedIn();
       allow create: if (signedIn() && isManager())
         || (userId == 'manager' && !managerDocExists());
       allow update: if signedIn() && (isManager() || profileId() == userId);
