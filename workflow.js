@@ -522,7 +522,7 @@ function _wfJobGantt(j){
     const sEnd=i===h.length-1?jEnd:toMillis(h[i].at)||jEnd;
     const dur=sEnd-sStart;
     const l=pct(sStart);
-    const w=Math.max((sEnd-sStart)/totalMs*100,0.8);
+    const w=Math.max(Math.min((sEnd-sStart)/totalMs*100, 100-l),0.8);
     const col=_WF_STAGE_COLORS[e.to]||'#8e8e93';
     return{e,l,w,dur,col,sStart,sEnd};
   });
