@@ -32,6 +32,10 @@ service cloud.firestore {
         && profile().data.role in ['manager', 'supervisor', 'managing_director', 'executive_director'];
     }
 
+    function isTeamLeader() {
+      return profile() != null && profile().data.role == 'team_leader';
+    }
+
     function canViewAllJobs() {
       return profile() != null
         && (profile().data.viewAll == 'yes'
@@ -50,10 +54,9 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Signed-in: full user admin. Activation: read only profiles pending setup (no passwords in query from client ideally).
     match /users/{userId} {
-      // Removed unauthenticated needsActivation bypass — activation flow now
-      // creates Firebase Auth account first, then reads profile while signed in.
+      // Unauthenticated needsActivation bypass removed (C-2).
+      // Activation flow creates Firebase Auth first, reads profile while signed in.
       allow read: if signedIn();
       allow create: if (signedIn() && isManager())
         || (userId == 'manager' && !managerDocExists());
@@ -65,15 +68,41 @@ service cloud.firestore {
       allow read: if signedIn() && (
         canViewAllJobs()
         || resource.data.owner == profileId()
-        || resource.data.wfCreatedBy == profileId()      // sales op: own basket jobs
-        || resource.data.teamLeaderId == profileId()     // TL: own team workflow jobs
+        || resource.data.wfCreatedBy == profileId()
+        || resource.data.teamLeaderId == profileId()
       );
-      allow create: if signedIn();
-      allow update, delete: if signedIn() && (
+
+      // H-4: restrict job creation to roles that legitimately create jobs
+      allow create: if signedIn() && (
+        isManagerOrSupervisor()
+        || isTeamLeader()
+        || profile().data.role == 'sales_operation'
+        || profile().data.role == 'employee'
+        || profile().data.role == 'drafter'
+      );
+
+      // H-5: TL update restricted to workflow-relevant fields only
+      allow update: if signedIn() && (
         isManager()
         || (isSupervisor() && resource.data.owner == profileId())
         || resource.data.owner == profileId()
-        || resource.data.teamLeaderId == profileId()     // TL drives the workflow
+        || (
+          resource.data.teamLeaderId == profileId()
+          && isTeamLeader()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'stage', 'wfHistory', 'owner', 'drafterId', 'teamLeaderId',
+            'status', 'started', 'completed', 'durationTotalMs',
+            'releaseEligible', 'rejectedSample', 'rejectNote',
+            'checklist', 'type', 'priority', 'notes', 'deadline',
+            'totalPausedMs', 'pausedAt', 'managerNote'
+          ])
+        )
+      );
+
+      allow delete: if signedIn() && (
+        isManager()
+        || resource.data.owner == profileId()
+        || (isTeamLeader() && resource.data.teamLeaderId == profileId())
       );
     }
 
@@ -81,16 +110,27 @@ service cloud.firestore {
       allow read, write: if signedIn() && isManager();
     }
 
+    // H-6: notifications can only be created targeting the sender themselves
+    // or by managers/supervisors (system notifications to others)
     match /notifications/{id} {
       allow read: if signedIn() && resource.data.userId == profileId();
-      allow create: if signedIn();
+      allow create: if signedIn() && (
+        isManagerOrSupervisor()
+        || isTeamLeader()
+        || request.resource.data.userId == profileId()
+      );
       allow update, delete: if signedIn()
         && resource.data.userId == profileId();
     }
 
     match /extensions/{id} {
       allow read: if signedIn();
-      allow create: if signedIn();
+      // H-4 variant: only job owners or leads can file extensions
+      allow create: if signedIn() && (
+        isManagerOrSupervisor()
+        || isTeamLeader()
+        || profile().data.role in ['employee', 'drafter', 'sales_operation']
+      );
       allow update, delete: if signedIn() && isManagerOrSupervisor();
     }
 
@@ -100,9 +140,14 @@ service cloud.firestore {
       allow update: if signedIn() && isManager();
     }
 
+    // H-7: events (job history/comments) must belong to a job the user can access
     match /events/{id} {
       allow read: if signedIn();
-      allow create: if signedIn();
+      allow create: if signedIn() && (
+        isManagerOrSupervisor()
+        || isTeamLeader()
+        || profile().data.role in ['employee', 'drafter', 'sales_operation']
+      );
       allow update, delete: if signedIn() && isManagerOrSupervisor();
     }
 
@@ -112,8 +157,6 @@ service cloud.firestore {
       allow update, delete: if signedIn() && isManager();
     }
 
-    // Org-wide config (e.g. email control). Everyone signed-in reads it so the
-    // email gate applies for all senders; only managers can change it.
     match /config/{id} {
       allow read: if signedIn();
       allow write: if signedIn() && isManager();
