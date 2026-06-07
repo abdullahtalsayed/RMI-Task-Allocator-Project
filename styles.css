@@ -1506,6 +1506,13 @@ textarea.af-input{resize:vertical;min-height:72px;}
 }
 .sb-divider{height:1px;background:var(--border);margin:0.4rem 10px;}
 
+/* collapsible wrappers for Job Basket + Analytics */
+.sb-grp-wrap{display:block;}
+.sb-grp-chev{margin-left:auto;color:var(--text3);font-size:0.85rem;transition:transform var(--t-fast);cursor:pointer;padding:0 2px;flex-shrink:0;}
+.sb-grp-open>.sb-item .sb-grp-chev{transform:rotate(90deg);color:var(--text2);}
+.sb-grp-wrap:not(.sb-grp-open) .sb-subs{display:none!important;}
+#sidebar.sb-collapsed .sb-grp-chev{display:none;}
+
 /* sidebar dynamic sub-items */
 .sb-subs{display:flex;flex-direction:column;gap:0;}
 .sb-sub-btn{display:flex;align-items:center;padding:0.28rem 0.75rem 0.28rem 2rem;font-size:0.78rem;font-weight:500;color:var(--text3);background:transparent;border:none;cursor:pointer;font-family:var(--font);text-align:left;transition:color var(--t-fast),background var(--t-fast);border-radius:6px;width:100%;}
