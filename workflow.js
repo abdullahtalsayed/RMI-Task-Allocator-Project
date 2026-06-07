@@ -500,8 +500,10 @@ export function wfTimeline(j){return _wfTlList(j);}
 window.wfToggleTimeline=function(id){
   const el=document.getElementById('wf-tl-'+id);
   const gel=document.getElementById('wf-jg-'+id);
+  const fel=document.getElementById('wf-fc-'+id);
   if(!el)return;
-  if(gel)gel.style.display='none'; // close gantt if open
+  if(gel)gel.style.display='none';
+  if(fel)fel.style.display='none';
   const hidden=el.style.display==='none'||!el.style.display;
   el.style.display=hidden?'block':'none';
   if(hidden){const j=jobs.find(x=>x.id===id);if(j)el.innerHTML=_wfTlVisual(j);}
@@ -591,19 +593,71 @@ function _wfJobGantt(j){
   }).join('');
   const flowHtml=`<div class="wfjg-fc">${flowNodes}</div>`;
 
-  return`<div style="font-size:0.72rem;color:var(--muted);padding:0.3rem 0.5rem 0.1rem;">📊 Timeline Gantt</div>
-  ${ganttHtml}
-  <div style="font-size:0.72rem;color:var(--muted);padding:0.5rem 0.5rem 0.1rem;">🔀 Flow</div>
-  ${flowHtml}`;
+  return ganttHtml;
+}
+
+function _wfJobFlow(j){
+  const h=Array.isArray(j.wfHistory)?j.wfHistory:[];
+  if(!h.length)return'<div class="tc-muted" style="font-size:0.78rem;padding:0.5rem;">No history yet.</div>';
+  const REJECT_ACTIONS=new Set(['sample_rejected','sd_rejected','jobcard_rejected']);
+  const APPROVE_ACTIONS=new Set(['sample_approved','sd_approved','sd_to_client','jobcard_approved','completed','release_completed','client_approved']);
+  function _arrowClass(a){return REJECT_ACTIONS.has(a)?'wfjg-arrow-reject':APPROVE_ACTIONS.has(a)?'wfjg-arrow-approve':'wfjg-arrow-neutral';}
+  function _arrowLabel(a){
+    if(REJECT_ACTIONS.has(a))return'✗';
+    if(APPROVE_ACTIONS.has(a))return'✓';
+    if(/submit/i.test(a))return'↑';
+    if(a==='assigned')return'→';
+    return'→';
+  }
+  const now=Date.now();
+  const jStart=toMillis(j.created)||now;
+  const jEnd=j.completed?toMillis(j.completed):now;
+  const totalMs=Math.max(jEnd-jStart,1);
+  const nodes=h.map((e,i)=>{
+    const col=_WF_STAGE_COLORS[e.to]||'#8e8e93';
+    const sStart=i===0?jStart:toMillis(h[i-1].at)||jStart;
+    const sEnd=i===h.length-1?jEnd:toMillis(h[i].at)||jEnd;
+    const dur=tdiff(0,sEnd-sStart);
+    const arrow=i>0?`<div class="wfjg-fc-arrow ${_arrowClass(h[i-1].action)}">
+      <div class="wfjg-fc-arrow-line-h"></div>
+      <div class="wfjg-fc-arrow-lbl-h">${_arrowLabel(h[i-1].action)}</div>
+      <div class="wfjg-fc-arrow-head-h">▶</div>
+    </div>`:'';
+    const tipKey=`fc_${j.id}_${i}`;
+    const dateStr=new Date(toMillis(e.at)).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    _htlTipData[tipKey]=`<div class="wf-htl-tt-stage" style="color:${col}">${esc(wfStageMeta(e.to).label)}</div>`+
+      `<div class="wf-htl-tt-meta">${esc(e.by)} · ${dateStr}</div>`+
+      `<div class="wf-htl-tt-dur">⏱ ${dur}</div>`+
+      (e.note?`<div class="wf-htl-tt-dur" style="font-style:italic;">${esc(e.note)}</div>`:'');
+    return`${arrow}<div class="wfjg-fc-node-h" style="border-color:${col};"
+      onmouseenter="wfHtlShow(this,'${tipKey}')" onmouseleave="wfHtlHide()">
+      <div class="wfjg-fc-node-stage-h" style="background:${col}22;color:${col};">${esc(wfStageMeta(e.to).short)}</div>
+      <div class="wfjg-fc-node-dur-h">${dur}</div>
+    </div>`;
+  }).join('');
+  return`<div class="wfjg-fc-h">${nodes}</div>`;
 }
 window.wfToggleJobGantt=function(id){
-  const el=document.getElementById('wf-tl-'+id);
+  const tl=document.getElementById('wf-tl-'+id);
   const gel=document.getElementById('wf-jg-'+id);
+  const fel=document.getElementById('wf-fc-'+id);
   if(!gel)return;
-  if(el)el.style.display='none'; // close timeline if open
+  if(tl)tl.style.display='none';
+  if(fel)fel.style.display='none';
   const hidden=gel.style.display==='none'||!gel.style.display;
   gel.style.display=hidden?'block':'none';
   if(hidden){const j=jobs.find(x=>x.id===id);if(j)gel.innerHTML=_wfJobGantt(j);}
+};
+window.wfToggleJobFlow=function(id){
+  const tl=document.getElementById('wf-tl-'+id);
+  const gel=document.getElementById('wf-jg-'+id);
+  const fel=document.getElementById('wf-fc-'+id);
+  if(!fel)return;
+  if(tl)tl.style.display='none';
+  if(gel)gel.style.display='none';
+  const hidden=fel.style.display==='none'||!fel.style.display;
+  fel.style.display=hidden?'block':'none';
+  if(hidden){const j=jobs.find(x=>x.id===id);if(j)fel.innerHTML=_wfJobFlow(j);}
 };
 
 // ── STAGE PROGRESS PIPELINE (visual) ──────────────────────────────────────────
@@ -642,9 +696,11 @@ function wfCard(j,showAction){
       ${act?`<button class="wf-act ${act.cls}" onclick="${act.fn}">${act.label}</button>`:''}
       <button class="wf-act sec" onclick="wfToggleTimeline('${j.id}')">🕐 Timeline</button>
       <button class="wf-act sec" onclick="wfToggleJobGantt('${j.id}')">📊 Gantt</button>
+      <button class="wf-act sec" onclick="wfToggleJobFlow('${j.id}')">🔀 Flow</button>
     </div>
     <div class="wf-tl-wrap" id="wf-tl-${j.id}" style="display:none;">${wfTimeline(j)}</div>
     <div class="wf-jg-wrap" id="wf-jg-${j.id}" style="display:none;"></div>
+    <div class="wf-jg-wrap" id="wf-fc-${j.id}" style="display:none;"></div>
   </div>`;
 }
 
