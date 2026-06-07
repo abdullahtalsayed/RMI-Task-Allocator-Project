@@ -612,10 +612,86 @@ export function wfAnalyticsSection(){
 
 // ── TAB STATE ─────────────────────────────────────────────────────────────────
 let _wfTab=null;
+let _wfGanttMode=false;
 window.getWfTab=()=>_wfTab;
-window.wfSetTab=function(key){_wfTab=key;renderJobBasket();window.renderSbBasketSubs?.();};
+window.wfSetTab=function(key){_wfTab=key;_wfGanttMode=false;renderJobBasket();window.renderSbBasketSubs?.();};
+window.wfToggleGantt=function(){_wfGanttMode=!_wfGanttMode;renderJobBasket();};
 function _tabBar(tabs,cur){
-  return`<div class="wf-tabs">${tabs.map(t=>`<button class="wf-tab${t.key===cur?' active':''}" onclick="wfSetTab('${t.key}')">${t.label}${t.n?` <span class="wf-tab-count">${t.n}</span>`:''}</button>`).join('')}</div>`;
+  return`<div class="wf-tabs">${tabs.map(t=>`<button class="wf-tab${t.key===cur?' active':''}" onclick="wfSetTab('${t.key}')">${t.label}${t.n?` <span class="wf-tab-count">${t.n}</span>`:''}</button>`).join('')}<button class="wf-tab wf-gantt-btn${_wfGanttMode?' active':''}" onclick="wfToggleGantt()" title="Gantt view">📊 Gantt</button></div>`;
+}
+
+// ── GANTT CHART ────────────────────────────────────────────────────────────────
+const _WF_STAGE_COLORS={
+  intake:'#5ac8fa',drafting:'#0a84ff',tl_sample_review:'#ffd60a',
+  detailing:'#30d158',tl_sd_review:'#ff9f0a',client_wait:'#bf5af2',
+  jobcard:'#64d2ff',tl_jobcard_review:'#ff6961',completed:'#32d74b',release:'#30d158'
+};
+function _wfGantt(pool){
+  if(!pool.length)return'<div class="empty" style="padding:2rem;">No jobs to display in Gantt.</div>';
+  const now=Date.now();
+  const allTs=pool.flatMap(j=>[toMillis(j.created)||now,...(j.wfHistory||[]).map(e=>toMillis(e.at)||now),j.completed?toMillis(j.completed):now]);
+  const rawMin=Math.min(...allTs),rawMax=Math.max(...allTs,now);
+  // snap to week boundaries
+  const sd=new Date(rawMin);sd.setDate(sd.getDate()-sd.getDay());sd.setHours(0,0,0,0);
+  const ed=new Date(rawMax);ed.setDate(ed.getDate()+(7-ed.getDay())%7||7);ed.setHours(23,59,59,999);
+  const totalMs=ed-sd;
+  const pct=ts=>{const t=toMillis(ts)||now;return Math.max(0,Math.min(100,(t-sd)/totalMs*100));};
+  // weeks
+  const weeks=[];let d=new Date(sd);
+  while(d<ed){weeks.push(new Date(d));d=new Date(d);d.setDate(d.getDate()+7);}
+  // month groups
+  const months=[];let prev='';
+  weeks.forEach(w=>{const lbl=w.toLocaleString('en-GB',{month:'short',year:'2-digit'});if(lbl!==prev){months.push({lbl,count:0});prev=lbl;}months[months.length-1].count++;});
+  // today line
+  const todayPct=pct(now);
+  // rows
+  const rows=pool.map(j=>{
+    const h=Array.isArray(j.wfHistory)?j.wfHistory:[];
+    const jStart=toMillis(j.created)||sd.getTime();
+    const jEnd=j.completed?toMillis(j.completed):now;
+    let segs='';
+    if(h.length>=2){
+      h.forEach((e,i)=>{
+        const sStart=i===0?jStart:toMillis(h[i-1].at)||jStart;
+        const sEnd=i===h.length-1?jEnd:toMillis(h[i].at)||jEnd;
+        if(sEnd<=sStart)return;
+        const l=pct(sStart);const w2=Math.max(pct(sEnd)-l,0.3);
+        segs+=`<div class="wf-gantt-seg" style="left:${l.toFixed(2)}%;width:${w2.toFixed(2)}%;background:${_WF_STAGE_COLORS[e.to]||'#8e8e93'};" title="${esc(wfStageMeta(e.to).label)}"></div>`;
+      });
+    }else{
+      const l=pct(jStart);const w2=Math.max(pct(jEnd)-l,0.5);
+      segs=`<div class="wf-gantt-seg" style="left:${l.toFixed(2)}%;width:${w2.toFixed(2)}%;background:${_WF_STAGE_COLORS[j.stage]||'#8e8e93'};"></div>`;
+    }
+    const meta=wfStageMeta(j.stage);
+    const drafter=users.find(u=>u.id===j.drafterId);
+    const tl=users.find(u=>u.id===j.teamLeaderId);
+    const person=drafter||tl;
+    return`<div class="wf-gantt-row">
+      <div class="wf-gantt-lbl">
+        ${person?`<div class="wf-gantt-person">${esc(person.name)}</div>`:''}
+        <div class="wf-gantt-jobname">${esc(j.client)}</div>
+        <div class="wf-gantt-jobsub"><span class="tc-muted">#${esc(j.jobNum)}</span> <span style="color:${_WF_STAGE_COLORS[j.stage]||'var(--text3)'};">· ${esc(meta.short)}</span></div>
+      </div>
+      <div class="wf-gantt-track">
+        <div class="wf-gantt-grid">${weeks.map((_,i)=>`<div class="wf-gantt-cell"></div>`).join('')}</div>
+        <div class="wf-gantt-bars">${segs}</div>
+        <div class="wf-gantt-today" style="left:${todayPct.toFixed(2)}%"></div>
+      </div>
+    </div>`;
+  });
+  const monthHdr=months.map(m=>`<div class="wf-gantt-mth" style="flex:${m.count}">${m.lbl}</div>`).join('');
+  const weekHdr=weeks.map((_,i)=>`<div class="wf-gantt-wk">W${(i%4)+1}</div>`).join('');
+  return`<div class="wf-gantt">
+    <div class="wf-gantt-hdr">
+      <div class="wf-gantt-lbl-hd">Job</div>
+      <div class="wf-gantt-tl-hd">
+        <div class="wf-gantt-months">${monthHdr}</div>
+        <div class="wf-gantt-wks">${weekHdr}</div>
+      </div>
+    </div>
+    <div class="wf-gantt-body">${rows.join('')}</div>
+    <div class="wf-gantt-legend">${Object.entries(_WF_STAGE_COLORS).map(([s,c])=>`<div class="wf-gantt-leg-item"><span class="wf-gantt-leg-dot" style="background:${c}"></span>${esc(wfStageMeta(s).short)}</div>`).join('')}</div>
+  </div>`;
 }
 function _pickTab(tabs,preferred){
   const keys=tabs.map(t=>t.key);
@@ -655,6 +731,7 @@ export function renderJobBasket(){
     }else{
       content=done.length?done.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.5rem;">No completed jobs yet.</div>';
     }
+    if(_wfGanttMode){root.innerHTML=_tabBar(tabs,tab)+_wfGantt(mine);return;}
     root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
     return;
   }
@@ -680,6 +757,7 @@ export function renderJobBasket(){
       // pass showAction=true so Reopen for Release button appears in completed tab
       content=doneJobs.length?doneJobs.map(j=>wfCard(j,true)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
     }
+    if(_wfGanttMode){root.innerHTML=_tabBar(tabs,tab)+_wfGantt(wfJobs.filter(j=>j.teamLeaderId===me.id));return;}
     root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
     return;
   }
@@ -699,6 +777,7 @@ export function renderJobBasket(){
     }else{
       content=doneJobs.length?doneJobs.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
     }
+    if(_wfGanttMode){root.innerHTML=_tabBar(tabs,tab)+_wfGantt(wfJobs);return;}
     root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
     return;
   }
@@ -721,6 +800,7 @@ export function renderJobBasket(){
   }else{
     content=doneJobs.length?doneJobs.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
   }
+  if(_wfGanttMode){root.innerHTML=_tabBar(tabs,tab)+_wfGantt(wfJobs.filter(j=>j.drafterId===me.id));window.renderSbBasketSubs?.();return;}
   root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
   window.renderSbBasketSubs?.();
 }
