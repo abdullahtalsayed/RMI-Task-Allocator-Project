@@ -516,17 +516,17 @@ function _wfJobGantt(j){
   const jEnd=j.completed?toMillis(j.completed):now;
   const totalMs=Math.max(jEnd-jStart,1);
   const pct=ts=>Math.max(0,Math.min(100,(toMillis(ts)-jStart)/totalMs*100));
-  // build stage spans
+
+  // ── Gantt bars ───────────────────────────────────────────────────────────────
   const spans=h.map((e,i)=>{
     const sStart=i===0?jStart:toMillis(h[i-1].at)||jStart;
     const sEnd=i===h.length-1?jEnd:toMillis(h[i].at)||jEnd;
     const dur=sEnd-sStart;
     const l=pct(sStart);
-    const w=Math.max(Math.min((sEnd-sStart)/totalMs*100, 100-l),0.8);
+    const w=Math.max(Math.min((sEnd-sStart)/totalMs*100,100-l),0.8);
     const col=_WF_STAGE_COLORS[e.to]||'#8e8e93';
     return{e,l,w,dur,col,sStart,sEnd};
   });
-  // x axis: build week ticks
   const weeks=[];let d=new Date(jStart);d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);
   while(d.getTime()<jEnd+7*864e5){weeks.push(new Date(d));d=new Date(d);d.setDate(d.getDate()+7);}
   const weekTicks=weeks.map(w=>{const l=(w.getTime()-jStart)/totalMs*100;if(l<0||l>105)return'';return`<div class="wfjg-tick" style="left:${l.toFixed(1)}%"><span>${w.toLocaleString('en-GB',{day:'numeric',month:'short'})}</span></div>`;}).join('');
@@ -548,10 +548,53 @@ function _wfJobGantt(j){
     </div>`;
   }).join('');
   const todayPct=((now-jStart)/totalMs*100).toFixed(2);
-  return`<div class="wfjg">
+  const ganttHtml=`<div class="wfjg">
     <div class="wfjg-axis">${weekTicks}<div class="wfjg-today-line" style="left:${todayPct}%" title="Today"></div></div>
     ${rows}
   </div>`;
+
+  // ── Flowchart ────────────────────────────────────────────────────────────────
+  const REJECT_ACTIONS=new Set(['sample_rejected','sd_rejected','jobcard_rejected']);
+  const APPROVE_ACTIONS=new Set(['sample_approved','sd_approved','sd_to_client','jobcard_approved','completed','release_completed','client_approved']);
+  function _arrowClass(action){
+    if(REJECT_ACTIONS.has(action))return'wfjg-arrow-reject';
+    if(APPROVE_ACTIONS.has(action))return'wfjg-arrow-approve';
+    return'wfjg-arrow-neutral';
+  }
+  function _arrowLabel(action){
+    if(REJECT_ACTIONS.has(action))return'✗ Rejected';
+    if(APPROVE_ACTIONS.has(action))return'✓ Approved';
+    if(action==='submitted'||action==='sample_submitted'||action==='sd_submitted'||action==='jobcard_submitted')return'↑ Submitted';
+    if(action==='assigned')return'→ Assigned';
+    if(action==='sd_to_client')return'↗ To Client';
+    return'→';
+  }
+  const flowNodes=h.map((e,i)=>{
+    const col=_WF_STAGE_COLORS[e.to]||'#8e8e93';
+    const dur=spans[i]?tdiff(0,spans[i].dur):'';
+    const dateStr=new Date(toMillis(e.at)).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    const arrowCls=i>0?_arrowClass(h[i-1].action):'';
+    const arrowLbl=i>0?_arrowLabel(h[i-1].action):'';
+    const isReject=arrowCls==='wfjg-arrow-reject';
+    const arrow=i>0?`<div class="wfjg-fc-arrow ${arrowCls}">
+      <div class="wfjg-fc-arrow-line"></div>
+      <div class="wfjg-fc-arrow-head">▼</div>
+      <div class="wfjg-fc-arrow-lbl">${arrowLbl}${isReject&&h[i-1].note?`<span class="wfjg-fc-arrow-note">${esc(h[i-1].note)}</span>`:''}
+      </div>
+    </div>`:'';
+    return`${arrow}<div class="wfjg-fc-node" style="border-color:${col};box-shadow:0 0 0 1px ${col}22;">
+      <div class="wfjg-fc-node-stage" style="background:${col}22;color:${col};">${esc(wfStageMeta(e.to).label)}</div>
+      <div class="wfjg-fc-node-meta">${esc(e.by)} · ${dateStr}</div>
+      ${dur?`<div class="wfjg-fc-node-dur">⏱ ${dur}</div>`:''}
+      ${e.note?`<div class="wfjg-fc-node-note">${esc(e.note)}</div>`:''}
+    </div>`;
+  }).join('');
+  const flowHtml=`<div class="wfjg-fc">${flowNodes}</div>`;
+
+  return`<div style="font-size:0.72rem;color:var(--muted);padding:0.3rem 0.5rem 0.1rem;">📊 Timeline Gantt</div>
+  ${ganttHtml}
+  <div style="font-size:0.72rem;color:var(--muted);padding:0.5rem 0.5rem 0.1rem;">🔀 Flow</div>
+  ${flowHtml}`;
 }
 window.wfToggleJobGantt=function(id){
   const el=document.getElementById('wf-tl-'+id);
