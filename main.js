@@ -4027,11 +4027,24 @@ renderAnalyticsContent=function(){
   const isTL_=isTeamLeader();
   const isSup=me.role==='supervisor';
   const leadEmps=teamUsersForView().filter(u=>u.role!=='manager');
+  const crossTeam=anCrossTeamTypeWidget();
+  const overdueTrend=anOverdueTrendWidget(visibleJobs(),buckets);
+
+  // tab guards
+  const hasWf=jobs.some(j=>j.workflow);
+  if(_anSubTab==='team'&&!isMgr)_anSubTab='overview';
+  if(_anSubTab==='workflow'&&!hasWf)_anSubTab='overview';
+  const showOv=_anSubTab==='overview';
+  const showJbs=_anSubTab==='jobs';
+  const showTm=_anSubTab==='team';
+  const showWf=_anSubTab==='workflow';
+
+  const set=html=>{el.innerHTML=`<div class="an-sub-body">${html}</div>`;bindChartInteractions(el);};
 
   // ── EMPLOYEE ──────────────────────────────────────────────────────────────
   if(isEmp){
-    el.innerHTML=`
-      ${kpiHtml}
+    if(showJbs){set(jobAnalysisHtml);return;}
+    set(`${kpiHtml}
       <div class="an-row-2">
         <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
         ${typeRows.length?`<div class="an-widget"><div class="an-widget-hd">My Jobs by Type</div>${anBars(typeRows)}</div>`:''}
@@ -4040,69 +4053,63 @@ renderAnalyticsContent=function(){
         <div class="an-widget"><div class="an-widget-hd">My Completion Trend <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anTrendChart(trendPts)}</div>
         ${anSpeedVsTeam(me.id,visibleJobs())}
       </div>
-      ${anMyRankCard(me.id,visibleJobs())}
-      ${jobAnalysisHtml}`;
+      ${anMyRankCard(me.id,visibleJobs())}`);
     return;
   }
 
   // ── TEAM LEADER ───────────────────────────────────────────────────────────
   if(isTL_){
-    el.innerHTML=`
-      ${kpiHtml}
-      <div class="an-row-2">
-        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-        ${throughputHtml}
-      </div>
+    if(showWf){set(wfAnalyticsSection()||'<div class="empty" style="padding:2rem;">No workflow data yet.</div>');return;}
+    if(showTm){set(`
       <div class="an-row-2">
         ${anTeamHealthWidget(leadEmps,visibleJobs())}
         ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
       </div>
       ${anOverdueTrendWidget(visibleJobs(),buckets)}
-      ${wfAnalyticsSection()}
-      ${perfHtml}
-      ${jobAnalysisHtml}`;
-    return;
-  }
-
-  const crossTeam=anCrossTeamTypeWidget();
-  const overdueTrend=anOverdueTrendWidget(visibleJobs(),buckets);
-
-  // ── SUPERVISOR ────────────────────────────────────────────────────────────
-  if(isSup){
-    el.innerHTML=`
-      ${kpiHtml}
+      ${perfHtml}`);return;}
+    if(showJbs){set(jobAnalysisHtml);return;}
+    set(`${kpiHtml}
       <div class="an-row-2">
         <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
         ${throughputHtml}
-      </div>
+      </div>`);
+    return;
+  }
+
+  // ── SUPERVISOR ────────────────────────────────────────────────────────────
+  if(isSup){
+    if(showWf){set(wfAnalyticsSection()||'<div class="empty" style="padding:2rem;">No workflow data yet.</div>');return;}
+    if(showTm){set(`
       <div class="an-row-2">
         ${anTeamHealthWidget(leadEmps,visibleJobs())}
         ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
       </div>
       ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
-      ${anBranchSection()}
-      ${wfAnalyticsSection()}
-      ${perfHtml}
-      ${jobAnalysisHtml}`;
+      ${perfHtml}`);return;}
+    if(showJbs){set(`${anBranchSection()}${jobAnalysisHtml}`);return;}
+    set(`${kpiHtml}
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
+        ${throughputHtml}
+      </div>`);
     return;
   }
 
   // ── MANAGER ───────────────────────────────────────────────────────────────
-  el.innerHTML=`
-    ${kpiHtml}
-    <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-      ${throughputHtml}
-    </div>
+  if(showWf){set(wfAnalyticsSection()||'<div class="empty" style="padding:2rem;">No workflow data yet.</div>');return;}
+  if(showTm){set(`
     <div class="an-row-2">
       ${anTeamHealthWidget(leadEmps,visibleJobs())}
       ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
     </div>
     ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
-    ${anBranchSection()}
-    ${wfAnalyticsSection()}
-    ${perfHtml}
-    ${jobAnalysisHtml}`;
+    ${perfHtml}`);return;}
+  if(showJbs){set(`${anBranchSection()}${jobAnalysisHtml}`);return;}
+  set(`${kpiHtml}
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
+      ${throughputHtml}
+    </div>`);
 }
 
 // handleNotifClick with URL update
