@@ -4428,21 +4428,12 @@ renderAnalyticsContent=function(){
   const priUrgencyCard=`<div class="an-widget"><div class="an-widget-hd">Priority vs Urgency <span class="an-hd-note">% overdue</span></div>${priUrgency.map(p=>`<div class="an-bar-row"><span class="an-bar-label">${p.label}</span><div class="an-bar-track"><div class="an-bar-fill" style="width:${Math.max(p.pct,p.overdueCount?2:0)}%;background:${p.color}"></div></div><span class="an-bar-val">${p.pct}% <span class="tc-muted">${p.overdueCount}/${p.active}</span></span></div>`).join('')}${priUrgency.every(p=>p.pct===0)?'<div class="empty" style="padding:0.35rem 0;">No overdue jobs 🎉</div>':''}</div>`;
   const extCard=`<div class="an-widget"><div class="an-widget-hd">Extension Rate</div><div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.45rem;"><span style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:${extRate>=30?'var(--red)':extRate>=15?'var(--yellow)':'var(--green)'}">${extRate}%</span><span style="font-size:0.72rem;color:var(--text3);">${jobIdsWithExt.size} of ${jobsWithDl.length} jobs</span></div>${extApproved+extRejected+extPending>0?anBars([{label:'Approved',value:extApproved,color:'var(--green)'},{label:'Rejected',value:extRejected,color:'var(--red)'},{label:'Pending',value:extPending,color:'var(--yellow)'}].filter(r=>r.value>0)):''}</div>`;
   const peakCard=`<div class="an-widget"><div class="an-widget-hd">Peak Workload <span class="an-hd-note"><span style="color:var(--blue)">■ cre</span> <span style="color:var(--green)">■ done</span></span></div><div class="an-day-chart">${dayNames.map((d,i)=>dayBarRow(d,createdByDay[i],completedByDay[i],maxDay)).join('')}</div></div>`;
-  const jobAnalysisHtml=`
-    <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Created vs Completed <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anDualLineChart(createdPts,trendPts,'Created','Completed','var(--blue)','var(--green)')}</div>
-      ${priRows.length?`<div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>`:''}
-    </div>
-    <div class="an-row-3">
-      ${priUrgencyCard}${extCard}${peakCard}
-    </div>
-    <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Job Age <span class="an-hd-note">active jobs by how long open</span></div>${anBars(ageRows)}${oldestActive.length?`<div class="an-hd-note" style="margin-top:0.55rem;margin-bottom:0.3rem;">Oldest active jobs</div>${oldestActive.map(j=>{const age=nowMs-toMillis(j.created);const col=age>14*864e5?'var(--red)':age>7*864e5?'var(--orange)':'var(--text2)';const own=users.find(u=>u.id===j.owner)?.name||'?';return`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(j.client)} <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></span><span class="an-turn-time" style="color:${col}">${tdiff(0,age)}</span><span class="an-turn-n">${escapeHtml(own)}</span></div>`;}).join('')}`:''}
-      </div>
-      ${turnHtml}
-    </div>
-    ${topReassigned.length?`<div class="an-widget"><div class="an-widget-hd">Most Reassigned Jobs <span class="an-hd-note">times reassigned</span></div>${anBars(topReassigned)}</div>`:''}
-  `;
+  // job analysis widgets — flat list, no row wrappers
+  const jobAgeWidget=`<div class="an-widget"><div class="an-widget-hd">Job Age <span class="an-hd-note">active jobs by how long open</span></div>${anBars(ageRows)}${oldestActive.length?`<div class="an-hd-note" style="margin-top:0.55rem;margin-bottom:0.3rem;">Oldest active jobs</div>${oldestActive.map(j=>{const age=nowMs-toMillis(j.created);const col=age>14*864e5?'var(--red)':age>7*864e5?'var(--orange)':'var(--text2)';const own=users.find(u=>u.id===j.owner)?.name||'?';return`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(j.client)} <span class="tc-muted">#${escapeHtml(j.jobNum)}</span></span><span class="an-turn-time" style="color:${col}">${tdiff(0,age)}</span><span class="an-turn-n">${escapeHtml(own)}</span></div>`;}).join('')}`:''}
+  </div>`;
+  const createdVsCompletedWidget=`<div class="an-widget"><div class="an-widget-hd">Created vs Completed <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anDualLineChart(createdPts,trendPts,'Created','Completed','var(--blue)','var(--green)')}</div>`;
+  const priCompWidget=priRows.length?`<div class="an-widget"><div class="an-widget-hd">Completion Rate by Priority</div>${anBars(priRows,{rate:true})}</div>`:'';
+  const reassignWidget=topReassigned.length?`<div class="an-widget"><div class="an-widget-hd">Most Reassigned Jobs <span class="an-hd-note">times reassigned</span></div>${anBars(topReassigned)}</div>`:'';
 
   const isEmp=me.role==='employee';
   const isTL_=isTeamLeader();
@@ -4452,6 +4443,7 @@ renderAnalyticsContent=function(){
   const overdueTrend=anOverdueTrendWidget(visibleJobs(),buckets);
   const hasWf=jobs.some(j=>j.workflow);
 
+  const cols=(L,R)=>`<div class="an-cols"><div class="an-col">${L}</div><div class="an-col">${R}</div></div>`;
   const set=html=>{el.innerHTML=`<div class="an-sub-body">${html}</div>`;bindChartInteractions(el);applyAnVis(el);};
   const sec=lbl=>`<div class="an-section-lbl">${lbl}</div>`;
   const wrap=(key,html)=>`<div class="an-section-wrap" data-vis="${key}">${html}</div>`;
@@ -4459,26 +4451,30 @@ renderAnalyticsContent=function(){
   // ── EMPLOYEE ──────────────────────────────────────────────────────────────
   if(isEmp){
     set(`${wrap('kpis',kpiHtml)}
-      ${wrap('status_trend',`<div class="an-row-2">
-        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-        <div class="an-widget"><div class="an-widget-hd">Completion Trend <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anTrendChart(trendPts)}</div>
-      </div>`)}
-      ${wrap('my_rank',anMyRankCard(me.id,visibleJobs())+anSpeedVsTeam(me.id,visibleJobs()))}
-      ${wrap('jobs',sec('📋 Job Analysis')+jobAnalysisHtml)}`);
+      ${cols(
+        wrap('status_trend',`<div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>`)
+        +wrap('my_rank',anMyRankCard(me.id,visibleJobs()))
+        +wrap('jobs',sec('📋 Job Analysis')+jobAgeWidget+priUrgencyCard+extCard),
+        wrap('status_trend',`<div class="an-widget"><div class="an-widget-hd">Completion Trend <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anTrendChart(trendPts)}</div>`)
+        +wrap('my_rank',anSpeedVsTeam(me.id,visibleJobs()))
+        +wrap('jobs',createdVsCompletedWidget+priCompWidget+peakCard+turnHtml+reassignWidget)
+      )}`);
     return;
   }
 
   // ── TEAM LEADER ───────────────────────────────────────────────────────────
   if(isTL_){
     set(`${wrap('kpis',kpiHtml)}
-      ${wrap('status_trend',`<div class="an-row-2">
-        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-        ${throughputHtml}
-      </div>`)}
-      ${wrap('team',sec('👥 Team')+`<div class="an-row-2">${anTeamHealthWidget(leadEmps,visibleJobs())}${anActiveVsPausedWidget(leadEmps,visibleJobs())}</div>`+anOverdueTrendWidget(visibleJobs(),buckets))}
-      ${wrap('perf',perfHtml)}
-      ${wrap('jobs',sec('📋 Job Analysis')+jobAnalysisHtml)}
-      ${hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>'):''}`);
+      ${cols(
+        wrap('status_trend',`<div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>`)
+        +wrap('team',sec('👥 Team')+anTeamHealthWidget(leadEmps,visibleJobs())+overdueTrend)
+        +wrap('perf',perfHtml)
+        +wrap('jobs',sec('📋 Job Analysis')+jobAgeWidget+priUrgencyCard+extCard)
+        +(hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>'):''),
+        wrap('status_trend',throughputHtml)
+        +wrap('team',anActiveVsPausedWidget(leadEmps,visibleJobs()))
+        +wrap('jobs',createdVsCompletedWidget+priCompWidget+peakCard+turnHtml+reassignWidget)
+      )}`);
     if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'<div class="empty" style="padding:1rem;">No workflow data yet.</div>';}
     return;
   }
@@ -4486,31 +4482,33 @@ renderAnalyticsContent=function(){
   // ── SUPERVISOR ────────────────────────────────────────────────────────────
   if(isSup){
     set(`${wrap('kpis',kpiHtml)}
-      ${wrap('status_trend',`<div class="an-row-2">
-        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-        ${throughputHtml}
-      </div>`)}
-      ${wrap('team',sec('👥 Team')+`<div class="an-row-2">${anTeamHealthWidget(leadEmps,visibleJobs())}${anActiveVsPausedWidget(leadEmps,visibleJobs())}</div>`+(crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend))}
-      ${wrap('perf',perfHtml)}
-      ${wrap('branches',sec('📋 Jobs & Branches')+anBranchSection())}
-      ${wrap('jobs',jobAnalysisHtml)}
-      ${hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>'):''}`);
+      ${cols(
+        wrap('status_trend',`<div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>`)
+        +wrap('team',sec('👥 Team')+anTeamHealthWidget(leadEmps,visibleJobs())+overdueTrend)
+        +wrap('perf',perfHtml)
+        +wrap('branches',sec('📋 Jobs & Branches')+anBranchSection())
+        +(hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>'):''),
+        wrap('status_trend',throughputHtml)
+        +wrap('team',anActiveVsPausedWidget(leadEmps,visibleJobs())+(crossTeam||''))
+        +wrap('jobs',createdVsCompletedWidget+priCompWidget+priUrgencyCard+extCard+peakCard+jobAgeWidget+turnHtml+reassignWidget)
+      )}`);
     if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'<div class="empty" style="padding:1rem;">No workflow data yet.</div>';}
     return;
   }
 
   // ── MANAGER / DIRECTOR ────────────────────────────────────────────────────
   set(`${wrap('kpis',kpiHtml)}
-    ${wrap('status_trend',`<div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-      ${throughputHtml}
-    </div>`)}
-    ${wrap('team',sec('👥 Team')+`<div class="an-row-2">${anTeamHealthWidget(leadEmps,visibleJobs())}${anActiveVsPausedWidget(leadEmps,visibleJobs())}</div>`+(crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend))}
-    ${wrap('perf',perfHtml)}
-    ${wrap('branches',sec('📋 Jobs & Branches')+anBranchSection())}
-    ${wrap('jobs',jobAnalysisHtml)}
-    ${hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>'):''}
-    ${wrap('teams_overview',sec('👥 Teams Overview')+'<div id="an-teams-inline"></div>')}`);
+    ${cols(
+      wrap('status_trend',`<div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>`)
+      +wrap('team',sec('👥 Team')+anTeamHealthWidget(leadEmps,visibleJobs())+overdueTrend)
+      +wrap('perf',perfHtml)
+      +wrap('branches',sec('📋 Jobs & Branches')+anBranchSection())
+      +(hasWf?wrap('workflow',sec('🧺 Workflow')+'<div id="an-wf-inline"></div>'):''),
+      wrap('status_trend',throughputHtml)
+      +wrap('team',anActiveVsPausedWidget(leadEmps,visibleJobs())+(crossTeam||''))
+      +wrap('jobs',sec('📋 Job Analysis')+createdVsCompletedWidget+priCompWidget+priUrgencyCard+extCard+peakCard+jobAgeWidget+turnHtml+reassignWidget)
+      +wrap('teams_overview',sec('👥 Teams Overview')+'<div id="an-teams-inline"></div>')
+    )}`);
   if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'';}
   const teamsEl=el.querySelector('#an-teams-inline');if(teamsEl)renderTeamsAnalytics(teamsEl);
 }

@@ -715,10 +715,16 @@ hr.div{border:none;border-top:1px solid var(--border);margin:1.5rem 0;}
 .an-kpi-value{font-size:1.25rem;font-weight:700;font-family:var(--mono);letter-spacing:-0.03em;line-height:1;}
 .an-kpi-sub{font-size:0.66rem;color:var(--text3);margin-top:0.12rem;}
 
-.an-row-2{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem;align-items:start;}
-.an-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.5rem;align-items:start;}
-.an-row-4{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.5rem;align-items:start;}
-.an-widget{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:0.55rem 0.75rem;margin-bottom:0.4rem;}
+.an-cols{display:flex;gap:0.65rem;align-items:flex-start;}
+.an-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:0.5rem;}
+/* keep an-row-* for any legacy usage */
+.an-row-2{display:flex;gap:0.5rem;align-items:flex-start;margin-bottom:0.5rem;}
+.an-row-2>*{flex:1;min-width:0;}
+.an-row-3{display:flex;gap:0.5rem;align-items:flex-start;margin-bottom:0.5rem;}
+.an-row-3>*{flex:1;min-width:0;}
+.an-row-4{display:flex;gap:0.5rem;align-items:flex-start;margin-bottom:0.5rem;}
+.an-row-4>*{flex:1;min-width:0;}
+.an-widget{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:0.55rem 0.75rem;}
 .an-widget-hd{font-size:0.79rem;font-weight:600;margin-bottom:0.4rem;display:flex;align-items:center;gap:0.4rem;}
 .an-hd-note{font-size:0.72rem;font-weight:400;color:var(--text3);}
 
@@ -757,10 +763,15 @@ hr.div{border:none;border-top:1px solid var(--border);margin:1.5rem 0;}
 
 @media(max-width:900px){
   .an-kpi{min-width:calc(50% - 0.4rem);max-width:none;}
-  .an-row-3,.an-row-4{grid-template-columns:1fr 1fr;}
 }
-@media(max-width:600px){
-  .an-row-2,.an-row-3,.an-row-4{grid-template-columns:1fr;}
+@media(max-width:700px){
+  .an-cols{flex-direction:column;}
+  .an-col{min-width:unset;}
+  .an-row-2,.an-row-3,.an-row-4{flex-wrap:wrap;}
+  .an-row-2>*,.an-row-3>*,.an-row-4>*{min-width:45%;}
+}
+@media(max-width:500px){
+  .an-row-2>*,.an-row-3>*,.an-row-4>*{min-width:100%;}
 }
 
 .atabs{display:flex;gap:0.3rem;margin-bottom:1rem;flex-wrap:wrap;}
