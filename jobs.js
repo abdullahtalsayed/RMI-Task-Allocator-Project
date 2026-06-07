@@ -11,6 +11,7 @@ import { db, jCol, uCol, extCol, calFilterEmp, calShowMode,
   renderAssignEmpGrid, getJobEvents, pushNotif, renderDashExtensions, localSave,
   addEvent, showToastMsg, canManageJob, assignableUsers, amDirector } from './main.js';
 import { renderUList } from './admin.js';
+import { emailEventOwnerId } from './email.js';
 
 // ── COMMENTS ──────────────────────────────────────────────────────────────────
 export async function addComment(jobId,text){
@@ -275,6 +276,7 @@ window.approveExt=async function(eid){
   }
   await addEvent(req.jobId,'ext_approved',`${me.name} approved deadline extension requested by ${req.requestedByName}`,'green');
   pushNotif(req.requestedBy,'✅ Extension Approved',`Your deadline extension for ${req.client} (#${req.jobNum}) was approved.`);
+  emailEventOwnerId('ext_approved',req.requestedBy,`✅ Extension Approved — ${req.client} (#${req.jobNum})`,`Your deadline extension request for ${req.client} (#${req.jobNum}) was approved by ${me.name}.\n\nNew deadline: ${fmt(req.newDeadline)}`);
   renderDashExtensions();
 };
 window.rejectExt=async function(eid){
@@ -283,6 +285,7 @@ window.rejectExt=async function(eid){
     await extUpdate(eid,{status:'rejected',reviewedBy:me.name,reviewedAt:Date.now()});
     await addEvent(req.jobId,'ext_rejected',`${me.name} rejected deadline extension requested by ${req.requestedByName}`,'red');
     pushNotif(req.requestedBy,'❌ Extension Rejected',`Your deadline extension for ${req.client} (#${req.jobNum}) was rejected.`);
+    emailEventOwnerId('ext_rejected',req.requestedBy,`❌ Extension Rejected — ${req.client} (#${req.jobNum})`,`Your deadline extension request for ${req.client} (#${req.jobNum}) was rejected by ${me.name}.`);
     renderDashExtensions();
   },'Reject',true);
 };
