@@ -2968,12 +2968,13 @@ setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocal
 
 // ── TABS / HUB NAV ────────────────────────────────────────────────────────────
 let currentHub='jobs',currentSub='my-jobs',lastAccountSub='profile';
-const HUB_DEFAULTS={jobs:'my-jobs',team:'board',insights:'overview',messages:'broadcast',account:'profile',work:'job-basket'};
+const HUB_DEFAULTS={jobs:'my-jobs',team:'board',insights:'overview',messages:'broadcast',account:'profile',work:'job-basket',personal:'my-space'};
 const SUB_TO_SECTION={
   'my-jobs':'my-jobs','add-job':'add-job',board:'board',cal:'cal',assign:'assign',
   overview:'dashboard',reports:'analytics',search:'adv-search',extensions:'extensions-review',activity:'login-log',
   broadcast:'broadcast',profile:'account',preferences:'account',users:'users','activity-log':'login-log',
-  teams:'teams-overview','email-control':'email-control','job-basket':'job-basket'
+  teams:'teams-overview','email-control':'email-control','job-basket':'job-basket',
+  'my-space':'my-space'
 };
 const SECTION_TO_SB={
   'my-jobs':'my-jobs','add-job':'my-jobs',
@@ -2981,7 +2982,8 @@ const SECTION_TO_SB={
   dashboard:'dashboard','extensions-review':'extensions-review',
   analytics:'analytics','adv-search':'adv-search',
   broadcast:'broadcast',account:'account',users:'users','login-log':'login-log',
-  'teams-overview':'teams-overview','email-control':'email-control','job-basket':'job-basket'
+  'teams-overview':'teams-overview','email-control':'email-control','job-basket':'job-basket',
+  'my-space':'my-space'
 };
 const SB_TO_HUB={
   'my-jobs':['jobs','my-jobs'],assign:['team','assign'],
@@ -2991,7 +2993,8 @@ const SB_TO_HUB={
   broadcast:['messages','broadcast'],account:['account','profile'],
   users:['account','users'],'login-log':['account','activity-log'],
   'teams-overview':['insights','teams'],'email-control':['insights','email-control'],
-  'job-basket':['work','job-basket']
+  'job-basket':['work','job-basket'],
+  'my-space':['personal','my-space']
 };
 function applyMainNav(){
   const r=me?.role||'';
@@ -3095,6 +3098,7 @@ function runHubSideEffects(id){
   if(id==='login-log')refreshActivityLogsRemote();
   if(id==='broadcast'){updateBroadcastUI();refreshBroadcastsRemote();setTimeout(markBroadcastsSeen,1200);}
   if(id==='account'){renderAccountProfile();renderAccountPreferences();}
+  if(id==='my-space')renderMySpace();
 }
 function goHub(hub,sub){
   if(hub==='account'&&!sub)sub=lastAccountSub;
@@ -3894,6 +3898,204 @@ function anBranchSection(){
     ${turnRows.length?`<div class="an-widget"><div class="an-widget-hd">Avg Turnaround per Branch <span class="an-hd-note">created → completed (hours, fastest first)</span></div>${anBars(turnRows)}</div>`:''}`;
 
 }
+
+// ── MY SPACE ───────────────────────────────────────────────────────────────
+const MYS_WIDGETS={
+  'an-kpis':{label:'📊 Key Metrics',group:'Analytics',size:'full',
+    roles:r=>r!=='sales_operation',
+    render(){
+      const scope=analyticsScope(),total=scope.length;
+      const completed=scope.filter(j=>j.status==='completed').length;
+      const overdue=scope.filter(j=>isOverdue(j)).length;
+      const compRate=total?Math.round(completed/total*100):0;
+      const doneWithTime=scope.filter(j=>j.completed&&j.created);
+      const avgMs=doneWithTime.length?doneWithTime.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/doneWithTime.length:0;
+      const sla=computeSlaStats(scope);
+      const pending=scope.filter(j=>j.status==='pending').length,ongoing=scope.filter(j=>j.status==='ongoing').length;
+      const kpis=[
+        {label:'Total Jobs',value:total,color:'var(--blue)',sub:`${pending} pending · ${ongoing} ongoing`},
+        {label:'Completion Rate',value:compRate+'%',color:compRate>=70?'var(--green)':compRate>=40?'var(--yellow)':'var(--red)',sub:`${completed} of ${total}`},
+        {label:'Avg Completion',value:doneWithTime.length?tdiff(0,avgMs):'—',color:'var(--text)',sub:`${doneWithTime.length} tracked`},
+        {label:'On-Time Rate',value:sla.onTimePct+'%',color:sla.onTimePct>=70?'var(--green)':'var(--yellow)',sub:`${overdue} overdue open`},
+      ];
+      return`<div class="an-kpis">${kpis.map(k=>`<div class="an-kpi"><div class="an-kpi-label">${k.label}</div><div class="an-kpi-value" style="color:${k.color}">${k.value}</div><div class="an-kpi-sub">${k.sub}</div></div>`).join('')}</div>`;
+    }},
+  'an-status':{label:'🔵 Status Breakdown',group:'Analytics',size:'half',
+    roles:r=>r!=='sales_operation',
+    render(){
+      const scope=analyticsScope(),total=scope.length;
+      const pending=scope.filter(j=>j.status==='pending').length,ongoing=scope.filter(j=>j.status==='ongoing').length,paused=scope.filter(j=>j.status==='paused').length,completed=scope.filter(j=>j.status==='completed').length;
+      return`<div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut([{label:'Pending',value:pending,color:'#ffd60a'},{label:'Ongoing',value:ongoing,color:'#0a84ff'},{label:'Paused',value:paused,color:'#6e6e73'},{label:'Completed',value:completed,color:'#32d74b'}],total,'jobs')}</div>`;
+    }},
+  'an-trend':{label:'📈 Completion Trend',group:'Analytics',size:'half',
+    roles:r=>r!=='sales_operation',
+    render(){
+      const ref=new Date();const buckets=[];
+      for(let i=5;i>=0;i--){const d=new Date(ref.getFullYear(),ref.getMonth()-i,1);buckets.push({label:d.toLocaleString('en-GB',{month:'short'}),start:d.getTime(),end:new Date(ref.getFullYear(),ref.getMonth()-i+1,1).getTime()});}
+      const scope=analyticsScope();
+      const trendPts=buckets.map(b=>({label:b.label,value:scope.filter(j=>j.completed&&toMillis(j.completed)>=b.start&&toMillis(j.completed)<b.end).length}));
+      return`<div class="an-widget"><div class="an-widget-hd">Completion Trend <span class="an-hd-note">last 6 months</span></div>${anTrendChart(trendPts)}</div>`;
+    }},
+  'an-turnaround':{label:'⏱ Turnaround by Type',group:'Analytics',size:'half',
+    roles:r=>r!=='sales_operation',
+    render(){
+      const scope=analyticsScope();const typeMap={};scope.forEach(j=>{const t=j.type||'Other';typeMap[t]=(typeMap[t]||0)+1;});
+      const rows=Object.keys(typeMap).map(t=>{const done=scope.filter(j=>j.type===t&&j.completed&&j.created);if(!done.length)return null;const avg=done.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/done.length;return{type:t,avg,n:done.length};}).filter(Boolean).sort((a,b)=>a.avg-b.avg);
+      if(!rows.length)return'<div class="an-widget"><div class="an-widget-hd">Turnaround by Type</div><div class="empty" style="padding:0.5rem 0;">No completed jobs</div></div>';
+      return`<div class="an-widget"><div class="an-widget-hd">Turnaround by Type <span class="an-hd-note">avg to complete</span></div><div class="an-turn">${rows.map(r=>`<div class="an-turn-row"><span class="an-turn-type">${escapeHtml(r.type)}</span><span class="an-turn-time">${tdiff(0,r.avg)}</span><span class="an-turn-n">${r.n} job${r.n>1?'s':''}</span></div>`).join('')}</div></div>`;
+    }},
+  'an-my-rank':{label:'🏅 My Rank & Speed',group:'Analytics',size:'half',
+    roles:r=>r==='employee',
+    render(){return(anMyRankCard(me.id,visibleJobs())||'')+(anSpeedVsTeam(me.id,visibleJobs())||'');}},
+  'an-team-health':{label:'👥 Team Health',group:'Analytics',size:'half',
+    roles:r=>['team_leader','supervisor','manager'].includes(r)||amDirector(),
+    render(){
+      const emps=teamUsersForView().filter(u=>u.role!=='manager');
+      return anTeamHealthWidget(emps,visibleJobs())||'<div class="an-widget"><div class="empty" style="padding:0.5rem 0;">No team data</div></div>';
+    }},
+  'an-overdue-trend':{label:'⚠️ Overdue Rate Trend',group:'Analytics',size:'half',
+    roles:r=>['team_leader','supervisor','manager'].includes(r)||amDirector(),
+    render(){
+      const ref=new Date();const buckets=[];
+      for(let i=5;i>=0;i--){const d=new Date(ref.getFullYear(),ref.getMonth()-i,1);buckets.push({label:d.toLocaleString('en-GB',{month:'short'}),start:d.getTime(),end:new Date(ref.getFullYear(),ref.getMonth()-i+1,1).getTime()});}
+      return anOverdueTrendWidget(visibleJobs(),buckets);
+    }},
+  'an-perf':{label:'🏆 Performance Leaderboard',group:'Analytics',size:'full',
+    roles:r=>['team_leader','supervisor','manager'].includes(r)||amDirector(),
+    render(){
+      const emps=teamUsersForView().filter(u=>u.role!=='manager');
+      const cards=emps.map(u=>{
+        const ej=visibleJobs().filter(j=>j.owner===u.id);
+        const done=ej.filter(j=>j.completed&&j.created);
+        const avg=done.length?done.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/done.length:0;
+        const od=ej.filter(j=>isOverdue(j)).length;
+        const ws=new Date();ws.setDate(ws.getDate()-ws.getDay());ws.setHours(0,0,0,0);
+        const tw=ej.filter(j=>j.completed&&toMillis(j.completed)>=ws.getTime()).length;
+        return{u,done:ej.filter(j=>j.status==='completed').length,active:ej.filter(j=>j.status!=='completed').length,od,tw,avg:done.length?tdiff(0,avg):'—',total:ej.length};
+      }).filter(c=>c.total>0).sort((a,b)=>b.done-a.done);
+      if(!cards.length)return'<div class="an-widget"><div class="empty" style="padding:0.5rem 0;">No team data yet</div></div>';
+      return`<div class="an-widget"><div class="an-widget-hd">Performance Leaderboard</div><div class="an-perf-grid">${cards.map(c=>`<div class="an-perf-card"><div class="an-perf-name">${c.u.role==='team_leader'?'🧭':'👤'} ${escapeHtml(c.u.name)}</div><div class="an-perf-stats"><div><span class="ap-n">${c.done}</span><span class="ap-l">done</span></div><div><span class="ap-n">${c.active}</span><span class="ap-l">active</span></div><div><span class="ap-n">${c.tw}</span><span class="ap-l">this wk</span></div><div><span class="ap-n ${c.od?'tc-red':''}">${c.od}</span><span class="ap-l">overdue</span></div></div><div class="an-perf-avg">⏱ avg ${c.avg}</div></div>`).join('')}</div></div>`;
+    }},
+  'an-branch':{label:'🏢 Branch Analytics',group:'Analytics',size:'full',
+    roles:r=>['supervisor','manager'].includes(r)||amDirector(),
+    render(){return anBranchSection()||'<div class="an-widget"><div class="empty" style="padding:0.5rem 0;">No branch data</div></div>';}},
+  'my-active':{label:'📋 My Active Jobs',group:'Jobs',size:'half',
+    roles:r=>true,
+    render(){
+      const myJobs=jobs.filter(j=>j.owner===me.id&&j.status!=='completed'&&!j.workflow).sort((a,b)=>toMillis(a.created)-toMillis(b.created));
+      if(!myJobs.length)return'<div class="an-widget"><div class="an-widget-hd">My Active Jobs</div><div class="empty" style="padding:0.5rem 0;">No active jobs 🎉</div></div>';
+      return`<div class="an-widget"><div class="an-widget-hd">My Active Jobs <span class="an-hd-note">${myJobs.length}</span></div><div class="mys-job-list">${myJobs.slice(0,10).map(j=>{const od=isOverdue(j);return`<div class="mys-job-row" onclick="editJob('${j.id}')"><span class="mys-jnum">#${escapeHtml(j.jobNum||'')}</span><span class="mys-jclient">${escapeHtml(j.client||'')}</span><span class="mys-jstatus${od?' tc-red':''}">${od?'⚠ overdue':j.status}</span></div>`;}).join('')}${myJobs.length>10?`<div style="font-size:0.72rem;color:var(--text3);padding:0.3rem 0.4rem;">+${myJobs.length-10} more</div>`:''}</div></div>`;
+    }},
+  'my-overdue':{label:'⚠️ My Overdue Jobs',group:'Jobs',size:'half',
+    roles:r=>true,
+    render(){
+      const od=jobs.filter(j=>j.owner===me.id&&isOverdue(j));
+      if(!od.length)return'<div class="an-widget"><div class="an-widget-hd">My Overdue Jobs</div><div class="empty" style="padding:0.5rem 0;">None overdue 🎉</div></div>';
+      return`<div class="an-widget"><div class="an-widget-hd" style="color:var(--red);">⚠ Overdue Jobs <span class="an-hd-note tc-muted">${od.length}</span></div><div class="mys-job-list">${od.map(j=>`<div class="mys-job-row" onclick="editJob('${j.id}')"><span class="mys-jnum">#${escapeHtml(j.jobNum||'')}</span><span class="mys-jclient">${escapeHtml(j.client||'')}</span><span class="mys-jstatus tc-red">${tdiff(0,Date.now()-toMillis(j.created))} open</span></div>`).join('')}</div></div>`;
+    }},
+  'my-deadlines':{label:'⏰ Upcoming Deadlines',group:'Jobs',size:'half',
+    roles:r=>true,
+    render(){
+      const now=Date.now();
+      const teamIds=isTeamLeader()?new Set([me.id,...(myTeamIds()||[])]):new Set([me.id]);
+      const soon=jobs.filter(j=>j.deadline&&j.status!=='completed'&&teamIds.has(j.owner)&&toMillis(j.deadline)>now&&toMillis(j.deadline)<now+7*864e5).sort((a,b)=>toMillis(a.deadline)-toMillis(b.deadline));
+      if(!soon.length)return'<div class="an-widget"><div class="an-widget-hd">Upcoming Deadlines</div><div class="empty" style="padding:0.5rem 0;">No deadlines this week</div></div>';
+      return`<div class="an-widget"><div class="an-widget-hd">Upcoming Deadlines <span class="an-hd-note">next 7 days</span></div><div class="mys-job-list">${soon.map(j=>{const diff=toMillis(j.deadline)-now;const col=diff<864e5?'var(--red)':diff<3*864e5?'var(--yellow)':'var(--green)';return`<div class="mys-job-row" onclick="editJob('${j.id}')"><span class="mys-jnum">#${escapeHtml(j.jobNum||'')}</span><span class="mys-jclient">${escapeHtml(j.client||'')}</span><span class="mys-jstatus" style="color:${col}">${tdiff(0,diff)}</span></div>`;}).join('')}</div></div>`;
+    }},
+  'my-activity':{label:'📜 My Recent Activity',group:'Activity',size:'half',
+    roles:r=>true,
+    render(){
+      const myLogs=[...activityLogs].filter(e=>e.userId===me.id||e.actorId===me.id).slice(-15).reverse();
+      if(!myLogs.length)return'<div class="an-widget"><div class="an-widget-hd">Recent Activity</div><div class="empty" style="padding:0.5rem 0;">No recent activity</div></div>';
+      return`<div class="an-widget"><div class="an-widget-hd">My Recent Activity</div><div class="mys-activity-list">${myLogs.map(e=>`<div class="mys-act-row"><span class="mys-act-type">${escapeHtml(ACTIVITY_TYPE_LABELS[e.type]||e.type||'Activity')}</span><span class="mys-act-time">${timeAgo(e.ts||e.timestamp||0)}</span></div>`).join('')}</div></div>`;
+    }},
+  'my-broadcasts':{label:'📢 Recent Messages',group:'Messages',size:'half',
+    roles:r=>true,
+    render(){
+      const recent=[...broadcasts].sort((a,b)=>toMillis(b.created)-toMillis(a.created)).slice(0,6);
+      if(!recent.length)return'<div class="an-widget"><div class="an-widget-hd">Recent Messages</div><div class="empty" style="padding:0.5rem 0;">No messages yet</div></div>';
+      return`<div class="an-widget"><div class="an-widget-hd">Recent Messages</div><div class="mys-activity-list">${recent.map(b=>`<div class="mys-act-row" onclick="goHub('messages','broadcast')"><span class="mys-act-type">${escapeHtml((b.subject||b.title||'Message').slice(0,50))}</span><span class="mys-act-time">${timeAgo(b.created||0)}</span></div>`).join('')}</div></div>`;
+    }},
+};
+
+function getMysDefaults(){
+  if(!me)return[];
+  const r=me.role;
+  if(r==='sales_operation')return['my-active','my-overdue','my-deadlines','my-broadcasts'];
+  if(r==='employee')return['an-kpis','an-status','an-trend','an-my-rank','my-active','my-overdue','my-deadlines'];
+  if(r==='team_leader')return['an-kpis','an-team-health','an-overdue-trend','an-perf','my-deadlines','my-active'];
+  if(r==='supervisor'||r==='manager'||amDirector())return['an-kpis','an-branch','an-perf','my-deadlines','my-activity'];
+  return['my-active','my-overdue','my-deadlines'];
+}
+function loadMysConfig(){
+  if(!me)return[];
+  try{const s=localStorage.getItem('mys-cfg-'+me.id);return s?JSON.parse(s):getMysDefaults();}
+  catch(e){return getMysDefaults();}
+}
+function saveMysConfig(cfg){if(me)localStorage.setItem('mys-cfg-'+me.id,JSON.stringify(cfg));}
+function canUseMysWidget(key){
+  if(!me)return false;
+  const def=MYS_WIDGETS[key];
+  return def?def.roles(me.role):false;
+}
+window.addMysWidget=function(key){
+  const cfg=loadMysConfig();
+  if(!cfg.includes(key)){cfg.push(key);saveMysConfig(cfg);}
+  renderMySpace();
+};
+window.removeMysWidget=function(key){
+  const cfg=loadMysConfig().filter(k=>k!==key);
+  saveMysConfig(cfg);renderMySpace();
+};
+let _mysEditMode=false;
+window.toggleMysEdit=function(){
+  _mysEditMode=!_mysEditMode;
+  const grid=document.getElementById('mys-grid');
+  const picker=document.getElementById('mys-picker');
+  const btn=document.getElementById('mys-edit-btn');
+  if(grid)grid.classList.toggle('mys-edit-mode',_mysEditMode);
+  if(picker)picker.style.display=_mysEditMode?'block':'none';
+  if(btn){btn.textContent=_mysEditMode?'✓ Done':'✏️ Customize';btn.classList.toggle('active',_mysEditMode);}
+};
+function renderMySpace(){
+  const el=document.getElementById('mys-content');if(!el||!me)return;
+  _mysEditMode=false;
+  const btn=document.getElementById('mys-edit-btn');
+  if(btn){btn.textContent='✏️ Customize';btn.classList.remove('active');}
+  const cfg=loadMysConfig();
+  // render widgets
+  const widgetsHtml=cfg.map(key=>{
+    const def=MYS_WIDGETS[key];
+    if(!def||!def.roles(me.role))return'';
+    let html='';
+    try{html=def.render()||'';}catch(e){html=`<div class="an-widget"><div class="empty" style="padding:0.5rem 0;color:var(--red);">Widget error</div></div>`;}
+    return`<div class="mys-widget${def.size==='full'?' full':''}" data-key="${key}">
+      <button class="mys-remove-btn" onclick="removeMysWidget('${key}')" title="Remove widget">✕</button>
+      ${html}
+    </div>`;
+  }).join('');
+  // build picker groups
+  const groups={};
+  Object.entries(MYS_WIDGETS).forEach(([key,def])=>{
+    if(!def.roles(me.role))return;
+    if(!groups[def.group])groups[def.group]=[];
+    groups[def.group].push({key,def});
+  });
+  const pickerHtml=Object.entries(groups).map(([grp,items])=>`
+    <div><div class="mys-pick-grp-lbl">${grp}</div>
+    <div class="mys-pick-items">${items.map(({key,def})=>`<button class="mys-pick-btn" ${cfg.includes(key)?'disabled':''}onclick="addMysWidget('${key}')">${def.label}</button>`).join('')}</div></div>
+  `).join('');
+  el.innerHTML=`
+    <div class="mys-grid${_mysEditMode?' mys-edit-mode':''}" id="mys-grid">
+      ${widgetsHtml||'<div style="grid-column:1/-1;padding:2rem;text-align:center;color:var(--text3);">Click ✏️ Customize to add widgets.</div>'}
+    </div>
+    <div class="mys-picker" id="mys-picker" style="display:none;">
+      <div class="mys-picker-hd"><span>➕ Add Widget</span><button class="bp sec" style="font-size:0.75rem;padding:0.28rem 0.6rem;" onclick="toggleMysEdit()">✓ Done</button></div>
+      <div class="mys-picker-groups">${pickerHtml}</div>
+    </div>`;
+  bindChartInteractions(el);
+}
+window.renderMySpace=renderMySpace;
 
 renderAnalyticsContent=function(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
