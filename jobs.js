@@ -3,7 +3,7 @@
 // approve/reject. Also hosts user-CRUD wrappers and calendar-day helpers that
 // historically lived in this section.
 import { USE_FIREBASE, addDoc, deleteDoc, updateDoc, setDoc, doc, writeBatch } from './firebase.js';
-import { jobs, me, users, extRequests, lastDel, tagStores, setJobs, setUsers, setLastDel } from './state.js';
+import { jobs, me, users, extRequests, lastDel, tagStores, setJobs, setUsers, setLastDel, setMe } from './state.js';
 import { uid, toMillis, tdiff, fmt, escapeHtml, getJobDurationBreakdown, jobPauseDefaults } from './helpers.js';
 import { setTags, showConfirm } from './modals.js';
 import { db, jCol, uCol, extCol, calFilterEmp, calShowMode,
@@ -52,12 +52,19 @@ export async function uAdd(id,data){
   else{users.push(data);localSave();populateADrop();renderUList();populateCalEmpDrop();}
 }
 export async function uUpdate(id,data){
+  // patch local state immediately so UI reflects change without waiting for snapshot
+  const u=users.find(x=>x.id===id);if(u)Object.assign(u,data);
   if(USE_FIREBASE){await updateDoc(doc(uCol,id),data);}
-  else{const u=users.find(x=>x.id===id);if(u){Object.assign(u,data);localSave();populateADrop();renderUList();populateCalEmpDrop();}}
+  else{localSave();}
+  populateADrop();renderUList();populateCalEmpDrop();
+  // if editing the logged-in user, update me reference so header/nav reflects change
+  if(u&&me&&id===me.id)setMe({...me,...data});
 }
 export async function uDelete(id){
   if(USE_FIREBASE){await deleteDoc(doc(uCol,id));}
-  else{setUsers(users.filter(u=>u.id!==id));localSave();populateADrop();renderUList();populateCalEmpDrop();}
+  else{localSave();}
+  setUsers(users.filter(u=>u.id!==id));
+  populateADrop();renderUList();populateCalEmpDrop();
 }
 export function empOverdueJobs(uid){return visibleJobs().filter(j=>j.owner===uid&&isOverdue(j));}
 export function dateKey(ts){const ms=toMillis(ts);if(!ms)return'';const d=new Date(ms);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}

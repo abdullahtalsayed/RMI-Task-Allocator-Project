@@ -481,6 +481,15 @@ function attachFirebaseListeners(){
     setNotifications(snap.docs.map(d=>({id:d.id,...d.data()})));
     onNotificationsUpdated();
   }));
+  // live users listener — reflects name/role changes instantly across all clients
+  if(uCol){fbUnsubs.push(onSnapshot(uCol,snap=>{
+    const updated=snap.docs.map(d=>({id:d.id,...d.data()}));
+    setUsers(updated);
+    // if my own record changed, update me reference
+    const myRecord=updated.find(u=>u.id===me.id);
+    if(myRecord)setMe({...me,...myRecord});
+    populateADrop();renderUList();populateReassignDrops();populateCalEmpDrop();
+  }));}
 }
 
 function updateSynced(){document.getElementById('synced').textContent='● '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});}
