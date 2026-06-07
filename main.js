@@ -388,6 +388,14 @@ export function canManageJob(j){
   if(isTeamLeader()&&myTeamIds().includes(j.owner))return true;
   return false;
 }
+export function canDeleteJob(j){
+  if(!me||!j)return false;
+  if(me.role==='manager')return true;
+  if(j.managerAssigned&&me.role!=='manager'&&!isTeamLeader())return false;
+  if(me.id===j.owner)return true;
+  if(isTeamLeader()&&myTeamIds().includes(j.owner))return true;
+  return false;
+}
 // is current user a "lead" (manager/supervisor/team_leader) — gets assign, board, notes
 export function isLead(){return me&&['manager','supervisor','team_leader'].includes(me.role);}
 // users visible in board/assign/calendar/analytics dropdowns
@@ -1540,7 +1548,7 @@ function jobDetailHTML(j){
   const now=Date.now(),od=isOverdue(j);
   const own=users.find(u=>u.id===j.owner)?.name||j.owner||'—';
   const canEdit=canManageJob(j);
-  const canDelete=me&&(me.id===j.owner||me.role==='manager'||(isTeamLeader()&&myTeamIds().includes(j.owner)))&&(!j.managerAssigned||me.role==='manager'||isTeamLeader());
+  const canDelete=canDeleteJob(j);
   const canSup=isLead();
   // duration / pause breakdown
   let durHtml='';
@@ -1663,7 +1671,7 @@ function jobTableRow(j,showEmp){
   const now=Date.now(),od=isOverdue(j);
   const own=users.find(u=>u.id===j.owner)?.name||'—';
   const canEdit=canManageJob(j);
-  const canDelete=me&&(me.id===j.owner||me.role==='manager'||(isTeamLeader()&&myTeamIds().includes(j.owner)))&&(!j.managerAssigned||me.role==='manager'||isTeamLeader());
+  const canDelete=canDeleteJob(j);
   const cols=showEmp?9:8;
   const stChip=od?'<span class="st-chip st-overdue">Overdue</span>':
     j.status==='ongoing'?'<span class="st-chip st-ongoing">Ongoing</span>':
@@ -1764,7 +1772,7 @@ const lbl=j.status==='completed'?'📅 Deadline':diff<0?'⚠️ OVERDUE':diff<86
   const mgNoteHtml=canSeeManagerNote&&j.managerNote?`<br><span style="color:var(--purple);font-size:0.76rem;">🔒 Manager note: ${j.managerNote}</span>`:'';
   const compNoteHtml=j.completionNote?`<br><span style="color:var(--green);font-size:0.76rem;">✅ ${j.completionNote}</span>`:'';
   const canEdit=canManageJob(j);
-  const canDelete=me&&(me.id===j.owner||me.role==='manager')&&(!j.managerAssigned||me.role==='manager');
+  const canDelete=canDeleteJob(j);
   let ab='';
   if(acts&&canEdit){
     ab=`<div class="arow">
