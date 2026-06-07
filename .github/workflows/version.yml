@@ -26,6 +26,8 @@ jobs:
 
       - name: Create or force-update tag
         run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
           new_tag=${{ steps.get_version.outputs.version }}
           git fetch --tags
           # Delete remote tag if it already exists (force-sync to current commit)
