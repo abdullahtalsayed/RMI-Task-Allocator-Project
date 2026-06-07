@@ -616,8 +616,11 @@ let _wfGanttMode=false;
 window.getWfTab=()=>_wfTab;
 window.wfSetTab=function(key){_wfTab=key;_wfGanttMode=false;renderJobBasket();window.renderSbBasketSubs?.();};
 window.wfToggleGantt=function(){_wfGanttMode=!_wfGanttMode;renderJobBasket();};
+function _ganttBtn(){
+  return`<div class="wf-gantt-bar-btn"><button class="wf-tab wf-gantt-btn${_wfGanttMode?' active':''}" onclick="wfToggleGantt()">📊 Gantt Chart</button></div>`;
+}
 function _tabBar(tabs,cur){
-  return`<div class="wf-tabs">${tabs.map(t=>`<button class="wf-tab${t.key===cur?' active':''}" onclick="wfSetTab('${t.key}')">${t.label}${t.n?` <span class="wf-tab-count">${t.n}</span>`:''}</button>`).join('')}<button class="wf-tab wf-gantt-btn${_wfGanttMode?' active':''}" onclick="wfToggleGantt()" title="Gantt view">📊 Gantt</button></div>`;
+  return`<div class="wf-tabs">${tabs.map(t=>`<button class="wf-tab${t.key===cur?' active':''}" onclick="wfSetTab('${t.key}')">${t.label}${t.n?` <span class="wf-tab-count">${t.n}</span>`:''}</button>`).join('')}<button class="wf-tab wf-gantt-btn${_wfGanttMode?' active':''}" onclick="wfToggleGantt()">📊 Gantt Chart</button></div>`;
 }
 
 // ── GANTT CHART ────────────────────────────────────────────────────────────────
@@ -732,7 +735,7 @@ export function renderJobBasket(){
       content=done.length?done.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.5rem;">No completed jobs yet.</div>';
     }
     if(_wfGanttMode){root.innerHTML=_tabBar(tabs,tab)+_wfGantt(mine);return;}
-    root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
+    root.innerHTML=_ganttBtn()+`<div class="wf-tab-content">${content}</div>`;
     return;
   }
 
@@ -758,7 +761,7 @@ export function renderJobBasket(){
       content=doneJobs.length?doneJobs.map(j=>wfCard(j,true)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
     }
     if(_wfGanttMode){root.innerHTML=_tabBar(tabs,tab)+_wfGantt(wfJobs.filter(j=>j.teamLeaderId===me.id));return;}
-    root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
+    root.innerHTML=_ganttBtn()+`<div class="wf-tab-content">${content}</div>`;
     return;
   }
 
@@ -778,7 +781,7 @@ export function renderJobBasket(){
       content=doneJobs.length?doneJobs.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
     }
     if(_wfGanttMode){root.innerHTML=_tabBar(tabs,tab)+_wfGantt(wfJobs);return;}
-    root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
+    root.innerHTML=_ganttBtn()+`<div class="wf-tab-content">${content}</div>`;
     return;
   }
 
@@ -801,6 +804,6 @@ export function renderJobBasket(){
     content=doneJobs.length?doneJobs.map(j=>wfCard(j,false)).join(''):'<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
   }
   if(_wfGanttMode){root.innerHTML=_tabBar(tabs,tab)+_wfGantt(wfJobs.filter(j=>j.drafterId===me.id));window.renderSbBasketSubs?.();return;}
-  root.innerHTML=`<div class="wf-tab-content">${content}</div>`;
+  root.innerHTML=_ganttBtn()+`<div class="wf-tab-content">${content}</div>`;
   window.renderSbBasketSubs?.();
 }

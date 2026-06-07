@@ -1870,8 +1870,9 @@ textarea.af-input{resize:vertical;min-height:72px;}
 .wf-tab.active{background:var(--blue);color:#fff;border-color:transparent;}
 .wf-tab-count{background:rgba(255,255,255,0.22);color:inherit;font-size:0.65rem;font-weight:700;padding:0px 6px;border-radius:var(--radius-pill);font-family:var(--mono);}
 .wf-tab.active .wf-tab-count{background:rgba(255,255,255,0.25);}
-.wf-gantt-btn{margin-left:auto;border:1px solid var(--border)!important;}
-.wf-gantt-btn.active{background:rgba(50,215,75,0.15);color:var(--green);border-color:var(--green)!important;}
+.wf-gantt-bar-btn{display:flex;justify-content:flex-end;margin-bottom:0.65rem;}
+.wf-gantt-btn{border:1px solid var(--border)!important;}
+.wf-gantt-btn.active{background:rgba(50,215,75,0.15)!important;color:var(--green)!important;border-color:var(--green)!important;}
 .wf-tab-content{min-height:80px;}
 /* ── Gantt chart ─────────────────────────────────────────────── */
 .wf-gantt{font-size:0.78rem;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--card);}
