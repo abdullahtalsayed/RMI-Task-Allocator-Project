@@ -2,7 +2,7 @@
 // Announcements (compose/list/edit/delete + unread badge) and user CRUD UI
 // (add/edit/remove users, role pickers, team-leader assignment).
 import { USE_FIREBASE, USE_AUTH, addDoc, doc, updateDoc, deleteDoc } from './firebase.js';
-import { me, users, broadcasts, jobs, setBroadcasts } from './state.js';
+import { me, users, broadcasts, jobs, setBroadcasts, BRANCHES } from './state.js';
 import { uid, toMillis, fmt, escapeHtml } from './helpers.js';
 import { uAdd, uUpdate, uDelete } from './jobs.js';
 import { showConfirm } from './modals.js';
@@ -18,13 +18,14 @@ window.sendBroadcast=async function(){
   const bcast={msg,to,by:me.name,byId:me.id,created:Date.now()};
   if(USE_FIREBASE){await addDoc(bcastCol,bcast);await refreshBroadcastsRemote();}
   else{bcast.id=uid();broadcasts.unshift(bcast);localSave();renderBroadcasts();}
-  const toLabel=to==='all'?'everyone':to==='employees'?'employees':to==='supervisors'?'supervisors':to.startsWith('team:')?'my team':to;
+  const toLabel=to==='all'?'everyone':to==='employees'?'employees':to==='supervisors'?'supervisors':to.startsWith('team:')?'my team':to.startsWith('branch:')?to.slice(7):to;
   await logActivity({type:'broadcast',category:'broadcast',desc:`${me.name} sent message to ${toLabel}: ${msg.slice(0,120)}${msg.length>120?'…':''}`,userId:me.id,userName:me.name,role:me.role});
   // Push notifications
   let targets=users;
   if(to==='employees')targets=users.filter(u=>u.role==='employee'||u.role==='team_leader'||u.role==='sales_operation');
   else if(to==='supervisors')targets=users.filter(u=>u.role==='supervisor');
   else if(to.startsWith('team:')){const lid=to.slice(5);targets=users.filter(u=>u.teamLeaderId===lid||u.id===lid);}
+  else if(to.startsWith('branch:')){const br=to.slice(7);targets=users.filter(u=>u.branch===br);}
   targets.filter(u=>u.id!==me.id&&!isDirectorRole(u.role)).forEach(u=>pushNotif(u.id,'📢 Message from '+me.name,msg));
   document.getElementById('bcast-msg').value='';
   showToastMsg('Message sent!');
@@ -41,6 +42,11 @@ export function broadcastsForUser(u){
       const leaderId=b.to.slice(5);
       if(u.id===leaderId)return true;
       if(u.teamLeaderId===leaderId)return true;
+    }
+    // branch-scoped: branch:${branchName}
+    if(b.to&&b.to.startsWith('branch:')){
+      const br=b.to.slice(7);
+      if(u.branch===br)return true;
     }
     return false;
   });
@@ -91,6 +97,20 @@ export function updateBroadcastUI(){
       if(supPill)supPill.style.display='';
       if(teamPill)teamPill.style.display=isMgr?'none':'';
     }
+    // Branch pills — inject once for manager
+    const aud=compose.querySelector('.msg-audience');
+    if(aud&&isMgr&&!aud.querySelector('.msg-aud-pill[data-to^="branch:"]')){
+      const sel=document.getElementById('bcast-to');
+      BRANCHES.forEach(br=>{
+        const key=`branch:${br}`;
+        const btn=document.createElement('button');
+        btn.type='button';btn.className='msg-aud-pill';btn.dataset.to=key;
+        btn.textContent='🌍 '+br;
+        btn.onclick=()=>window.setBcastAudience(key,btn);
+        aud.appendChild(btn);
+        if(sel){const opt=document.createElement('option');opt.value=key;opt.textContent=br;sel.appendChild(opt);}
+      });
+    }
   }
   const hint=document.getElementById('broadcast-hint');
   if(hint)hint.style.display=canCompose?'none':'block';
@@ -116,7 +136,7 @@ export function renderBroadcasts(){
   visible.forEach(b=>{
     const day=broadcastDayLabel(b.created);
     if(day!==lastDay){html+=`<div class="msg-day-hd">${day}</div>`;lastDay=day;}
-    const toLbl=b.to==='all'?'👥 Everyone':b.to==='employees'?'👤 Employees':b.to==='supervisors'?'🔰 Supervisors':escapeHtml(b.to);
+    const toLbl=b.to==='all'?'👥 Everyone':b.to==='employees'?'👤 Employees':b.to==='supervisors'?'🔰 Supervisors':(b.to&&b.to.startsWith('branch:'))?'🌍 '+escapeHtml(b.to.slice(7)):(b.to&&b.to.startsWith('team:'))?'🧭 Team':escapeHtml(b.to||'');
     const unread=toMillis(b.created)>seen&&b.byId!==me.id;
     const initial=(b.by||'?').trim().charAt(0).toUpperCase();
     const editBtn=isMgr&&b.id?`<button type="button" class="msg-act" onclick="editBroadcast('${b.id}')" title="Edit">✎</button>`:'';
