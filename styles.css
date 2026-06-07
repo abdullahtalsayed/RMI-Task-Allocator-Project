@@ -1887,12 +1887,12 @@ textarea.af-input{resize:vertical;min-height:72px;}
 .wfjg-bar-lbl{color:#fff;font-size:0.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,0.4);}
 /* Flowchart — horizontal */
 .wfjg-fc-h{display:flex;flex-direction:row;align-items:center;flex-wrap:wrap;gap:0;padding:0.75rem 0.75rem 0.85rem;overflow-x:auto;}
-.wfjg-fc-node-h{border:1.5px solid;border-radius:9px;overflow:hidden;background:var(--card-bg);cursor:default;min-width:100px;max-width:140px;text-align:center;flex-shrink:0;}
-.wfjg-fc-node-stage-h{font-size:0.75rem;font-weight:600;padding:0.3rem 0.55rem 0.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.wfjg-fc-node-actor-h{font-size:0.66rem;color:var(--muted);padding:0.05rem 0.55rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wfjg-fc-node-h{border:1.5px solid;border-radius:9px;overflow:hidden;background:var(--card-bg);cursor:default;min-width:130px;max-width:200px;text-align:center;flex-shrink:0;word-break:break-word;}
+.wfjg-fc-node-stage-h{font-size:0.75rem;font-weight:600;padding:0.3rem 0.55rem 0.1rem;white-space:normal;}
+.wfjg-fc-node-actor-h{font-size:0.66rem;color:var(--muted);padding:0.05rem 0.55rem;white-space:normal;}
 .wfjg-fc-node-date-h{font-size:0.62rem;color:var(--muted);padding:0.02rem 0.55rem;}
 .wfjg-fc-node-dur-h{font-size:0.67rem;font-weight:500;padding:0.1rem 0.55rem 0.08rem;}
-.wfjg-fc-node-note-h{font-size:0.62rem;color:var(--text);padding:0.15rem 0.55rem 0.3rem;border-top:1px solid var(--border);margin-top:0.15rem;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wfjg-fc-node-note-h{font-size:0.62rem;color:var(--text);padding:0.15rem 0.55rem 0.3rem;border-top:1px solid var(--border);margin-top:0.15rem;font-style:italic;white-space:normal;}
 .wfjg-fc-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;gap:1px;padding:0 2px;}
 .wfjg-fc-arrow-line-h{height:1.5px;width:20px;background:currentColor;}
 .wfjg-fc-arrow-lbl-h{font-size:0.65rem;font-weight:700;line-height:1;}
