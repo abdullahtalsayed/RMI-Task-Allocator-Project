@@ -5,13 +5,17 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RMI Task Allocator & Progress Tracker v2.15.36</title>
+<title>RMI Task Allocator & Progress Tracker v2.15.37</title>
 <link rel="icon" type="image/png" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_32,h_32,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <link rel="apple-touch-icon" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_180,h_180,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <meta name="theme-color" content="#07080c"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com https://api.emailjs.com; font-src 'self' data:; frame-src 'none'; object-src 'none';"/>
+<meta http-equiv="X-Content-Type-Options" content="nosniff"/>
+<meta http-equiv="X-Frame-Options" content="DENY"/>
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="stylesheet" href="styles.css"/>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js" integrity="sha384-SALc35EccAf6RzGw4iNsyj7kTPr33K7RoGzYu+7heZhT8s0GZouafRiCg1qy44AS" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -79,7 +83,7 @@
     <div class="hl">
       <button id="sb-toggle" class="sb-toggle-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
       <img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/>
-      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.15.36</div><div id="clock"></div></div>
+      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.15.37</div><div id="clock"></div></div>
     </div>
     <div class="hr">
       <span id="synced"></span>
@@ -648,7 +652,7 @@
     <div class="modal-foot"><button class="btn-cancel" type="button" onclick="closeJobDetail()">Close</button></div>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" integrity="sha384-BSxuMLxX+FCbTdYec3TbXlnMGEEM2QXTFdtDaveen71o+jswm2J36+xFqp8k4VHM" crossorigin="anonymous"></script>
 <script type="module" src="main.js"></script>
 </body>
 </html>
