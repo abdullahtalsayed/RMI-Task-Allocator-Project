@@ -5,7 +5,7 @@ import { users, me, userSettings, emailConfig } from './state.js';
 
 const EJS_SERVICE='service_s2xci8q';
 const EJS_TEMPLATE='template_4as1q75';
-const EJS_KEY='N_HEKFKra4RbkbfFA';
+const EJS_KEY='6SLEjcO01n04FBRGc';
 
 export function sendEmail(toEmail,subject,message,prefKey){
   if(!toEmail||!USE_FIREBASE)return;
