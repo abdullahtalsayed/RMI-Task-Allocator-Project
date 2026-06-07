@@ -2256,17 +2256,8 @@ let _anSubTab='overview';
 window.setAnSubTab=function(t){_anSubTab=t;renderAnalyticsContent();renderSbAnalyticsSubs();};
 
 function renderSbAnalyticsSubs(){
-  const el=document.getElementById('sb-analytics-subs');if(!el)return;
-  const mgr=isLead();
-  const hasWf=jobs.some(j=>j.workflow);
-  const tabs=[
-    {k:'overview',label:'📊 Overview'},
-    {k:'jobs',label:'🗂 Jobs'},
-    ...(mgr?[{k:'team',label:'👥 Team'}]:[]),
-    ...(hasWf?[{k:'workflow',label:'🧺 Workflow'}]:[])
-  ];
-  el.innerHTML=tabs.map(t=>`<button class="sb-sub-btn${t.k===_anSubTab?' active':''}" onclick="goHub('insights','reports');setAnSubTab('${t.k}')">${t.label}</button>`).join('');
-  el.style.display=el.innerHTML?'flex':'none';
+  const el=document.getElementById('sb-analytics-subs');
+  if(el){el.innerHTML='';el.style.display='none';}
 }
 window.renderSbAnalyticsSubs=renderSbAnalyticsSubs;
 
@@ -2979,8 +2970,6 @@ function applyMainNav(){
   document.querySelectorAll('.sb-work').forEach(el=>el.style.display='flex'); // Job Basket for all staff
   const topbar=document.querySelector('.topbar');
   if(topbar)topbar.style.display=currentHub==='jobs'?'flex':'none';
-  const anSubs=document.getElementById('sb-analytics-subs');
-  if(anSubs)anSubs.style.display=isLeadNav?'flex':'none';
   renderSbAnalyticsSubs();
   window.renderSbBasketSubs?.();
 }
@@ -3836,25 +3825,19 @@ function anBranchSection(){
   const otRows=branches.map(b=>({label:b,value:stat[b].onTimePct,sub:`${stat[b].onTimeN} done`,color:stat[b].onTimePct>=70?'var(--green)':stat[b].onTimePct>=40?'var(--yellow)':'var(--red)'}));
   const turnRows=branches.filter(b=>stat[b].avgMs>0).sort((a,b)=>stat[a].avgMs-stat[b].avgMs)
     .map(b=>({label:b,value:Math.round(stat[b].avgMs/3600000),sub:tdiff(0,stat[b].avgMs),color:'var(--blue)'}));
-  return`<div class="an-section-title">🏢 Branch Analytics</div>
-    <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Active Jobs per Branch</div>${anBars(activeRows)}</div>
-      <div class="an-widget"><div class="an-widget-hd">Completed per Branch <span class="an-hd-note">in range</span></div>${anBars(doneRows)}</div>
+  return`<div class="an-row-4">
+      <div class="an-widget"><div class="an-widget-hd">Active / Branch</div>${anBars(activeRows)}</div>
+      <div class="an-widget"><div class="an-widget-hd">Completed / Branch <span class="an-hd-note">in range</span></div>${anBars(doneRows)}</div>
+      <div class="an-widget"><div class="an-widget-hd">Overdue / Branch</div>${anBars(odRows)}</div>
+      <div class="an-widget"><div class="an-widget-hd">On-Time Rate / Branch</div>${anBars(otRows,{rate:true})}</div>
     </div>
-    <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Overdue per Branch</div>${anBars(odRows)}</div>
-      <div class="an-widget"><div class="an-widget-hd">On-Time Rate per Branch</div>${anBars(otRows,{rate:true})}</div>
-    </div>
-    <div class="an-widget"><div class="an-widget-hd">Avg Turnaround per Branch <span class="an-hd-note">created → completed (hours, fastest first)</span></div>${anBars(turnRows)}</div>`;
+    ${turnRows.length?`<div class="an-widget"><div class="an-widget-hd">Avg Turnaround per Branch <span class="an-hd-note">created → completed (hours, fastest first)</span></div>${anBars(turnRows)}</div>`:''}`;
+
 }
 
 renderAnalyticsContent=function(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
-  if(me.role==='sales_operation')return; // sales op has no analytics
-  // show Teams tab for managers only
-  document.querySelectorAll('.sb-manager-tab').forEach(b=>b.style.display=me.role==='manager'?'':'none');
-  // teams view
-  if(analyticsView==='teams'){renderTeamsAnalytics(el);return;}
+  if(me.role==='sales_operation')return;
   anPopulateEmp();anPopulateType();anPopulateBranch();
   const isMgr=isLead()||amDirector();
   const now=Date.now();
@@ -4029,87 +4012,88 @@ renderAnalyticsContent=function(){
   const leadEmps=teamUsersForView().filter(u=>u.role!=='manager');
   const crossTeam=anCrossTeamTypeWidget();
   const overdueTrend=anOverdueTrendWidget(visibleJobs(),buckets);
-
-  // tab guards
   const hasWf=jobs.some(j=>j.workflow);
-  if(_anSubTab==='team'&&!isMgr)_anSubTab='overview';
-  if(_anSubTab==='workflow'&&!hasWf)_anSubTab='overview';
-  const showOv=_anSubTab==='overview';
-  const showJbs=_anSubTab==='jobs';
-  const showTm=_anSubTab==='team';
-  const showWf=_anSubTab==='workflow';
 
   const set=html=>{el.innerHTML=`<div class="an-sub-body">${html}</div>`;bindChartInteractions(el);};
+  const sec=lbl=>`<div class="an-section-lbl">${lbl}</div>`;
 
   // ── EMPLOYEE ──────────────────────────────────────────────────────────────
   if(isEmp){
-    if(showJbs){set(jobAnalysisHtml);return;}
     set(`${kpiHtml}
       <div class="an-row-2">
         <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-        ${typeRows.length?`<div class="an-widget"><div class="an-widget-hd">My Jobs by Type</div>${anBars(typeRows)}</div>`:''}
+        <div class="an-widget"><div class="an-widget-hd">Completion Trend <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anTrendChart(trendPts)}</div>
       </div>
-      <div class="an-row-2">
-        <div class="an-widget"><div class="an-widget-hd">My Completion Trend <span class="an-hd-note">last 6 ${byMonth?'months':'weeks'}</span></div>${anTrendChart(trendPts)}</div>
-        ${anSpeedVsTeam(me.id,visibleJobs())}
-      </div>
-      ${anMyRankCard(me.id,visibleJobs())}`);
+      ${anMyRankCard(me.id,visibleJobs())}
+      ${anSpeedVsTeam(me.id,visibleJobs())}
+      ${sec('📋 Job Analysis')}
+      ${jobAnalysisHtml}`);
     return;
   }
 
   // ── TEAM LEADER ───────────────────────────────────────────────────────────
   if(isTL_){
-    if(showWf){set(wfAnalyticsSection()||'<div class="empty" style="padding:2rem;">No workflow data yet.</div>');return;}
-    if(showTm){set(`
+    set(`${kpiHtml}
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
+        ${throughputHtml}
+      </div>
+      ${sec('👥 Team')}
       <div class="an-row-2">
         ${anTeamHealthWidget(leadEmps,visibleJobs())}
         ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
       </div>
       ${anOverdueTrendWidget(visibleJobs(),buckets)}
-      ${perfHtml}`);return;}
-    if(showJbs){set(jobAnalysisHtml);return;}
-    set(`${kpiHtml}
-      <div class="an-row-2">
-        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-        ${throughputHtml}
-      </div>`);
+      ${perfHtml}
+      ${sec('📋 Job Analysis')}
+      ${jobAnalysisHtml}
+      ${hasWf?`${sec('🧺 Workflow')}<div id="an-wf-inline"></div>`:''}`);
+    if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'<div class="empty" style="padding:1rem;">No workflow data yet.</div>';}
     return;
   }
 
   // ── SUPERVISOR ────────────────────────────────────────────────────────────
   if(isSup){
-    if(showWf){set(wfAnalyticsSection()||'<div class="empty" style="padding:2rem;">No workflow data yet.</div>');return;}
-    if(showTm){set(`
+    set(`${kpiHtml}
+      <div class="an-row-2">
+        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
+        ${throughputHtml}
+      </div>
+      ${sec('👥 Team')}
       <div class="an-row-2">
         ${anTeamHealthWidget(leadEmps,visibleJobs())}
         ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
       </div>
       ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
-      ${perfHtml}`);return;}
-    if(showJbs){set(`${anBranchSection()}${jobAnalysisHtml}`);return;}
-    set(`${kpiHtml}
-      <div class="an-row-2">
-        <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-        ${throughputHtml}
-      </div>`);
+      ${perfHtml}
+      ${sec('📋 Jobs & Branches')}
+      ${anBranchSection()}
+      ${jobAnalysisHtml}
+      ${hasWf?`${sec('🧺 Workflow')}<div id="an-wf-inline"></div>`:''}`);
+    if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'<div class="empty" style="padding:1rem;">No workflow data yet.</div>';}
     return;
   }
 
-  // ── MANAGER ───────────────────────────────────────────────────────────────
-  if(showWf){set(wfAnalyticsSection()||'<div class="empty" style="padding:2rem;">No workflow data yet.</div>');return;}
-  if(showTm){set(`
+  // ── MANAGER / DIRECTOR ────────────────────────────────────────────────────
+  set(`${kpiHtml}
+    <div class="an-row-2">
+      <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
+      ${throughputHtml}
+    </div>
+    ${sec('👥 Team')}
     <div class="an-row-2">
       ${anTeamHealthWidget(leadEmps,visibleJobs())}
       ${anActiveVsPausedWidget(leadEmps,visibleJobs())}
     </div>
     ${crossTeam?`<div class="an-row-2">${overdueTrend}${crossTeam}</div>`:overdueTrend}
-    ${perfHtml}`);return;}
-  if(showJbs){set(`${anBranchSection()}${jobAnalysisHtml}`);return;}
-  set(`${kpiHtml}
-    <div class="an-row-2">
-      <div class="an-widget"><div class="an-widget-hd">Status Breakdown</div>${anDonut(statusData,total,'jobs')}</div>
-      ${throughputHtml}
-    </div>`);
+    ${perfHtml}
+    ${sec('📋 Jobs & Branches')}
+    ${anBranchSection()}
+    ${jobAnalysisHtml}
+    ${hasWf?`${sec('🧺 Workflow')}<div id="an-wf-inline"></div>`:''}
+    ${sec('👥 Teams Overview')}<div id="an-teams-inline"></div>`);
+  if(hasWf){const wfEl=el.querySelector('#an-wf-inline');if(wfEl)wfEl.innerHTML=wfAnalyticsSection()||'';}
+  const teamsEl=el.querySelector('#an-teams-inline');if(teamsEl)renderTeamsAnalytics(teamsEl);
 }
 
 // handleNotifClick with URL update
