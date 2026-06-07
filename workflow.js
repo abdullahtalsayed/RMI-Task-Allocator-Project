@@ -623,16 +623,13 @@ function _wfJobFlow(j){
       <div class="wfjg-fc-arrow-lbl-h">${_arrowLabel(h[i-1].action)}</div>
       <div class="wfjg-fc-arrow-head-h">▶</div>
     </div>`:'';
-    const tipKey=`fc_${j.id}_${i}`;
     const dateStr=new Date(toMillis(e.at)).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-    _htlTipData[tipKey]=`<div class="wf-htl-tt-stage" style="color:${col}">${esc(wfStageMeta(e.to).label)}</div>`+
-      `<div class="wf-htl-tt-meta">${esc(e.by)} · ${dateStr}</div>`+
-      `<div class="wf-htl-tt-dur">⏱ ${dur}</div>`+
-      (e.note?`<div class="wf-htl-tt-dur" style="font-style:italic;">${esc(e.note)}</div>`:'');
-    return`${arrow}<div class="wfjg-fc-node-h" style="border-color:${col};"
-      onmouseenter="wfHtlShow(this,'${tipKey}')" onmouseleave="wfHtlHide()">
-      <div class="wfjg-fc-node-stage-h" style="background:${col}22;color:${col};">${esc(wfStageMeta(e.to).short)}</div>
-      <div class="wfjg-fc-node-dur-h">${dur}</div>
+    return`${arrow}<div class="wfjg-fc-node-h" style="border-color:${col};">
+      <div class="wfjg-fc-node-stage-h" style="background:${col}22;color:${col};">${esc(wfStageMeta(e.to).label)}</div>
+      <div class="wfjg-fc-node-actor-h">👤 ${esc(e.by)}</div>
+      <div class="wfjg-fc-node-date-h">🕐 ${dateStr}</div>
+      <div class="wfjg-fc-node-dur-h" style="color:${col};">⏱ ${dur}</div>
+      ${e.note?`<div class="wfjg-fc-node-note-h">${esc(e.note)}</div>`:''}
     </div>`;
   }).join('');
   return`<div class="wfjg-fc-h">${nodes}</div>`;
