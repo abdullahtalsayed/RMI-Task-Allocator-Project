@@ -4167,78 +4167,99 @@ const MYS_WIDGETS={
 };
 
 function getMysDefaults(){
-  if(!me)return[];
+  if(!me)return{left:[],right:[]};
   const r=me.role;
-  if(r==='sales_operation')return['quick-links','my-active','my-overdue','my-deadlines','wf-submitted','my-broadcasts'];
-  if(r==='employee')return['quick-links','an-kpis','an-status','an-trend','an-my-rank','my-active','my-overdue','my-deadlines','wf-my-tasks'];
-  if(r==='team_leader')return['quick-links','an-kpis','an-team-health','an-overdue-trend','an-perf','my-deadlines','all-overdue','wf-my-queue','wf-pending-review'];
-  if(r==='supervisor'||r==='manager'||amDirector())return['quick-links','an-kpis','an-branch','an-perf','all-overdue','all-pending','wf-overview','my-activity'];
-  return['quick-links','my-active','my-overdue','my-deadlines'];
+  if(r==='sales_operation')return{left:['quick-links','my-active','my-overdue'],right:['my-deadlines','wf-submitted','my-broadcasts']};
+  if(r==='employee')return{left:['quick-links','an-kpis','an-trend','my-active','my-overdue'],right:['an-status','an-my-rank','my-deadlines','my-recently-done']};
+  if(r==='team_leader')return{left:['quick-links','an-kpis','an-team-health','an-perf','wf-my-queue'],right:['my-deadlines','an-overdue-trend','all-overdue','wf-pending-review']};
+  if(r==='supervisor'||r==='manager'||amDirector())return{left:['quick-links','an-kpis','an-branch','all-overdue','wf-overview'],right:['an-perf','all-pending','my-activity','team-activity']};
+  return{left:['quick-links','my-active'],right:['my-overdue','my-deadlines']};
+}
+function _mysColConfig(flat){
+  // split flat array into {left,right} alternating
+  const left=[],right=[];
+  flat.forEach((k,i)=>{if(i%2===0)left.push(k);else right.push(k);});
+  return{left,right};
 }
 function loadMysConfig(){
-  if(!me)return[];
-  try{const s=localStorage.getItem('mys-cfg-'+me.id);return s?JSON.parse(s):getMysDefaults();}
-  catch(e){return getMysDefaults();}
+  if(!me)return getMysDefaults();
+  try{
+    const s=localStorage.getItem('mys-cfg-'+me.id);
+    if(!s)return getMysDefaults();
+    const p=JSON.parse(s);
+    // backward compat: old format was flat array
+    return Array.isArray(p)?_mysColConfig(p):p;
+  }catch(e){return getMysDefaults();}
 }
 function saveMysConfig(cfg){if(me)localStorage.setItem('mys-cfg-'+me.id,JSON.stringify(cfg));}
 window.addMysWidget=function(key){
   const cfg=loadMysConfig();
-  if(!cfg.includes(key)){cfg.push(key);saveMysConfig(cfg);}
-  renderMySpace();
+  const all=[...cfg.left,...cfg.right];
+  if(all.includes(key)){renderMySpace();return;}
+  // add to shorter column
+  if(cfg.left.length<=cfg.right.length)cfg.left.push(key);else cfg.right.push(key);
+  saveMysConfig(cfg);renderMySpace();
 };
 window.removeMysWidget=function(key){
-  saveMysConfig(loadMysConfig().filter(k=>k!==key));
-  renderMySpace();
+  const cfg=loadMysConfig();
+  cfg.left=cfg.left.filter(k=>k!==key);
+  cfg.right=cfg.right.filter(k=>k!==key);
+  saveMysConfig(cfg);renderMySpace();
 };
 let _mysEditMode=false;
 window.toggleMysEdit=function(){
   _mysEditMode=!_mysEditMode;
-  const grid=document.getElementById('mys-grid');
+  document.querySelectorAll('.mys-col').forEach(c=>c.classList.toggle('mys-edit-mode',_mysEditMode));
   const picker=document.getElementById('mys-picker');
   const btn=document.getElementById('mys-edit-btn');
-  if(grid)grid.classList.toggle('mys-edit-mode',_mysEditMode);
   if(picker)picker.style.display=_mysEditMode?'block':'none';
   if(btn){btn.textContent=_mysEditMode?'✓ Done':'✏️ Customize';btn.classList.toggle('active',_mysEditMode);}
 };
-let _mysSortable=null;
-function _mysInitDrag(grid){
-  if(!grid||!window.Sortable)return;
-  if(_mysSortable){try{_mysSortable.destroy();}catch(e){}}
-  _mysSortable=new window.Sortable(grid,{
+const _mysSortables=[];
+function _mysInitDrag(leftEl,rightEl){
+  if(!window.Sortable)return;
+  _mysSortables.forEach(s=>{try{s.destroy();}catch(e){}});
+  _mysSortables.length=0;
+  const opts={
+    group:'mys-widgets',
     animation:180,
     handle:'.mys-drag-handle',
     ghostClass:'mys-drag-ghost',
     chosenClass:'mys-drag-chosen',
     dragClass:'mys-drag-active',
-    forceFallback:false,
     onEnd(){
-      const order=[...grid.children].map(el=>el.dataset.key).filter(Boolean);
-      const cfg=loadMysConfig();
-      const hidden=cfg.filter(k=>!order.includes(k));
-      saveMysConfig([...order,...hidden]);
+      const left=[...leftEl.children].map(e=>e.dataset.key).filter(Boolean);
+      const right=[...rightEl.children].map(e=>e.dataset.key).filter(Boolean);
+      saveMysConfig({left,right});
     }
-  });
+  };
+  _mysSortables.push(new window.Sortable(leftEl,opts),new window.Sortable(rightEl,opts));
+}
+function _mysWidgetHtml(key){
+  const def=MYS_WIDGETS[key];
+  if(!def||!def.roles(me.role))return'';
+  let body='';
+  try{body=def.render()||'';}catch(e){body=_mysW('Widget Error',`<div style="color:var(--red);font-size:0.78rem;">${e.message||'render failed'}</div>`);}
+  return`<div class="mys-widget" data-key="${key}"><div class="mys-drag-handle" title="Drag to reorder">⠿</div><button class="mys-remove-btn" onclick="removeMysWidget('${key}')" title="Remove">✕</button>${body}</div>`;
 }
 function renderMySpace(){
   const el=document.getElementById('mys-content');if(!el||!me)return;
   const cfg=loadMysConfig();
-  const widgetsHtml=cfg.map(key=>{
-    const def=MYS_WIDGETS[key];
-    if(!def||!def.roles(me.role))return'';
-    let body='';
-    try{body=def.render()||'';}catch(e){body=_mysW('Widget Error',`<div style="color:var(--red);font-size:0.78rem;">${e.message||'render failed'}</div>`);}
-    return`<div class="mys-widget${def.size==='full'?' full':''}" data-key="${key}"><div class="mys-drag-handle" title="Drag to reorder">⠿</div><button class="mys-remove-btn" onclick="removeMysWidget('${key}')" title="Remove">✕</button>${body}</div>`;
-  }).join('');
+  const allInCfg=new Set([...cfg.left,...cfg.right]);
+  const leftHtml=cfg.left.map(k=>_mysWidgetHtml(k)).filter(Boolean).join('');
+  const rightHtml=cfg.right.map(k=>_mysWidgetHtml(k)).filter(Boolean).join('');
   const groups={};
   Object.entries(MYS_WIDGETS).forEach(([key,def])=>{
     if(!def.roles(me.role))return;
     if(!groups[def.group])groups[def.group]=[];
     groups[def.group].push({key,def});
   });
-  const pickerHtml=Object.entries(groups).map(([grp,items])=>`<div><div class="mys-pick-grp-lbl">${grp}</div><div class="mys-pick-items">${items.map(({key,def})=>`<button class="mys-pick-btn"${cfg.includes(key)?' disabled':''} onclick="addMysWidget('${key}')">${def.label}</button>`).join('')}</div></div>`).join('');
+  const pickerHtml=Object.entries(groups).map(([grp,items])=>`<div><div class="mys-pick-grp-lbl">${grp}</div><div class="mys-pick-items">${items.map(({key,def})=>`<button class="mys-pick-btn"${allInCfg.has(key)?' disabled':''} onclick="addMysWidget('${key}')">${def.label}</button>`).join('')}</div></div>`).join('');
+  const emptyMsg=`<div style="padding:2.5rem 1rem;text-align:center;color:var(--text3);">Click ✏️ Customize to add widgets.</div>`;
   el.innerHTML=`
-    <div class="mys-grid${_mysEditMode?' mys-edit-mode':''}" id="mys-grid">
-      ${widgetsHtml||'<div style="grid-column:1/-1;padding:2.5rem;text-align:center;color:var(--text3);">Click ✏️ Customize to add widgets.</div>'}
+    <div class="mys-cols">
+      <div class="mys-col${_mysEditMode?' mys-edit-mode':''}" id="mys-col-left">${leftHtml||(!rightHtml?emptyMsg:'')}</div>
+      <div class="mys-col${_mysEditMode?' mys-edit-mode':''}" id="mys-col-right">${rightHtml}</div>
     </div>
     <div class="mys-picker" id="mys-picker" style="display:${_mysEditMode?'block':'none'};">
       <div class="mys-picker-hd"><span>➕ Add Widget</span><button class="bp sec" style="font-size:0.75rem;padding:0.28rem 0.6rem;" onclick="toggleMysEdit()">✓ Done</button></div>
@@ -4247,7 +4268,7 @@ function renderMySpace(){
   const btn=document.getElementById('mys-edit-btn');
   if(btn){btn.textContent=_mysEditMode?'✓ Done':'✏️ Customize';btn.classList.toggle('active',_mysEditMode);}
   bindChartInteractions(el);
-  _mysInitDrag(document.getElementById('mys-grid'));
+  _mysInitDrag(document.getElementById('mys-col-left'),document.getElementById('mys-col-right'));
 }
 window.renderMySpace=renderMySpace;
 
