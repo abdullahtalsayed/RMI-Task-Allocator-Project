@@ -4059,9 +4059,6 @@ window.toggleMysEdit=function(){
 };
 function renderMySpace(){
   const el=document.getElementById('mys-content');if(!el||!me)return;
-  _mysEditMode=false;
-  const btn=document.getElementById('mys-edit-btn');
-  if(btn){btn.textContent='✏️ Customize';btn.classList.remove('active');}
   const cfg=loadMysConfig();
   // render widgets
   const widgetsHtml=cfg.map(key=>{
@@ -4089,10 +4086,12 @@ function renderMySpace(){
     <div class="mys-grid${_mysEditMode?' mys-edit-mode':''}" id="mys-grid">
       ${widgetsHtml||'<div style="grid-column:1/-1;padding:2rem;text-align:center;color:var(--text3);">Click ✏️ Customize to add widgets.</div>'}
     </div>
-    <div class="mys-picker" id="mys-picker" style="display:none;">
+    <div class="mys-picker" id="mys-picker" style="display:${_mysEditMode?'block':'none'};">
       <div class="mys-picker-hd"><span>➕ Add Widget</span><button class="bp sec" style="font-size:0.75rem;padding:0.28rem 0.6rem;" onclick="toggleMysEdit()">✓ Done</button></div>
       <div class="mys-picker-groups">${pickerHtml}</div>
     </div>`;
+  const btn=document.getElementById('mys-edit-btn');
+  if(btn){btn.textContent=_mysEditMode?'✓ Done':'✏️ Customize';btn.classList.toggle('active',_mysEditMode);}
   bindChartInteractions(el);
 }
 window.renderMySpace=renderMySpace;
