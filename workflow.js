@@ -60,6 +60,12 @@ export const WF_STAGES = {
   sd_tl_revision_review:   { actor:'tl',      label:'Revision Review',                   short:'Rev Review',  color:'purple' },
   sd_jobcard:              { actor:'drafter', label:'Job Card Preparation',              short:'Job Card',    color:'yellow' },
   sd_tl_jobcard_review:    { actor:'tl',      label:'Job Card Review',                   short:'Card Review', color:'purple' },
+  // panels release
+  pr_draft:                { actor:'drafter', label:'Panels Release Preparation',        short:'PR Draft',    color:'yellow' },
+  pr_tl_review:            { actor:'tl',      label:'Panels Release Review',             short:'PR Review',   color:'purple' },
+  // flashings release
+  fl_draft:                { actor:'drafter', label:'Flashings Release Preparation',     short:'FL Draft',    color:'yellow' },
+  fl_tl_review:            { actor:'tl',      label:'Flashings Release Review',          short:'FL Review',   color:'purple' },
   // terminal
   completed:               { actor:'none',    label:'Completed',                          short:'Done',        color:'green'  },
   // reopen/continuation
@@ -83,10 +89,15 @@ function _sdPipeline(j){
   return base;
 }
 
+function _prPipeline(){ return ['intake','pr_draft','pr_tl_review','completed']; }
+function _flPipeline(){ return ['intake','fl_draft','fl_tl_review','completed']; }
+
 function wfPipeline(j){
   let pipeline;
-  if(j.type === 'Shop Drawing' || !j.type){ pipeline = _sdPipeline(j); }
-  else { pipeline = ['intake', 'completed']; }
+  if(j.type === 'Shop Drawing' || !j.type)     pipeline = _sdPipeline(j);
+  else if(j.type === 'Panels Release')          pipeline = _prPipeline();
+  else if(j.type === 'Flashings Release')       pipeline = _flPipeline();
+  else pipeline = ['intake','completed'];
   const displayStage = j.stage === 'release' ? 'completed' : j.stage;
   const cur = pipeline.indexOf(displayStage);
   return `<div class="wf-pipe">${pipeline.map((s,i)=>{
@@ -303,6 +314,157 @@ const QC5 = [
   {q:'Did you check the panel thickness specs / sketches?',       key:'thickness'},
 ];
 
+// ── PANELS RELEASE CHECKLIST ─────────────────────────────────────────────────
+const PR_CHECKLIST = [
+  {q:'Did you check the panel orientation (LH or RH)?', key:'orientation'},
+  {q:'Did you check the quantity?',                      key:'quantity'},
+  {q:'Did you check the length?',                        key:'length'},
+  {q:'Did you check the part mark?',                     key:'partMark'},
+  {q:'Did you check the top sheet material?',            key:'topSheetMaterial'},
+  {q:'Did you check the liner sheet material?',          key:'linerSheetMaterial'},
+  {q:'Did you check the insulation material?',           key:'insulationMaterial'},
+  {q:'Did you check the insulation thickness?',          key:'insulationThickness'},
+  {q:'Did you check the insulation density?',            key:'insulationDensity'},
+  {q:'Did you check the top sheet color?',               key:'topSheetColor'},
+  {q:'Did you check the bottom sheet color?',            key:'bottomSheetColor'},
+];
+
+// ── FLASHINGS RELEASE CHECKLIST ───────────────────────────────────────────────
+const FL_CHECKLIST = [
+  {q:'Did you check the color?',                     key:'color'},
+  {q:'Did you check the specs?',                     key:'specs'},
+  {q:'Did you check the material?',                  key:'material'},
+  {q:'Did you check the color side of flashing?',    key:'colorSide'},
+];
+
+// ── PANELS RELEASE · DRAFTER: START / SUBMIT ─────────────────────────────────
+window.wfSubmitPR = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const scopeMap = {roof:'Roof Panels', wall:'Wall Panels', both:'Roof + Wall Panels'};
+  const scopeLabel = scopeMap[j.prScope] || 'Panels';
+  wfAsk(`Submit ${scopeLabel} Release`, PR_CHECKLIST, async(ans)=>{
+    await wfAdvance(jobId,'pr_tl_review',{
+      action:'pr_submitted', checklist:ans, owner:j.teamLeaderId,
+      note:`${scopeLabel} release submitted for TL review`,
+    });
+    await addEvent(jobId,'wf_pr_tl_review',
+      `📦 ${me.name} submitted ${scopeLabel} release for review`,'purple');
+    pushNotif(j.teamLeaderId,'📦 Panels Release Ready',
+      `${j.client} (#${j.jobNum}) — review ${scopeLabel} release.`);
+    showToastMsg('✅ Sent to team leader for review.');
+    renderJobBasket();
+  },(q)=>{ showToastMsg('Complete every check before submitting.'); });
+};
+
+// ── PANELS RELEASE · TL: REVIEW ──────────────────────────────────────────────
+window.wfReviewPR = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const scopeMap = {roof:'Roof Panels', wall:'Wall Panels', both:'Roof + Wall Panels'};
+  const scopeLabel = scopeMap[j.prScope] || 'Panels';
+  wfAsk(`Review ${scopeLabel} Release`, PR_CHECKLIST, (ans)=>{
+    _wfCtx = {jobId, checklist:ans};
+    wfShowDecision(j,
+      'Approve → job completed. Reject (comment required) → drafter fixes & resubmits.',
+      'wfDecidePR', true);
+  },(q)=>{ showToastMsg('Complete the checklist before reviewing.'); });
+};
+
+window.wfDecidePR = async function(approve){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  const note = document.getElementById('wf-reject-note')?.value.trim() || null;
+  if(!approve && !note){ alert('A comment is required when rejecting.'); return; }
+  if(approve){
+    await wfAdvance(j.id,'completed',{
+      action:'pr_approved', checklist:_wfCtx.checklist,
+      note:'Panels release approved — completed',
+      statusComplete:true, extra:{releaseEligible:true},
+    });
+    await addEvent(j.id,'completed',`✅ ${me.name} approved panels release — completed`,'green');
+    if(j.drafterId)   pushNotif(j.drafterId,'✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — panels release approved.`);
+    if(j.wfCreatedBy) pushNotif(j.wfCreatedBy,'✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — done.`);
+    showToastMsg('🎉 Panels release approved — job completed.');
+  } else {
+    const rejCount = (j.rejectionCount||0) + 1;
+    await wfAdvance(j.id,'pr_draft',{
+      action:'pr_rejected', checklist:_wfCtx.checklist, owner:j.drafterId,
+      note:note, extra:{rejectionCount:rejCount, lastRejectNote:note, lastRejectPhase:'pr'},
+    });
+    await addEvent(j.id,'wf_pr_rejected',
+      `🔴 ${me.name} rejected panels release (rejection #${rejCount}) — ${note}`,'red');
+    pushNotif(j.drafterId,'🔴 Panels Release Rejected',
+      `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    showToastMsg('Sent back for fixes.');
+  }
+  window.wfCloseModal();
+  renderJobBasket();
+};
+
+// ── FLASHINGS RELEASE · DRAFTER: START / SUBMIT ───────────────────────────────
+window.wfSubmitFL = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const scopeMap = {roof:'Roof Flashings', wall:'Wall Flashings', both:'Roof + Wall Flashings'};
+  const scopeLabel = scopeMap[j.flScope] || 'Flashings';
+  wfAsk(`Submit ${scopeLabel} Release`, FL_CHECKLIST, async(ans)=>{
+    await wfAdvance(jobId,'fl_tl_review',{
+      action:'fl_submitted', checklist:ans, owner:j.teamLeaderId,
+      note:`${scopeLabel} release submitted for TL review`,
+    });
+    await addEvent(jobId,'wf_fl_tl_review',
+      `🔩 ${me.name} submitted ${scopeLabel} release for review`,'purple');
+    pushNotif(j.teamLeaderId,'🔩 Flashings Release Ready',
+      `${j.client} (#${j.jobNum}) — review ${scopeLabel} release.`);
+    showToastMsg('✅ Sent to team leader for review.');
+    renderJobBasket();
+  },(q)=>{ showToastMsg('Complete every check before submitting.'); });
+};
+
+// ── FLASHINGS RELEASE · TL: REVIEW ───────────────────────────────────────────
+window.wfReviewFL = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const scopeMap = {roof:'Roof Flashings', wall:'Wall Flashings', both:'Roof + Wall Flashings'};
+  const scopeLabel = scopeMap[j.flScope] || 'Flashings';
+  wfAsk(`Review ${scopeLabel} Release`, FL_CHECKLIST, (ans)=>{
+    _wfCtx = {jobId, checklist:ans};
+    wfShowDecision(j,
+      'Approve → job completed. Reject (comment required) → drafter fixes & resubmits.',
+      'wfDecideFL', true);
+  },(q)=>{ showToastMsg('Complete the checklist before reviewing.'); });
+};
+
+window.wfDecideFL = async function(approve){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  const note = document.getElementById('wf-reject-note')?.value.trim() || null;
+  if(!approve && !note){ alert('A comment is required when rejecting.'); return; }
+  if(approve){
+    await wfAdvance(j.id,'completed',{
+      action:'fl_approved', checklist:_wfCtx.checklist,
+      note:'Flashings release approved — completed',
+      statusComplete:true, extra:{releaseEligible:true},
+    });
+    await addEvent(j.id,'completed',`✅ ${me.name} approved flashings release — completed`,'green');
+    if(j.drafterId)   pushNotif(j.drafterId,'✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — flashings release approved.`);
+    if(j.wfCreatedBy) pushNotif(j.wfCreatedBy,'✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — done.`);
+    showToastMsg('🎉 Flashings release approved — job completed.');
+  } else {
+    const rejCount = (j.rejectionCount||0) + 1;
+    await wfAdvance(j.id,'fl_draft',{
+      action:'fl_rejected', checklist:_wfCtx.checklist, owner:j.drafterId,
+      note:note, extra:{rejectionCount:rejCount, lastRejectNote:note, lastRejectPhase:'fl'},
+    });
+    await addEvent(j.id,'wf_fl_rejected',
+      `🔴 ${me.name} rejected flashings release (rejection #${rejCount}) — ${note}`,'red');
+    pushNotif(j.drafterId,'🔴 Flashings Release Rejected',
+      `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    showToastMsg('Sent back for fixes.');
+  }
+  window.wfCloseModal();
+  renderJobBasket();
+};
+
 // ── INTAKE: TL TAKE & ASSIGN ──────────────────────────────────────────────────
 window.wfTakeJob = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
@@ -351,6 +513,24 @@ function _wfShowAssignForm(j){
         </label>
       </div>
     </div>
+    <div id="wf-pr-scope-wrap" style="display:none;">
+      <label class="wf-f">Panels Scope
+        <select id="wf-pr-scope">
+          <option value="roof">Roof Panels</option>
+          <option value="wall">Wall Panels</option>
+          <option value="both" selected>Roof + Wall Panels</option>
+        </select>
+      </label>
+    </div>
+    <div id="wf-fl-scope-wrap" style="display:none;">
+      <label class="wf-f">Flashings Scope
+        <select id="wf-fl-scope">
+          <option value="roof">Roof Flashings</option>
+          <option value="wall">Wall Flashings</option>
+          <option value="both" selected>Roof + Wall Flashings</option>
+        </select>
+      </label>
+    </div>
     <label class="wf-f">Deadline<input type="datetime-local" id="wf-dl"></label>
     <label class="wf-f">Assign to (freest first)
       <select id="wf-member">
@@ -365,9 +545,13 @@ function _wfShowAssignForm(j){
 }
 
 window.wfTypeChange = function(){
-  const t  = document.getElementById('wf-type')?.value;
-  const sw = document.getElementById('wf-sd-scope-wrap');
-  if(sw) sw.style.display = (t === 'Shop Drawing') ? 'block' : 'none';
+  const t = document.getElementById('wf-type')?.value;
+  const sd = document.getElementById('wf-sd-scope-wrap');
+  const pr = document.getElementById('wf-pr-scope-wrap');
+  const fl = document.getElementById('wf-fl-scope-wrap');
+  if(sd) sd.style.display = (t === 'Shop Drawing')     ? 'block' : 'none';
+  if(pr) pr.style.display = (t === 'Panels Release')   ? 'block' : 'none';
+  if(fl) fl.style.display = (t === 'Flashings Release')? 'block' : 'none';
 };
 
 window.wfScopeChange = function(){
@@ -401,14 +585,26 @@ window.wfConfirmAssign = async function(){
     extra.sdGutter  = gutter;
     extra.sdSkylight = skylight;
     firstStage = (scope === 'wall') ? 'sd_wall_draft' : 'sd_roof_draft';
+  } else if(type === 'Panels Release'){
+    const scope = document.getElementById('wf-pr-scope').value;
+    extra.prScope = scope;
+    firstStage = 'pr_draft';
+  } else if(type === 'Flashings Release'){
+    const scope = document.getElementById('wf-fl-scope').value;
+    extra.flScope = scope;
+    firstStage = 'fl_draft';
   } else {
-    // Other types not yet implemented — TL still assigns, job goes to stub stage
+    // future types not yet implemented
     extra.sdScope = null; extra.sdGutter = null; extra.sdSkylight = null;
-    firstStage = 'sd_jobcard'; // placeholder until that type's flow is built
+    firstStage = 'sd_jobcard';
   }
 
-  const scopeLabel = extra.sdScope
-    ? ({roof:'Roof Only', wall:'Wall Only', roof_wall:'Roof + Wall'}[extra.sdScope] || '')
+  const _scopeLabels = {
+    roof:'Roof Only', wall:'Wall Only', roof_wall:'Roof + Wall', both:'Roof + Wall',
+  };
+  const scopeLabel = extra.sdScope ? (_scopeLabels[extra.sdScope]||'')
+    : extra.prScope ? (_scopeLabels[extra.prScope]||'')
+    : extra.flScope ? (_scopeLabels[extra.flScope]||'')
     : '';
 
   await wfAdvance(j.id, firstStage, {
@@ -861,7 +1057,23 @@ function wfActionFor(j){
   if(j.stage === 'completed' && amTL && j.releaseEligible)
     return {label:'♻️ Reopen for Continuation', fn:`wfReopenJob('${j.id}')`, cls:'sec'};
 
-  // release
+  // panels release
+  if(j.stage === 'pr_draft' && amDrafter){
+    if(j.status === 'pending') return {label:'▶ Start Job', fn:`wfStart('${j.id}')`, cls:'primary'};
+    return {label:'📦 Submit Panels Release', fn:`wfSubmitPR('${j.id}')`, cls:'primary'};
+  }
+  if(j.stage === 'pr_tl_review' && amTL)
+    return {label:'🔍 Review Panels Release', fn:`wfReviewPR('${j.id}')`, cls:'primary'};
+
+  // flashings release
+  if(j.stage === 'fl_draft' && amDrafter){
+    if(j.status === 'pending') return {label:'▶ Start Job', fn:`wfStart('${j.id}')`, cls:'primary'};
+    return {label:'🔩 Submit Flashings Release', fn:`wfSubmitFL('${j.id}')`, cls:'primary'};
+  }
+  if(j.stage === 'fl_tl_review' && amTL)
+    return {label:'🔍 Review Flashings Release', fn:`wfReviewFL('${j.id}')`, cls:'primary'};
+
+  // release (reopen)
   if(j.stage === 'release' && amDrafter)
     return {label:'📦 Submit Release', fn:`wfSubmitRelease('${j.id}')`, cls:'primary'};
 
@@ -970,6 +1182,8 @@ const _WF_STAGE_COLORS = {
   sd_client_wait:'#bf5af2',
   sd_revision_draft:'#ff453a',  sd_tl_revision_review:'#ff6961',
   sd_jobcard:'#64d2ff',         sd_tl_jobcard_review:'#ff9f0a',
+  pr_draft:'#ff9f0a',           pr_tl_review:'#bf5af2',
+  fl_draft:'#64d2ff',           fl_tl_review:'#30d158',
   completed:'#32d74b',          release:'#30d158',
 };
 
@@ -1181,9 +1395,17 @@ function wfCard(j, showAction){
   const act     = showAction ? wfActionFor(j) : null;
 
   // scope + extras badge
-  const scopeMap = {roof:'Roof Only', wall:'Wall Only', roof_wall:'Roof + Wall'};
+  const scopeMap = {roof:'Roof Only', wall:'Wall Only', roof_wall:'Roof + Wall',
+                    both:'Roof + Wall'};
+  const prScopeMap = {roof:'Roof Panels', wall:'Wall Panels', both:'Roof + Wall Panels'};
+  const flScopeMap = {roof:'Roof Flashings', wall:'Wall Flashings', both:'Roof + Wall Flashings'};
   const scopeBdg = j.sdScope
-    ? `<span class="wf-scope-bdg">${esc(scopeMap[j.sdScope]||j.sdScope)}</span>` : '';
+    ? `<span class="wf-scope-bdg">${esc(scopeMap[j.sdScope]||j.sdScope)}</span>`
+    : j.prScope
+    ? `<span class="wf-scope-bdg">${esc(prScopeMap[j.prScope]||j.prScope)}</span>`
+    : j.flScope
+    ? `<span class="wf-scope-bdg">${esc(flScopeMap[j.flScope]||j.flScope)}</span>`
+    : '';
   const gutterBdg = j.sdGutter && j.sdGutter !== 'none'
     ? `<span class="wf-scope-bdg" style="opacity:0.7;">${esc(j.sdGutter==='eave_gutter'?'Eave Gutter':'Curve')}</span>` : '';
   const skylightBdg = j.sdSkylight
@@ -1192,7 +1414,8 @@ function wfCard(j, showAction){
   // rejection warning
   const rejBanner = j.rejectionCount
     ? `<span class="wf-rej">⚠ ${j.rejectionCount} rejection${j.rejectionCount>1?'s':''}</span>` : '';
-  const lastRejectBanner = j.lastRejectNote && (j.stage==='sd_roof_draft'||j.stage==='sd_wall_draft'||j.stage==='sd_revision_draft')
+  const _rejectStages = new Set(['sd_roof_draft','sd_wall_draft','sd_revision_draft','pr_draft','fl_draft']);
+  const lastRejectBanner = j.lastRejectNote && _rejectStages.has(j.stage)
     ? `<div class="wf-rej" style="display:block;margin-top:0.25rem;">🔴 ${esc(j.lastRejectNote)}</div>` : '';
 
   // overdue
