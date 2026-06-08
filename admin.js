@@ -2,7 +2,7 @@
 // Announcements (compose/list/edit/delete + unread badge) and user CRUD UI
 // (add/edit/remove users, role pickers, team-leader assignment).
 import { USE_FIREBASE, USE_AUTH, addDoc, doc, updateDoc, deleteDoc } from './firebase.js';
-import { me, users, broadcasts, jobs, setBroadcasts, BRANCHES } from './state.js';
+import { me, users, broadcasts, jobs, setBroadcasts, BRANCHES, SPECIALIZATIONS } from './state.js';
 import { uid, toMillis, fmt, escapeHtml } from './helpers.js';
 import { uAdd, uUpdate, uDelete } from './jobs.js';
 import { showConfirm } from './modals.js';
@@ -193,10 +193,12 @@ window.addUser=async function(){
   if(!name||!pw){alert('Name and password required.');return;}
   if(USE_AUTH&&!email){alert('Email is required so the employee can activate their account.');return;}
   const branch=document.getElementById('ubranch')?.value||'';
+  const isEmpRole=role==='employee'||role==='drafter';
+  const specialization=(isEmpRole&&document.getElementById('uspec')?.value)||'';
   const id=name.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now();
   const data=USE_AUTH
-    ?{id,name,role,email,viewAll,teamLeaderId,branch,needsActivation:true,tempPassword:pw}
-    :{id,name,role,password:pw,email,viewAll,teamLeaderId,branch};
+    ?{id,name,role,email,viewAll,teamLeaderId,branch,specialization,needsActivation:true,tempPassword:pw}
+    :{id,name,role,password:pw,email,viewAll,teamLeaderId,branch,specialization};
   await uAdd(id,data);
   await logActivity({type:'user_added',category:'user',desc:`${me.name} added user ${name} (${role})`,userId:me.id,userName:me.name,role:me.role});
   pushNotif(id,'👤 Account Created',USE_AUTH
@@ -232,18 +234,23 @@ export function populateTeamLeadSelect(selId,current){
   sel.innerHTML='<option value="">— None —</option>'+tls.map(u=>`<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
   sel.value=current||'';
 }
-// show/hide team-leader picker based on selected role (only employees get a leader)
+// show/hide team-leader + specialization pickers based on selected role
 window.onRoleChange=function(ctx){
-  const roleSel=document.getElementById(ctx==='edit'?'edit-urole':'urole');
-  const wrap=document.getElementById(ctx==='edit'?'edit-teamlead-wrap':'add-teamlead-wrap');
-  if(!roleSel||!wrap)return;
-  wrap.style.display=roleSel.value==='employee'?'block':'none';
+  const isEdit=ctx==='edit';
+  const roleSel=document.getElementById(isEdit?'edit-urole':'urole');
+  const tlWrap=document.getElementById(isEdit?'edit-teamlead-wrap':'add-teamlead-wrap');
+  const spWrap=document.getElementById(isEdit?'edit-spec-wrap':'add-spec-wrap');
+  if(!roleSel)return;
+  const isEmp=roleSel.value==='employee'||roleSel.value==='drafter';
+  if(tlWrap)tlWrap.style.display=roleSel.value==='employee'?'block':'none';
+  if(spWrap)spWrap.style.display=isEmp?'block':'none';
 };
 window.openAddUserModal=function(){
   ['uname','uemail','upw'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const r=document.getElementById('urole');if(r)r.value='employee';
   const v=document.getElementById('uviewall');if(v)v.value='no';
   const br=document.getElementById('ubranch');if(br)br.value='';
+  const sp=document.getElementById('uspec');if(sp)sp.value='';
   populateTeamLeadSelect('u-teamlead','');
   onRoleChange('add');
   document.getElementById('add-user-modal').classList.add('open');
@@ -288,6 +295,12 @@ export function renderUList(){
     else cls='bdg-br-sy';
     return`<span class="bdg-br ${cls}">${escapeHtml(branch)}</span>`;
   }
+  function specBdg(spec){
+    if(!spec)return'';
+    const cls=spec==='Drafter'?'bdg-spec-dr':'bdg-spec-rl';
+    const ico=spec==='Drafter'?'✏️':'📦';
+    return`<span class="bdg-spec ${cls}">${ico} ${escapeHtml(spec)}</span>`;
+  }
   function userCard(u){
     const rmeta=roleMeta(u.role);
     const bdg=rmeta.bdg;
@@ -301,7 +314,7 @@ export function renderUList(){
     return`<div class="user-row">
       <div class="user-avatar user-av-${bdg}">${escapeHtml(initial)}</div>
       <div class="user-info">
-        <div class="user-name-row">${escapeHtml(u.name)} <span class="bdg bdg-${bdg}">${rmeta.label}</span>${branchBdg(u.branch)}</div>
+        <div class="user-name-row">${escapeHtml(u.name)} <span class="bdg bdg-${bdg}">${rmeta.label}</span>${branchBdg(u.branch)}${specBdg(u.specialization)}</div>
         <div class="user-meta">${u.email?`✉️ ${escapeHtml(u.email)}`:'<span class="tc-muted">no email</span>'} · ${u.viewAll==='yes'?'All jobs':'Own only'}${teamMeta}</div>
       </div>
       <div class="user-stat"><span class="user-stat-n">${active}</span><span class="user-stat-l">active</span></div>
@@ -340,6 +353,7 @@ window.openEditUserModal=function(id){
   document.getElementById('edit-urole').value=u.role||'employee';
   document.getElementById('edit-uviewall').value=u.viewAll==='yes'?'yes':'no';
   const ebr=document.getElementById('edit-ubranch');if(ebr)ebr.value=u.branch||'';
+  const esp=document.getElementById('edit-uspec');if(esp)esp.value=u.specialization||'';
   populateTeamLeadSelect('edit-uteamlead',u.teamLeaderId||'');
   onRoleChange('edit');
   document.getElementById('edit-user-modal').classList.add('open');
@@ -358,7 +372,9 @@ window.saveEditUser=async function(){
   const teamLeaderId=rawEditTlId&&users.find(u=>u.id===rawEditTlId&&u.role==='team_leader')?rawEditTlId:null;
   if(!name){alert('Name is required.');return;}
   const branch=document.getElementById('edit-ubranch')?.value||'';
-  const patch={name,email,role,viewAll,teamLeaderId,branch};
+  const isEmpRole=role==='employee'||role==='drafter';
+  const specialization=(isEmpRole&&document.getElementById('edit-uspec')?.value)||'';
+  const patch={name,email,role,viewAll,teamLeaderId,branch,specialization};
   if(pw)patch.password=pw;
   await uUpdate(id,patch);
   await logActivity({type:'user_edited',category:'user',desc:`${me.name} updated user ${name} (${role})`,userId:me.id,userName:me.name,role:me.role});

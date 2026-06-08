@@ -541,11 +541,12 @@ export function renderAssignEmpGrid(){
     const loadLbl=overdue>0?`⚠ ${overdue} overdue`:active>=5?'Overloaded':active>=3?'Busy':'Available';
     const roleIcon=u.role==='manager'?'👔':u.role==='supervisor'?'🔰':u.role==='team_leader'?'🧭':'👤';
     const isSel=u.id===selected;
+    const specBdg=u.specialization?`<span class="bdg-spec ${u.specialization==='Drafter'?'bdg-spec-dr':'bdg-spec-rl'}" style="font-size:0.66rem;padding:0.12rem 0.45rem;">${u.specialization==='Drafter'?'✏️':'📦'} ${escapeHtml(u.specialization)}</span>`:'';
     return`<div class="emp-card${isSel?' emp-card-sel':''}" onclick="selectAssignEmp('${u.id}')">
       <div class="emp-card-top">
         <span class="emp-card-avatar">${roleIcon}</span>
         <div class="emp-card-info">
-          <div class="emp-card-name">${escapeHtml(u.name)}</div>
+          <div class="emp-card-name">${escapeHtml(u.name)}${specBdg}</div>
           <div class="emp-card-role">${u.role}</div>
         </div>
       </div>

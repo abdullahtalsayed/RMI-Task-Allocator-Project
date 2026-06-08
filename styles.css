@@ -983,6 +983,9 @@ hr.div{border:none;border-top:1px solid var(--border);margin:1.5rem 0;}
 .bdg-br-sy{background:rgba(255,196,60,0.14);color:#ffcd5c;border:1px solid rgba(255,196,60,0.28);}
 .bdg-br-uae{background:rgba(78,220,196,0.13);color:#4ecdc4;border:1px solid rgba(78,220,196,0.28);}
 .bdg-br-in{background:rgba(255,120,70,0.14);color:#ff8c6b;border:1px solid rgba(255,120,70,0.28);}
+.bdg-spec{font-size:0.63rem;padding:2px 7px;border-radius:var(--radius-pill);font-weight:600;font-family:var(--mono);display:inline-block;vertical-align:middle;margin-left:3px;}
+.bdg-spec-dr{background:rgba(100,180,255,0.13);color:#64b4ff;border:1px solid rgba(100,180,255,0.28);}
+.bdg-spec-rl{background:rgba(160,130,255,0.13);color:#a082ff;border:1px solid rgba(160,130,255,0.28);}
 /* role group sections */
 .user-group{margin-bottom:1rem;}
 .user-group-hdr{display:flex;align-items:center;gap:0.5rem;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3);padding:0.4rem 0;border-bottom:1px solid var(--border);margin-bottom:0.5rem;cursor:pointer;user-select:none;}
