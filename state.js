@@ -6,7 +6,7 @@ export const JOB_TYPES=[
   'Panels Release','Flashings Release','Accessories Release','Purlins Release',
   'Panels + Flashings Release','Panels + Accessories Release','Flashings + Accessories Release',
   'Panels + Flashings + Accessories Release','Full Job Release','Shop Drawing',
-  'Editing Internally','Editing Revision','Erection Drawing','Civil Defense','BOM','Other'
+  'Shop Drawing Editing (Internal Audit)','Shop Drawing Editing (Revision)','Erection Drawing','Civil Defense','BOM','Other'
 ];
 
 export const ACTIVITY_TYPE_LABELS={

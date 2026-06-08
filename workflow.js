@@ -66,6 +66,39 @@ export const WF_STAGES = {
   // flashings release
   fl_draft:                { actor:'drafter', label:'Flashings Release Preparation',     short:'FL Draft',    color:'yellow' },
   fl_tl_review:            { actor:'tl',      label:'Flashings Release Review',          short:'FL Review',   color:'purple' },
+  // accessories release
+  ac_draft:                { actor:'drafter', label:'Accessories Release Preparation',   short:'AC Draft',    color:'yellow' },
+  ac_tl_review:            { actor:'tl',      label:'Accessories Release Review',        short:'AC Review',   color:'purple' },
+  // purlins release
+  pu_draft:                { actor:'drafter', label:'Purlins Release Preparation',       short:'PU Draft',    color:'yellow' },
+  pu_tl_review:            { actor:'tl',      label:'Purlins Release Review',            short:'PU Review',   color:'purple' },
+  // panels + flashings
+  pf_draft:                { actor:'drafter', label:'Panels + Flashings Preparation',    short:'PF Draft',    color:'yellow' },
+  pf_tl_review:            { actor:'tl',      label:'Panels + Flashings Review',         short:'PF Review',   color:'purple' },
+  // panels + accessories
+  pa_draft:                { actor:'drafter', label:'Panels + Accessories Preparation',  short:'PA Draft',    color:'yellow' },
+  pa_tl_review:            { actor:'tl',      label:'Panels + Accessories Review',       short:'PA Review',   color:'purple' },
+  // flashings + accessories
+  fa_draft:                { actor:'drafter', label:'Flashings + Accessories Prep',      short:'FA Draft',    color:'yellow' },
+  fa_tl_review:            { actor:'tl',      label:'Flashings + Accessories Review',    short:'FA Review',   color:'purple' },
+  // panels + flashings + accessories
+  pfa_draft:               { actor:'drafter', label:'P+F+A Preparation',                 short:'PFA Draft',   color:'yellow' },
+  pfa_tl_review:           { actor:'tl',      label:'P+F+A Review',                      short:'PFA Review',  color:'purple' },
+  // full job release
+  fj_draft:                { actor:'drafter', label:'Full Job Release Preparation',      short:'FJ Draft',    color:'yellow' },
+  fj_tl_review:            { actor:'tl',      label:'Full Job Release Review',           short:'FJ Review',   color:'purple' },
+  // shop drawing editing (internal audit)
+  sdi_draft:               { actor:'drafter', label:'SD Editing (Internal Audit) Prep',  short:'SDI Draft',   color:'yellow' },
+  sdi_tl_review:           { actor:'tl',      label:'SD Editing (Internal Audit) Review',short:'SDI Review',  color:'purple' },
+  // shop drawing editing (revision)
+  sdr_draft:               { actor:'drafter', label:'SD Editing (Revision) Prep',        short:'SDR Draft',   color:'yellow' },
+  sdr_tl_review:           { actor:'tl',      label:'SD Editing (Revision) Review',      short:'SDR Review',  color:'purple' },
+  // erection drawing
+  ed_draft:                { actor:'drafter', label:'Erection Drawing Preparation',      short:'ED Draft',    color:'yellow' },
+  ed_tl_review:            { actor:'tl',      label:'Erection Drawing Review',           short:'ED Review',   color:'purple' },
+  // civil defense
+  cd_draft:                { actor:'drafter', label:'Civil Defense — Submission Prep',   short:'CD Prep',     color:'yellow' },
+  cd_pending:              { actor:'tl',      label:'Civil Defense — Awaiting Response', short:'CD Pending',  color:'orange' },
   // terminal
   completed:               { actor:'none',    label:'Completed',                          short:'Done',        color:'green'  },
   // reopen/continuation
@@ -92,12 +125,19 @@ function _sdPipeline(j){
 function _prPipeline(){ return ['intake','pr_draft','pr_tl_review','completed']; }
 function _flPipeline(){ return ['intake','fl_draft','fl_tl_review','completed']; }
 
+function _typedPipeline(j){
+  const cfg = TYPED_WORKFLOW[j.type];
+  if(cfg) return ['intake', cfg.draftStage, cfg.reviewStage, 'completed'];
+  if(j.type === 'Civil Defense') return ['intake','cd_draft','cd_pending','completed'];
+  return ['intake','completed'];
+}
+
 function wfPipeline(j){
   let pipeline;
   if(j.type === 'Shop Drawing' || !j.type)     pipeline = _sdPipeline(j);
   else if(j.type === 'Panels Release')          pipeline = _prPipeline();
   else if(j.type === 'Flashings Release')       pipeline = _flPipeline();
-  else pipeline = ['intake','completed'];
+  else                                           pipeline = _typedPipeline(j);
   const displayStage = j.stage === 'release' ? 'completed' : j.stage;
   const cur = pipeline.indexOf(displayStage);
   return `<div class="wf-pipe">${pipeline.map((s,i)=>{
@@ -227,6 +267,42 @@ function wfAsk(title, questions, onAllYes, onNo){
   render();
 }
 
+// Multi-phase yes/no checklist — shows phase header; any No blocks
+function wfAskPhased(title, phases, onAllYes, onNo){
+  if(!phases || !phases.length){ onAllYes({}); return; }
+  const allAnswers = {};
+  let pi = 0, qi = 0;
+  const total = phases.reduce((a,p) => a + p.questions.length, 0);
+  let done = 0;
+  function render(){
+    const ph = phases[pi];
+    const q  = ph.questions[qi];
+    const showPhase = phases.length > 1 || ph.phaseTitle;
+    wfModalHtml(`
+      <div class="wf-q-title">${esc(title)}</div>
+      ${showPhase ? `<div class="wf-q-phase">${esc(ph.phaseTitle)}</div>` : ''}
+      <div class="wf-q-step">Question ${done+1}${total>1?' of '+total:''}</div>
+      <div class="wf-q-text">${esc(q.q)}</div>
+      <div class="wf-q-actions">
+        <button class="wf-btn-no"  onclick="__wfAns(false)">No</button>
+        <button class="wf-btn-yes" onclick="__wfAns(true)">Yes</button>
+      </div>`);
+  }
+  window.__wfAns = function(yes){
+    const ph = phases[pi];
+    const q  = ph.questions[qi];
+    allAnswers[q.key] = yes;
+    done++;
+    if(!yes){ window.wfCloseModal(); if(onNo) onNo(q, allAnswers); return; }
+    qi++;
+    if(qi >= ph.questions.length){ pi++; qi = 0;
+      if(pi >= phases.length){ window.wfCloseModal(); onAllYes(allAnswers); return; }
+    }
+    render();
+  };
+  render();
+}
+
 // Approve/reject decision modal (reject comment mandatory when rejectRequired=true)
 function wfShowDecision(j, desc, fnName, rejectRequired=false){
   wfModalHtml(`
@@ -336,6 +412,91 @@ const FL_CHECKLIST = [
   {q:'Did you check the material?',                  key:'material'},
   {q:'Did you check the color side of flashing?',    key:'colorSide'},
 ];
+
+// ── PURLINS RELEASE CHECKLIST ─────────────────────────────────────────────────
+const PU_CHECKLIST = [
+  {q:'Did you check the flange thickness?',                    key:'flangeThickness'},
+  {q:'Did you check that lengths match the purlin sketches?',  key:'lengthMatch'},
+];
+
+// ── ACCESSORIES SINGLE CHECK ──────────────────────────────────────────────────
+const AC_SINGLE = [
+  {q:'Did you prepare the accessories release package?',       key:'accessoriesPackage'},
+];
+
+// ── TYPED WORKFLOW CONFIG ─────────────────────────────────────────────────────
+// Data-driven config for all simple draft→tl_review→completed types.
+// phases(j) = array of {phaseTitle, questions} shown in wfAskPhased.
+// null phases = no checklist (straight submit/approve).
+// drafterPhases / tlPhases = separate phase arrays for Erection Drawing.
+const TYPED_WORKFLOW = {
+  'Accessories Release': {
+    draftStage:'ac_draft', reviewStage:'ac_tl_review', phases:null,
+  },
+  'Purlins Release': {
+    draftStage:'pu_draft', reviewStage:'pu_tl_review',
+    phases:()=>[{phaseTitle:'Purlins Check', questions:PU_CHECKLIST}],
+  },
+  'Panels + Flashings Release': {
+    draftStage:'pf_draft', reviewStage:'pf_tl_review',
+    phases:()=>[
+      {phaseTitle:'Phase 1 of 2 — Panels',    questions:PR_CHECKLIST},
+      {phaseTitle:'Phase 2 of 2 — Flashings', questions:FL_CHECKLIST},
+    ],
+  },
+  'Panels + Accessories Release': {
+    draftStage:'pa_draft', reviewStage:'pa_tl_review',
+    phases:()=>[
+      {phaseTitle:'Phase 1 of 2 — Panels',      questions:PR_CHECKLIST},
+      {phaseTitle:'Phase 2 of 2 — Accessories', questions:AC_SINGLE},
+    ],
+  },
+  'Flashings + Accessories Release': {
+    draftStage:'fa_draft', reviewStage:'fa_tl_review',
+    phases:()=>[
+      {phaseTitle:'Phase 1 of 2 — Flashings',   questions:FL_CHECKLIST},
+      {phaseTitle:'Phase 2 of 2 — Accessories', questions:AC_SINGLE},
+    ],
+  },
+  'Panels + Flashings + Accessories Release': {
+    draftStage:'pfa_draft', reviewStage:'pfa_tl_review',
+    phases:()=>[
+      {phaseTitle:'Phase 1 of 3 — Panels',      questions:PR_CHECKLIST},
+      {phaseTitle:'Phase 2 of 3 — Flashings',   questions:FL_CHECKLIST},
+      {phaseTitle:'Phase 3 of 3 — Accessories', questions:AC_SINGLE},
+    ],
+  },
+  'Full Job Release': {
+    draftStage:'fj_draft', reviewStage:'fj_tl_review',
+    phases:()=>[
+      {phaseTitle:'Phase 1 of 4 — Panels',      questions:PR_CHECKLIST},
+      {phaseTitle:'Phase 2 of 4 — Flashings',   questions:FL_CHECKLIST},
+      {phaseTitle:'Phase 3 of 4 — Accessories', questions:AC_SINGLE},
+      {phaseTitle:'Phase 4 of 4 — Purlins',     questions:PU_CHECKLIST},
+    ],
+  },
+  'Shop Drawing Editing (Internal Audit)': {
+    draftStage:'sdi_draft', reviewStage:'sdi_tl_review', phases:null,
+  },
+  'Shop Drawing Editing (Revision)': {
+    draftStage:'sdr_draft', reviewStage:'sdr_tl_review', phases:null,
+  },
+  'Erection Drawing': {
+    draftStage:'ed_draft', reviewStage:'ed_tl_review',
+    drafterPhases:(j)=>{
+      const s = j.sdScope || 'roof_wall'; const ps = [];
+      if(s==='roof'||s==='roof_wall') ps.push({phaseTitle:'Roof Layout', questions:_roofDrafterChecklist(j)});
+      if(s==='wall'||s==='roof_wall') ps.push({phaseTitle:'Wall Layout', questions:_wallDrafterChecklist()});
+      return ps.length ? ps : null;
+    },
+    tlPhases:(j)=>{
+      const s = j.sdScope || 'roof_wall'; const ps = [];
+      if(s==='roof'||s==='roof_wall') ps.push({phaseTitle:'Roof Layout', questions:_roofTLChecklist()});
+      if(s==='wall'||s==='roof_wall') ps.push({phaseTitle:'Wall Layout', questions:_wallTLChecklist()});
+      return ps.length ? ps : null;
+    },
+  },
+};
 
 // ── PANELS RELEASE · DRAFTER: START / SUBMIT ─────────────────────────────────
 window.wfSubmitPR = function(jobId){
@@ -465,6 +626,142 @@ window.wfDecideFL = async function(approve){
   renderJobBasket();
 };
 
+// ── GENERIC TYPED WORKFLOW HANDLERS ──────────────────────────────────────────
+window.wfSubmitType = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const cfg = TYPED_WORKFLOW[j.type]; if(!cfg) return;
+  const phases = cfg.drafterPhases ? cfg.drafterPhases(j) : (cfg.phases ? cfg.phases(j) : null);
+  if(!phases || !phases.length){
+    _wfTypeSubmitDone(j, cfg.reviewStage, null); return;
+  }
+  wfAskPhased(`Submit — ${j.type}`, phases, (ans)=>{
+    _wfTypeSubmitDone(j, cfg.reviewStage, ans);
+  },(q)=>{ showToastMsg('Complete every check before submitting.'); });
+};
+
+async function _wfTypeSubmitDone(j, reviewStage, checklist){
+  await wfAdvance(j.id, reviewStage, {
+    action:'type_submitted', checklist, owner:j.teamLeaderId,
+    note:`${j.type} submitted for TL review`,
+  });
+  await addEvent(j.id, `wf_${reviewStage}`, `📤 ${me.name} submitted ${j.type} for review`, 'purple');
+  pushNotif(j.teamLeaderId, `📋 ${j.type} Ready`,
+    `${j.client} (#${j.jobNum}) — review & approve.`);
+  showToastMsg('✅ Sent to team leader for review.');
+  renderJobBasket();
+}
+
+window.wfReviewType = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const cfg = TYPED_WORKFLOW[j.type]; if(!cfg) return;
+  const phases = cfg.tlPhases ? cfg.tlPhases(j) : (cfg.phases ? cfg.phases(j) : null);
+  if(!phases || !phases.length){
+    _wfCtx = {jobId, checklist:null};
+    wfShowDecision(j,
+      'Approve → completed. Reject (comment required) → drafter fixes & resubmits.',
+      'wfDecideType', true);
+  } else {
+    wfAskPhased(`Review — ${j.type}`, phases, (ans)=>{
+      _wfCtx = {jobId, checklist:ans};
+      wfShowDecision(j,
+        'Approve → completed. Reject (comment required) → drafter fixes & resubmits.',
+        'wfDecideType', true);
+    },(q)=>{ showToastMsg('Complete the checklist before reviewing.'); });
+  }
+};
+
+window.wfDecideType = async function(approve){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  const cfg = TYPED_WORKFLOW[j.type]; if(!cfg) return;
+  const note = document.getElementById('wf-reject-note')?.value.trim() || null;
+  if(!approve && !note){ alert('A comment is required when rejecting.'); return; }
+  if(approve){
+    await wfAdvance(j.id, 'completed', {
+      action:'type_approved', checklist:_wfCtx.checklist,
+      note:`${j.type} approved — completed`,
+      statusComplete:true, extra:{releaseEligible:true},
+    });
+    await addEvent(j.id, 'completed', `✅ ${me.name} approved ${j.type} — completed`, 'green');
+    if(j.drafterId)   pushNotif(j.drafterId,   '✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — ${j.type} approved.`);
+    if(j.wfCreatedBy) pushNotif(j.wfCreatedBy, '✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — done.`);
+    showToastMsg(`🎉 ${j.type} approved — job completed.`);
+  } else {
+    const rejCount = (j.rejectionCount||0) + 1;
+    await wfAdvance(j.id, cfg.draftStage, {
+      action:'type_rejected', checklist:_wfCtx.checklist, owner:j.drafterId,
+      note, extra:{rejectionCount:rejCount, lastRejectNote:note, lastRejectPhase:j.type},
+    });
+    await addEvent(j.id, 'wf_type_rejected',
+      `🔴 ${me.name} rejected ${j.type} (rejection #${rejCount}) — ${note}`, 'red');
+    pushNotif(j.drafterId, `🔴 ${j.type} Rejected`,
+      `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    showToastMsg('Sent back for fixes.');
+  }
+  window.wfCloseModal();
+  renderJobBasket();
+};
+
+// ── CIVIL DEFENSE HANDLERS ────────────────────────────────────────────────────
+window.wfSubmitCD = async function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  await wfAdvance(jobId, 'cd_pending', {
+    action:'cd_submitted', owner:j.teamLeaderId,
+    note:'Civil Defense drawings submitted — awaiting response',
+  });
+  await addEvent(jobId, 'wf_cd_pending',
+    `🏛 ${me.name} submitted drawings to Civil Defense`, 'orange');
+  pushNotif(j.teamLeaderId, '🏛 Civil Defense Submitted',
+    `${j.client} (#${j.jobNum}) — record response when received.`);
+  showToastMsg('✅ Submitted to Civil Defense.');
+  renderJobBasket();
+};
+
+window.wfRecordCDResponse = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  _wfCtx = {jobId};
+  wfModalHtml(`
+    <div class="wf-q-title">Civil Defense Response — ${esc(j.client)} <span class="tc-muted">#${esc(j.jobNum)}</span></div>
+    <label class="wf-f">Comments / Notes
+      <textarea id="wf-cd-note" rows="2" placeholder="Optional — paste response notes"></textarea>
+    </label>
+    <div class="wf-q-actions">
+      <button class="wf-btn-reject" onclick="wfCDResult('denied')">✗ Denied — Fix Required</button>
+      <button class="wf-btn-yes"    onclick="wfCDResult('approved')">✓ Approved</button>
+    </div>`);
+};
+
+window.wfCDResult = async function(result){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  const note = document.getElementById('wf-cd-note')?.value.trim() || null;
+  if(result === 'approved'){
+    await wfAdvance(j.id, 'completed', {
+      action:'cd_approved', note:'Civil Defense approved',
+      statusComplete:true, extra:{releaseEligible:true},
+    });
+    await addEvent(j.id, 'completed', `✅ Civil Defense approved — completed`, 'green');
+    if(j.drafterId)   pushNotif(j.drafterId,   '✅ Civil Defense Approved',
+      `${j.client} (#${j.jobNum})`);
+    if(j.wfCreatedBy) pushNotif(j.wfCreatedBy, '✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — done.`);
+    showToastMsg('🎉 Civil Defense approved — job completed.');
+  } else {
+    await wfAdvance(j.id, 'cd_draft', {
+      action:'cd_denied', owner:j.drafterId,
+      note: note ? `Civil Defense denied — ${note}` : 'Civil Defense denied — fix & resubmit',
+      extra:{lastRejectNote:note},
+    });
+    await addEvent(j.id, 'wf_cd_denied',
+      `🔴 Civil Defense denied${note ? ' — ' + note : ''}`, 'red');
+    pushNotif(j.drafterId, '🔴 Civil Defense Denied',
+      `${j.client} (#${j.jobNum}) — fix & resubmit.${note ? ' ' + note : ''}`);
+    showToastMsg('Sent back to drafter for fixes.');
+  }
+  window.wfCloseModal();
+  renderJobBasket();
+};
+
 // ── INTAKE: TL TAKE & ASSIGN ──────────────────────────────────────────────────
 window.wfTakeJob = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
@@ -549,9 +846,9 @@ window.wfTypeChange = function(){
   const sd = document.getElementById('wf-sd-scope-wrap');
   const pr = document.getElementById('wf-pr-scope-wrap');
   const fl = document.getElementById('wf-fl-scope-wrap');
-  if(sd) sd.style.display = (t === 'Shop Drawing')     ? 'block' : 'none';
-  if(pr) pr.style.display = (t === 'Panels Release')   ? 'block' : 'none';
-  if(fl) fl.style.display = (t === 'Flashings Release')? 'block' : 'none';
+  if(sd) sd.style.display = (t === 'Shop Drawing' || t === 'Erection Drawing') ? 'block' : 'none';
+  if(pr) pr.style.display = (t === 'Panels Release')    ? 'block' : 'none';
+  if(fl) fl.style.display = (t === 'Flashings Release') ? 'block' : 'none';
 };
 
 window.wfScopeChange = function(){
@@ -593,10 +890,24 @@ window.wfConfirmAssign = async function(){
     const scope = document.getElementById('wf-fl-scope').value;
     extra.flScope = scope;
     firstStage = 'fl_draft';
-  } else {
-    // future types not yet implemented
+  } else if(type === 'Erection Drawing'){
+    const scope   = document.getElementById('wf-sd-scope').value;
+    const gutter  = (scope==='roof'||scope==='roof_wall')
+      ? document.getElementById('wf-sd-gutter').value : null;
+    const skylight = (scope==='roof'||scope==='roof_wall')
+      ? document.getElementById('wf-sd-skylight').checked : false;
+    extra.sdScope   = scope;
+    extra.sdGutter  = gutter;
+    extra.sdSkylight = skylight;
+    firstStage = 'ed_draft';
+  } else if(type === 'Civil Defense'){
     extra.sdScope = null; extra.sdGutter = null; extra.sdSkylight = null;
-    firstStage = 'sd_jobcard';
+    firstStage = 'cd_draft';
+  } else {
+    // typed workflow types (AC, PU, PF, PA, FA, PFA, FJ, SDI, SDR, BOM, Other)
+    extra.sdScope = null; extra.sdGutter = null; extra.sdSkylight = null;
+    const typedCfg = TYPED_WORKFLOW[type];
+    firstStage = typedCfg ? typedCfg.draftStage : 'completed';
   }
 
   const _scopeLabels = {
@@ -1077,6 +1388,25 @@ function wfActionFor(j){
   if(j.stage === 'release' && amDrafter)
     return {label:'📦 Submit Release', fn:`wfSubmitRelease('${j.id}')`, cls:'primary'};
 
+  // generic typed workflow
+  const typedCfg = TYPED_WORKFLOW[j.type];
+  if(typedCfg){
+    if(j.stage === typedCfg.draftStage && amDrafter){
+      if(j.status === 'pending') return {label:'▶ Start Job', fn:`wfStart('${j.id}')`, cls:'primary'};
+      return {label:`📤 Submit ${j.type}`, fn:`wfSubmitType('${j.id}')`, cls:'primary'};
+    }
+    if(j.stage === typedCfg.reviewStage && amTL)
+      return {label:`🔍 Review ${j.type}`, fn:`wfReviewType('${j.id}')`, cls:'primary'};
+  }
+
+  // civil defense
+  if(j.stage === 'cd_draft' && amDrafter){
+    if(j.status === 'pending') return {label:'▶ Start Job', fn:`wfStart('${j.id}')`, cls:'primary'};
+    return {label:'🏛 Submit to Civil Defense', fn:`wfSubmitCD('${j.id}')`, cls:'primary'};
+  }
+  if(j.stage === 'cd_pending' && amTL)
+    return {label:'🏛 Record Civil Defense Response', fn:`wfRecordCDResponse('${j.id}')`, cls:'primary'};
+
   return null;
 }
 
@@ -1184,6 +1514,17 @@ const _WF_STAGE_COLORS = {
   sd_jobcard:'#64d2ff',         sd_tl_jobcard_review:'#ff9f0a',
   pr_draft:'#ff9f0a',           pr_tl_review:'#bf5af2',
   fl_draft:'#64d2ff',           fl_tl_review:'#30d158',
+  ac_draft:'#ffd60a',           ac_tl_review:'#bf5af2',
+  pu_draft:'#ff9f0a',           pu_tl_review:'#5e5ce6',
+  pf_draft:'#0a84ff',           pf_tl_review:'#bf5af2',
+  pa_draft:'#30d158',           pa_tl_review:'#5e5ce6',
+  fa_draft:'#64d2ff',           fa_tl_review:'#30d158',
+  pfa_draft:'#ff6961',          pfa_tl_review:'#bf5af2',
+  fj_draft:'#ffd60a',           fj_tl_review:'#5e5ce6',
+  sdi_draft:'#ff9f0a',          sdi_tl_review:'#bf5af2',
+  sdr_draft:'#ff453a',          sdr_tl_review:'#ff6961',
+  ed_draft:'#0a84ff',           ed_tl_review:'#30d158',
+  cd_draft:'#ffd60a',           cd_pending:'#ff9f0a',
   completed:'#32d74b',          release:'#30d158',
 };
 
@@ -1414,7 +1755,12 @@ function wfCard(j, showAction){
   // rejection warning
   const rejBanner = j.rejectionCount
     ? `<span class="wf-rej">⚠ ${j.rejectionCount} rejection${j.rejectionCount>1?'s':''}</span>` : '';
-  const _rejectStages = new Set(['sd_roof_draft','sd_wall_draft','sd_revision_draft','pr_draft','fl_draft']);
+  const _rejectStages = new Set([
+    'sd_roof_draft','sd_wall_draft','sd_revision_draft',
+    'pr_draft','fl_draft',
+    'ac_draft','pu_draft','pf_draft','pa_draft','fa_draft','pfa_draft','fj_draft',
+    'sdi_draft','sdr_draft','ed_draft','cd_draft',
+  ]);
   const lastRejectBanner = j.lastRejectNote && _rejectStages.has(j.stage)
     ? `<div class="wf-rej" style="display:block;margin-top:0.25rem;">🔴 ${esc(j.lastRejectNote)}</div>` : '';
 
