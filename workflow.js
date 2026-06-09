@@ -132,6 +132,7 @@ export const WF_STAGES = {
 };
 
 export function wfStageMeta(s){ return WF_STAGES[s] || { actor:'none', label:s, short:s, color:'blue' }; }
+window.WF_STAGES = WF_STAGES; // expose for analytics
 
 // ── PIPELINE ORDER (scope-aware, for progress bar) ────────────────────────────
 function _sdPipeline(j){

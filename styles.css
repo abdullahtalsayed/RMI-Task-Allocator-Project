@@ -770,6 +770,16 @@ hr.div{border:none;border-top:1px solid var(--border);margin:1.5rem 0;}
 .an-perf-name{font-size:0.82rem;font-weight:700;margin-bottom:0.45rem;padding-bottom:0.35rem;border-bottom:1px solid var(--border);color:var(--text);}
 .an-perf-row{display:flex;justify-content:space-between;align-items:center;font-size:0.75rem;padding:0.18rem 0;color:var(--text3);}
 .an-perf-row strong{font-family:var(--mono);font-size:0.78rem;color:var(--text);font-weight:600;}
+.an-perf-sep{margin-top:0.3rem;padding-top:0.3rem;border-top:1px solid var(--border);}
+
+/* ── ANALYTICS OVERVIEW SPLIT (tasks vs basket) ──────────────────────────── */
+.an-overview-split{display:flex;gap:0.75rem;align-items:flex-start;}
+.an-overview-col{flex:1;min-width:0;}
+.an-kpi-group{margin-bottom:0.5rem;}
+.an-kpi-group-hd{font-size:0.78rem;font-weight:700;margin-bottom:0.4rem;letter-spacing:0.02em;}
+.an-od-row{font-size:0.78rem;padding:0.35rem 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;}
+.an-od-row:last-child{border-bottom:none;}
+@media(max-width:900px){.an-overview-split{flex-direction:column;}}
 
 @media(max-width:900px){
   .an-kpi{min-width:calc(50% - 0.4rem);max-width:none;}
