@@ -4042,8 +4042,9 @@ loginAs=function(u){
   _loginAs(u);
   const sw=document.getElementById('jobs-scope-wrap');
   if(sw)sw.style.display=isManager()?'inline-flex':'none';
+  if(!userSettings.jobsSort||userSettings.jobsSort==='deadline')userSettings.jobsSort='created';
   const sortEl=document.getElementById('jobs-sort');
-  if(sortEl)sortEl.value=userSettings.jobsSort||'created';
+  if(sortEl)sortEl.value=userSettings.jobsSort;
   const scopeEl=document.getElementById('jobs-scope');
   if(scopeEl)scopeEl.value=userSettings.managerJobsScope||'all';
   auditManagersOnLogin();
