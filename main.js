@@ -22,6 +22,12 @@ let knownNotifIds=new Set(), notifSoundReady=false, notifSnapshotReady=false, no
 let fbUnsubs=[];
 let notifToastTimers=new Map();
 
+let _myJobsPool='tasks'; // 'tasks' | 'basket' | 'all'
+window.setMyJobsPool=function(p){
+  _myJobsPool=p;
+  userSettings.jobsPage=0;
+  renderJobs();
+};
 window.setF=function(f){
   setMyFilter(f);
   renderJobs();
@@ -1623,13 +1629,18 @@ function renderJobs(){
   if(!list||!me)return;
   try{
     const q=(document.getElementById('srch')?.value||'').toLowerCase();
-    let mine=(window._jobsForDisplay||visibleJobs)();
+    // build pool based on type toggle
+    const _taskBase=(window._jobsForDisplay||visibleJobs)().filter(j=>!j.workflow);
+    const _bkBase=analyticsBasketJobs().map(normalizeForAnalytics);
+    let mine = _myJobsPool==='basket' ? _bkBase
+             : _myJobsPool==='all'    ? [..._taskBase,..._bkBase]
+             : _taskBase;
     let ef=myFilter;
     if(ef==='pending')mine=mine.filter(j=>j.status==='pending');
     else if(ef==='ongoing')mine=mine.filter(j=>j.status==='ongoing');
     else if(ef==='paused')mine=mine.filter(j=>j.status==='paused');
     else if(ef==='completed')mine=mine.filter(j=>j.status==='completed');
-    else if(ef==='assigned')mine=mine.filter(j=>j.owner===me.id&&j.managerAssigned);
+    else if(ef==='assigned')mine=mine.filter(j=>!j.workflow&&j.owner===me.id&&j.managerAssigned);
     else if(ef==='overdue')mine=mine.filter(j=>j.status!=='completed'&&isOverdue(j));
     else if(ef==='pinned')mine=mine.filter(j=>j.pinned);
     if(q)mine=mine.filter(j=>(j.client||'').toLowerCase().includes(q)||(j.jobNum||'').toLowerCase().includes(q)||(j.notes||'').toLowerCase().includes(q)||(j.tags||[]).some(t=>t.toLowerCase().includes(q)));
@@ -1662,7 +1673,14 @@ window.toggleCompleted=function(btn){
 // ── TABLE VIEW ────────────────────────────────────────────────────────────────
 function jobsFilterBar(){
   const f=myFilter||'all';
+  const p=_myJobsPool||'tasks';
   const q=(document.getElementById('srch')?.value||'').trim();
+  const hasWf=jobs.some(j=>j.workflow);
+  const poolBtns=hasWf?`<div class="jtab-pool">
+    <button class="jtab-pool-btn${p==='tasks'?' jtab-pool-on':''}" onclick="setMyJobsPool('tasks')">📋 Tasks</button>
+    <button class="jtab-pool-btn${p==='basket'?' jtab-pool-on':''}" onclick="setMyJobsPool('basket')">🧺 Basket</button>
+    <button class="jtab-pool-btn${p==='all'?' jtab-pool-on':''}" onclick="setMyJobsPool('all')">All</button>
+  </div>`:'';
   const list=[
     {id:'all',label:'All'},
     {id:'pending',label:'🟡 Pending'},
@@ -1670,13 +1688,12 @@ function jobsFilterBar(){
     {id:'paused',label:'⏸ Paused'},
     {id:'completed',label:'✅ Done'},
     {id:'overdue',label:'⚠️ Overdue'},
-    {id:'assigned',label:'👔 Mine'},
-    {id:'pinned',label:'📌 Pinned'},
+    ...(p!=='basket'?[{id:'assigned',label:'👔 Mine'},{id:'pinned',label:'📌 Pinned'}]:[]),
   ];
   const tabs=list.map(x=>`<button onclick="setF('${x.id}')" id="f-${x.id}" class="jtab-btn${f===x.id?' jtab-on':''}">${x.label}</button>`).join('');
   const searchChip=q?`<span class="jobs-search-chip">🔍 "${escapeHtml(q)}" <button onclick="document.getElementById('srch').value='';renderAll()" title="Clear search">×</button></span>`:'';
   return`<div class="jobs-integrated-bar">
-    <div class="jtab-left">${tabs}${searchChip}</div>
+    <div class="jtab-left">${poolBtns}${tabs}${searchChip}</div>
     <div class="jtab-right" id="jobs-pager"></div>
   </div>`;
 }
