@@ -984,6 +984,7 @@ window.wfConfirmAssign = async function(){
     : extra.flScope ? (_scopeLabels[extra.flScope]||'')
     : '';
 
+  const proceed = async () => {
   await wfAdvance(j.id, firstStage, {
     action:'assigned', checklist:_wfCtx.checklist, owner:memberId, drafterId:memberId,
     note:`Assigned to ${member?.name} as ${type}${scopeLabel?' ('+scopeLabel+')':''}`,
@@ -1000,6 +1001,20 @@ window.wfConfirmAssign = async function(){
   window.wfCloseModal();
   showToastMsg(`✅ Assigned to ${member?.name}.`);
   renderJobBasket();
+  }; // end proceed
+
+  // BOM / Other complete instantly — warn TL before committing
+  if(firstStage === 'completed'){
+    showConfirm(
+      `⚠️ "${type}" — No Pipeline Stages`,
+      `This job type has no workflow stages and will be marked completed immediately upon assignment.\n\nAre you sure you want to assign "${type}" to ${member?.name}?`,
+      proceed,
+      'Assign & Complete',
+      true
+    );
+  } else {
+    await proceed();
+  }
 };
 
 // ── SD · DRAFTER: START JOB ───────────────────────────────────────────────────
