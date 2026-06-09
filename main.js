@@ -28,6 +28,13 @@ window.setMyJobsPool=function(p){
   userSettings.jobsPage=0;
   renderJobs();
 };
+let _myJobsView=localStorage.getItem('myJobsView')||'panel'; // 'panel' | 'classic'
+window.setMyJobsView=function(v){
+  _myJobsView=v;
+  localStorage.setItem('myJobsView',v);
+  if(v==='classic') closeJobSlideout();
+  renderJobs();
+};
 window.setF=function(f){
   setMyFilter(f);
   renderJobs();
@@ -1698,9 +1705,14 @@ function jobsFilterBar(){
   ];
   const tabs=list.map(x=>`<button onclick="setF('${x.id}')" id="f-${x.id}" class="jtab-btn${f===x.id?' jtab-on':''}">${x.label}</button>`).join('');
   const searchChip=q?`<span class="jobs-search-chip">🔍 "${escapeHtml(q)}" <button onclick="document.getElementById('srch').value='';renderAll()" title="Clear search">×</button></span>`:'';
+  const v=_myJobsView||'panel';
+  const viewToggle=`<div class="jtab-view-toggle" title="Switch view">
+    <button class="jtab-view-btn${v==='panel'?' jtab-view-on':''}" onclick="setMyJobsView('panel')" title="Panel view">◫ Panel</button>
+    <button class="jtab-view-btn${v==='classic'?' jtab-view-on':''}" onclick="setMyJobsView('classic')" title="Classic table">☰ Classic</button>
+  </div>`;
   return`<div class="jobs-integrated-bar">
     <div class="jtab-left">${poolBtns}${tabs}${searchChip}</div>
-    <div class="jtab-right" id="jobs-pager"></div>
+    <div class="jtab-right">${viewToggle}<span id="jobs-pager"></span></div>
   </div>`;
 }
 
@@ -1775,6 +1787,11 @@ function jobDetailHTML(j){
 }
 window.toggleJobDetail=function(id){
   closeRowMenus();
+  if(_myJobsView==='panel'){
+    if(_slideoutJobId===id){closeJobSlideout();return;}
+    openJobSlideout(id);
+    return;
+  }
   const row=document.getElementById('detail-row-'+id);
   if(!row)return;
   const open=row.style.display!=='none';
@@ -1800,12 +1817,67 @@ window.openJobDetail=function(id){
 };
 window.closeJobDetail=function(){document.getElementById('job-detail-modal').classList.remove('open');};
 
+// ── JOB SLIDEOUT PANEL ────────────────────────────────────────────────────────
+let _slideoutJobId=null;
+function ensureSlideout(){
+  if(document.getElementById('job-slideout'))return;
+  const el=document.createElement('div');
+  el.id='job-slideout';
+  el.className='job-slideout';
+  el.innerHTML=`<div class="jso-header">
+    <span id="jso-title" class="jso-title"></span>
+    <button class="jso-close" onclick="closeJobSlideout()" title="Close">✕</button>
+  </div>
+  <div class="jso-body" id="jso-body"></div>`;
+  document.body.appendChild(el);
+  // close on backdrop click (outside panel, inside #my-jobs section)
+  document.addEventListener('mousedown',function(e){
+    if(_slideoutJobId&&!el.contains(e.target)&&!e.target.closest('.row-menu')){
+      const row=document.getElementById('card-'+_slideoutJobId);
+      if(row&&!row.contains(e.target)) closeJobSlideout();
+    }
+  });
+}
+window.openJobSlideout=function(id){
+  ensureSlideout();
+  const j=jobs.find(x=>x.id===id);
+  if(!j)return;
+  _slideoutJobId=id;
+  // highlight active row
+  document.querySelectorAll('.job-row.row-slideout-active').forEach(r=>r.classList.remove('row-slideout-active'));
+  document.getElementById('card-'+id)?.classList.add('row-slideout-active');
+  document.getElementById('jso-title').innerHTML=`${j.pinned?'📌 ':''}${escapeHtml(j.client)} <span style="color:var(--text3);font-weight:400;">#${escapeHtml(j.jobNum)}</span>`;
+  const body=document.getElementById('jso-body');
+  body.innerHTML=jobDetailHTML(j);
+  body.scrollTop=0;
+  // auto-close slideout after action buttons (except timeline)
+  body.querySelectorAll('.jd-btn').forEach(b=>{
+    if(b.classList.contains('jd-tl-btn'))return;
+    b.addEventListener('click',()=>setTimeout(()=>{
+      renderJobs();
+      const jj=jobs.find(x=>x.id===id);
+      if(jj&&document.getElementById('job-slideout')?.classList.contains('open')){
+        document.getElementById('jso-body').innerHTML=jobDetailHTML(jj);
+      }
+    },80));
+  });
+  document.getElementById('job-slideout').classList.add('open');
+  document.getElementById('my-jobs')?.classList.add('has-slideout');
+};
+window.closeJobSlideout=function(){
+  _slideoutJobId=null;
+  document.querySelectorAll('.job-row.row-slideout-active').forEach(r=>r.classList.remove('row-slideout-active'));
+  document.getElementById('job-slideout')?.classList.remove('open');
+  document.getElementById('my-jobs')?.classList.remove('has-slideout');
+};
+
 function renderJobsTable(active,done){
   const showEmp=canSeeAllJobs();
-  const cols=showEmp?9:8;
+  const isPanelView=_myJobsView==='panel';
+  const cols=(showEmp?9:8)-(isPanelView?1:0);
   const thead=`<thead><tr class="jobs-th-row">
     <th style="width:28px;"></th>
-    <th style="width:28px;"></th>
+    ${isPanelView?'':`<th style="width:28px;"></th>`}
     <th>Client</th><th>Job #</th><th class="col-type">Type</th>
     <th>Status</th><th>Priority</th><th>Deadline</th>
     ${showEmp?'<th class="col-emp">Employee</th>':''}
@@ -1864,9 +1936,11 @@ function jobTableRow(j,showEmp){
   ;
   const notesPreview=j.notes?`<div class="tc-note">${escapeHtml(j.notes.substring(0,60))}${j.notes.length>60?'…':''}</div>`:'';
   const stKey=od?'overdue':j.status;
-  return`<tr id="card-${j.id}" class="job-row row-st-${stKey}${od?' row-overdue':''}${selectedJobs.has(j.id)?' row-selected':''}${j.pinned?' row-pinned':''}" onclick="if(!event.target.closest('button,input,.row-menu'))toggleJobDetail('${j.id}')">
+  const isPanelView=_myJobsView==='panel';
+  const isActiveSlideout=isPanelView&&_slideoutJobId===j.id;
+  return`<tr id="card-${j.id}" class="job-row row-st-${stKey}${od?' row-overdue':''}${selectedJobs.has(j.id)?' row-selected':''}${j.pinned?' row-pinned':''}${isActiveSlideout?' row-slideout-active':''}" onclick="if(!event.target.closest('button,input,.row-menu'))toggleJobDetail('${j.id}')">
     <td style="padding-left:0.65rem;" onclick="event.stopPropagation()"><input type="checkbox" class="sel-cb" ${selectedJobs.has(j.id)?'checked':''} onchange="toggleSelect('${j.id}',this)"/></td>
-    <td><button class="tl-toggle-btn" onclick="event.stopPropagation();toggleJobDetail('${j.id}')" title="Details">›</button></td>
+    ${isPanelView?'':`<td><button class="tl-toggle-btn" onclick="event.stopPropagation();toggleJobDetail('${j.id}')" title="Details">›</button></td>`}
     <td><span class="tc-client">${j.pinned?'📌 ':''}${escapeHtml(j.client)}</span>${notesPreview}<div style="margin-top:2px;">${j.workflow?'<span class="job-type-badge badge-basket">🧺 Basket</span>':'<span class="job-type-badge badge-task">📋 Task</span>'}</div></td>
     <td class="tc-muted" style="white-space:nowrap;">#${escapeHtml(j.jobNum)}</td>
     <td class="col-type tc-muted">${escapeHtml(j.type)}</td>
@@ -1876,11 +1950,11 @@ function jobTableRow(j,showEmp){
     ${showEmp?`<td class="col-emp tc-muted">${escapeHtml(own)}</td>`:''}
     <td class="tc-actions" style="position:relative;text-align:right;" onclick="event.stopPropagation()">${primary}${moreBtn}</td>
   </tr>
-  <tr id="detail-row-${j.id}" class="jd-expand-row" style="display:none;">
+  ${isPanelView?'':`<tr id="detail-row-${j.id}" class="jd-expand-row" style="display:none;">
     <td colspan="${cols}" style="padding:0;">
       <div id="detail-${j.id}"></div>
     </td>
-  </tr>`;
+  </tr>`}`;
 }
 
 window.toggleRowMenu=function(e,id){

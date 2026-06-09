@@ -858,6 +858,26 @@ hr.div{border:none;border-top:1px solid var(--border);margin:1.5rem 0;}
 .jtab-pool-btn{padding:0.28rem 0.75rem;background:transparent;border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text2);font-size:0.78rem;font-family:var(--font);font-weight:500;transition:all var(--t-fast);}
 .jtab-pool-btn:hover{background:var(--hover);color:var(--text);}
 .jtab-pool-on{background:var(--blue)!important;color:#fff!important;border-color:var(--blue)!important;}
+/* View toggle (Panel / Classic) */
+.jtab-view-toggle{display:flex;gap:0;align-items:center;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.jtab-view-btn{padding:0.26rem 0.65rem;background:transparent;border:none;border-right:1px solid var(--border);cursor:pointer;color:var(--text2);font-size:0.75rem;font-family:var(--font);font-weight:500;transition:all var(--t-fast);white-space:nowrap;}
+.jtab-view-btn:last-child{border-right:none;}
+.jtab-view-btn:hover{background:var(--hover);color:var(--text);}
+.jtab-view-on{background:var(--blue)!important;color:#fff!important;}
+/* Slideout panel */
+.job-slideout{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:92vw;background:var(--bg1);border-left:1px solid var(--border);box-shadow:-4px 0 24px rgba(0,0,0,0.25);z-index:1100;display:flex;flex-direction:column;transform:translateX(100%);transition:transform 0.22s cubic-bezier(.4,0,.2,1);}
+.job-slideout.open{transform:translateX(0);}
+.jso-header{display:flex;align-items:center;justify-content:space-between;padding:0.9rem 1rem 0.75rem;border-bottom:1px solid var(--border);gap:0.5rem;flex-shrink:0;}
+.jso-title{font-size:0.95rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.jso-close{background:none;border:none;cursor:pointer;color:var(--text2);font-size:1.1rem;padding:0.2rem 0.4rem;border-radius:4px;transition:all var(--t-fast);flex-shrink:0;}
+.jso-close:hover{background:var(--hover);color:var(--text);}
+.jso-body{flex:1;overflow-y:auto;padding:0.75rem 1rem 1.5rem;}
+/* Row highlight when slideout open */
+.job-row.row-slideout-active{background:var(--hover)!important;}
+/* Push table left when slideout open on wide screens */
+@media(min-width:900px){
+  #my-jobs.has-slideout .jobs-table-wrap{margin-right:0;}
+}
 .dash-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:0.85rem;margin-bottom:0.75rem;}
 .kpi-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);
