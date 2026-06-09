@@ -2458,13 +2458,10 @@ window.setAnSubTab=function(t){_anSubTab=t;renderAnalyticsContent();renderSbAnal
 function renderSbAnalyticsSubs(){
   const el=document.getElementById('sb-analytics-subs');
   if(!el||!me)return;
-  const mgr=isLead();
   const hasWf=jobs.some(j=>j.workflow);
-  const tabs=[{k:'overview',label:'📊 Overview'},{k:'tasks',label:'📋 Tasks'}];
+  const tabs=[{k:'tasks',label:'📋 Tasks'},{k:'all',label:'📊 All'}];
   if(hasWf)tabs.push({k:'basket',label:'🧺 Basket'});
-  if(mgr)tabs.push({k:'team',label:'👥 Team'});
-  if(hasWf)tabs.push({k:'workflow',label:'🔄 Workflow'});
-  el.innerHTML=tabs.map(t=>`<button class="sb-sub-btn${t.k===_anSubTab?' active':''}" onclick="window.setAnSubTab('${t.k}')">${t.label}</button>`).join('');
+  el.innerHTML=tabs.map(t=>`<button class="sb-sub-btn${t.k===analyticsPool?' active':''}" onclick="window.setAnalyticsPool('${t.k}');goHub('insights','analytics')">${t.label}</button>`).join('');
   el.style.display='';
 }
 window.renderSbAnalyticsSubs=renderSbAnalyticsSubs;
@@ -3982,7 +3979,7 @@ saveSettingsFromUI=function(){
 };
 
 // ── ANALYTICS — single-scroll report (replaces tab-based renderer) ───────────
-let analyticsRange='month',analyticsEmp='',analyticsType='',analyticsBranch='';
+let analyticsRange='month',analyticsEmp='',analyticsType='',analyticsBranch='',analyticsPool='tasks';
 function branchOf(ownerId){return users.find(u=>u.id===ownerId)?.branch||'';}
 function analyticsRangeStart(range){
   const n=new Date();
@@ -3992,21 +3989,42 @@ function analyticsRangeStart(range){
   if(range==='quarter')return new Date(n.getFullYear(),Math.floor(n.getMonth()/3)*3,1).getTime();
   return 0;
 }
+// Normalize basket jobs so analytics status fields work uniformly
+function normalizeForAnalytics(j){
+  if(!j.workflow) return j;
+  const status = j.stage==='completed' ? 'completed'
+    : (j.status==='ongoing'||j.status==='paused') ? j.status : 'pending';
+  return {...j, status};
+}
 function analyticsScope(){
   if(!me)return[];
-  let base=visibleJobs();
-  if(analyticsEmp)base=base.filter(j=>j.owner===analyticsEmp);
+  // pool selection
+  const taskBase = visibleJobs().filter(j=>!j.workflow);
+  const basketBase = analyticsBasketJobs();
+  let base;
+  if(analyticsPool==='basket') base = basketBase.map(normalizeForAnalytics);
+  else if(analyticsPool==='all')  base = [...taskBase, ...basketBase.map(normalizeForAnalytics)];
+  else                             base = taskBase; // 'tasks' default
+  if(analyticsEmp)base=base.filter(j=>j.owner===analyticsEmp||(j.workflow&&(j.teamLeaderId===analyticsEmp||j.drafterId===analyticsEmp)));
   if(analyticsType)base=base.filter(j=>(j.type||'Other')===analyticsType);
   if(analyticsBranch)base=base.filter(j=>branchOf(j.owner)===analyticsBranch);
   const start=analyticsRangeStart(analyticsRange);
   if(!start)return base.slice();
   return base.filter(j=>toMillis(j.created)>=start);
 }
-window.setAnalyticsType=function(t){analyticsType=t;renderAnalyticsContent();};
+window.setAnalyticsPool=function(p){
+  analyticsPool=p;
+  document.querySelectorAll('#an-pool .an-range-btn').forEach(b=>b.classList.toggle('on',b.dataset.p===p));
+  renderSbAnalyticsSubs();
+  renderAnalyticsContent();
+};
+window.setAnalyticsType=function(t){analyticsType=t;renderAnalyticsContent()};
 function anPopulateType(){
   const sel=document.getElementById('an-type');if(!sel)return;
   const cur=analyticsType;
-  const types=[...new Set(visibleJobs().map(j=>j.type||'Other'))].sort();
+  const taskTypes=analyticsPool!=='basket'?visibleJobs().filter(j=>!j.workflow).map(j=>j.type||'Other'):[];
+  const bkTypes=analyticsPool!=='tasks'?analyticsBasketJobs().map(j=>j.type||'Other'):[];
+  const types=[...new Set([...taskTypes,...bkTypes])].filter(Boolean).sort();
   sel.innerHTML='<option value="">All Types</option>'+types.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
   sel.value=cur;
 }
@@ -4695,6 +4713,7 @@ window.renderMySpace=renderMySpace;
 renderAnalyticsContent=function(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
   if(me.role==='sales_operation')return;
+  renderSbAnalyticsSubs();
   loadAnVis();
   anPopulateEmp();anPopulateType();anPopulateBranch();
   const isMgr=isLead()||amDirector();
