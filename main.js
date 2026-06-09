@@ -2209,15 +2209,19 @@ function renderCal(){
     const ds=calY+'-'+String(calM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     const it=today.getDate()===d&&today.getMonth()===calM&&today.getFullYear()===calY;
     const dayItems=jobsForCalendarDay(ds);
-    const counts={deadline:0,deadlineOd:0,started:0,completed:0};
+    const counts={dlTask:0,dlTaskOd:0,dlBasket:0,dlBasketOd:0,started:0,completed:0};
     dayItems.forEach(x=>{
-      if(x.kind==='deadline'){counts.deadline++;if(x.overdue)counts.deadlineOd++;}
-      else counts[x.kind]=(counts[x.kind]||0)+1;
+      if(x.kind==='deadline'){
+        if(x.job.workflow){counts.dlBasket++;if(x.overdue)counts.dlBasketOd++;}
+        else{counts.dlTask++;if(x.overdue)counts.dlTaskOd++;}
+      } else counts[x.kind]=(counts[x.kind]||0)+1;
     });
-    // event dots — one per kind, with count badge
+    // event dots — tasks (blue) vs basket (orange), overdue = red
     const dots=[];
-    if(counts.deadlineOd)dots.push(`<span class="cd-dot cd-dot-od">${counts.deadlineOd}</span>`);
-    else if(counts.deadline)dots.push(`<span class="cd-dot cd-dot-dl">${counts.deadline}</span>`);
+    if(counts.dlTaskOd)dots.push(`<span class="cd-dot cd-dot-od" title="📋 Task overdue">${counts.dlTaskOd}</span>`);
+    else if(counts.dlTask)dots.push(`<span class="cd-dot cd-dot-dl" title="📋 Task deadline">${counts.dlTask}</span>`);
+    if(counts.dlBasketOd)dots.push(`<span class="cd-dot cd-dot-bk-od" title="🧺 Basket overdue">${counts.dlBasketOd}</span>`);
+    else if(counts.dlBasket)dots.push(`<span class="cd-dot cd-dot-bk" title="🧺 Basket deadline">${counts.dlBasket}</span>`);
     if(counts.started)dots.push(`<span class="cd-dot cd-dot-st">${counts.started}</span>`);
     if(counts.completed)dots.push(`<span class="cd-dot cd-dot-dn">${counts.completed}</span>`);
     // client preview
@@ -2247,13 +2251,16 @@ function renderUpcomingDeadlines(){
   const el=document.getElementById('cal-upcoming');if(!el)return;
   const now=Date.now();
   const soon=14*24*60*60*1000;
-  const pool=visibleJobs();
-  const due=pool
-    .filter(j=>j.deadline&&j.status!=='completed'&&(calFilterEmp?j.owner===calFilterEmp:true))
-    .sort((a,b)=>toMillis(a.deadline)-toMillis(b.deadline));
-  const overdue=due.filter(j=>toMillis(j.deadline)<now);
-  const upcoming=due.filter(j=>toMillis(j.deadline)>=now&&toMillis(j.deadline)-now<=soon);
-  const later=due.filter(j=>toMillis(j.deadline)>=now&&toMillis(j.deadline)-now>soon);
+  // merge individual tasks + basket jobs
+  const taskPool=visibleJobs().filter(j=>!j.workflow);
+  const basketPool=(jobs||[]).filter(j=>j.workflow&&j.deadline&&j.status!=='completed');
+  function buildDue(pool){
+    return pool
+      .filter(j=>j.deadline&&j.status!=='completed'&&(calFilterEmp?j.owner===calFilterEmp:true))
+      .sort((a,b)=>toMillis(a.deadline)-toMillis(b.deadline));
+  }
+  const taskDue=buildDue(taskPool);
+  const basketDue=buildDue(basketPool);
   function jobRow(j){
     const diff=toMillis(j.deadline)-now;
     const od=diff<0;
@@ -2267,36 +2274,47 @@ function renderUpcomingDeadlines(){
       </div>
     </div>`;
   }
-  let html='';
-  if(overdue.length)html+=`<div class="upc-section-head upc-od">⚠ Overdue (${overdue.length})</div>${overdue.map(jobRow).join('')}`;
-  if(upcoming.length)html+=`<div class="upc-section-head">Next 14 days (${upcoming.length})</div>${upcoming.map(jobRow).join('')}`;
-  if(later.length)html+=`<div class="upc-section-head">Later (${later.length})</div>${later.map(jobRow).join('')}`;
+  function buildSection(due,label,color){
+    if(!due.length)return'';
+    const overdue=due.filter(j=>toMillis(j.deadline)<now);
+    const upcoming=due.filter(j=>toMillis(j.deadline)>=now&&toMillis(j.deadline)-now<=soon);
+    const later=due.filter(j=>toMillis(j.deadline)>=now&&toMillis(j.deadline)-now>soon);
+    let h=`<div class="upc-type-head" style="color:${color};">${label}</div>`;
+    if(overdue.length)h+=`<div class="upc-section-head upc-od">⚠ Overdue (${overdue.length})</div>${overdue.map(jobRow).join('')}`;
+    if(upcoming.length)h+=`<div class="upc-section-head">Next 14 days (${upcoming.length})</div>${upcoming.map(jobRow).join('')}`;
+    if(later.length)h+=`<div class="upc-section-head">Later (${later.length})</div>${later.map(jobRow).join('')}`;
+    return h;
+  }
+  const html=buildSection(taskDue,'📋 Individual Tasks','#6eb9ff')+buildSection(basketDue,'🧺 Basket Jobs','#ffb84d');
   el.innerHTML=html||'<div class="upc-empty">No upcoming deadlines</div>';
 }
 const CAL_KIND_LABELS={deadline:'📅 Deadline',started:'▶ Started',completed:'✅ Completed'};
 window.showDay=function(ds){
   const items=jobsForCalendarDay(ds);
   const d=new Date(ds+'T12:00:00');
-  const groups={deadline:[],started:[],completed:[]};
-  items.forEach(x=>{if(groups[x.kind])groups[x.kind].push(x);});
-  const order=['deadline','started','completed'];
+  const groups={dlTask:[],dlBasket:[],started:[],completed:[]};
+  items.forEach(x=>{
+    if(x.kind==='deadline') groups[x.job.workflow?'dlBasket':'dlTask'].push(x);
+    else if(groups[x.kind]) groups[x.kind].push(x);
+  });
+  const order=[['dlTask','📋 Task Deadlines','#6eb9ff'],['dlBasket','🧺 Basket Deadlines','#ffb84d'],['started','▶ Started','var(--blue)'],['completed','✅ Completed','var(--green)']];
   let body='';
-  order.forEach(kind=>{
-    const list=groups[kind];if(!list.length)return;
-    const colors={deadline:'#ffaaaa',started:'var(--blue)',completed:'var(--green)'};
+  order.forEach(([key,label,color])=>{
+    const list=groups[key];if(!list||!list.length)return;
     body+=`<div class="cd-modal-group">
-      <div class="cd-modal-group-head" style="color:${colors[kind]}">${CAL_KIND_LABELS[kind]} <span>(${list.length})</span></div>`;
+      <div class="cd-modal-group-head" style="color:${color}">${label} <span>(${list.length})</span></div>`;
     list.forEach(({job:j,overdue})=>{
       const own=users.find(u=>u.id===j.owner)?.name||'—';
-      const odBorder=kind==='deadline'&&overdue;
+      const odBorder=overdue;
       body+=`<div class="cd-modal-item${odBorder?' cd-modal-od':''}">
         <div class="cd-mi-top">
           <span class="cd-mi-client">${escapeHtml(j.client)}</span>
           <span class="cd-mi-num">#${escapeHtml(j.jobNum)}</span>
+          ${j.workflow?'<span class="job-type-badge badge-basket" style="font-size:0.6rem;">🧺 Basket</span>':'<span class="job-type-badge badge-task" style="font-size:0.6rem;">📋 Task</span>'}
           ${overdue?'<span class="cd-mi-badge-od">Overdue</span>':''}
         </div>
-        <div class="cd-mi-meta">${escapeHtml(own)} · ${escapeHtml(j.type)} · <span class="st-chip st-${j.status==='ongoing'?'ongoing':j.status==='paused'?'paused':j.status==='completed'?'done':'pending'}" style="font-size:0.65rem;">${j.status}</span>${j.priority?` · ${j.priority}`:''}</div>
-        ${kind==='deadline'&&j.deadline?`<div class="cd-mi-dl">Due: ${fmt(j.deadline)}</div>`:''}
+        <div class="cd-mi-meta">${escapeHtml(own)} · ${escapeHtml(j.type||'—')} · <span class="st-chip st-${j.status==='ongoing'?'ongoing':j.status==='paused'?'paused':j.status==='completed'?'done':'pending'}" style="font-size:0.65rem;">${j.status}</span>${j.priority?` · ${j.priority}`:''}</div>
+        ${j.deadline?`<div class="cd-mi-dl">Due: ${fmt(j.deadline)}</div>`:''}
       </div>`;
     });
     body+='</div>';
