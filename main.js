@@ -1186,12 +1186,24 @@ window.toggleNotifPanel=function(){
 window.handleNotifClick=async function(id,isBcast){
   const n=notifications.find(x=>x.id===id);
   await markNotifRead(id);
+  document.getElementById('notif-panel').style.display='none';
   if(isBcast){goTab('broadcast');return;}
   const body=(n?.body||'')+(n?.title||'');
   const m=body.match(/#(\d+)/);
   if(m){
     const job=jobs.find(j=>String(j.jobNum)===m[1]);
-    if(job){goTab('my-jobs');setTimeout(()=>{const c=document.getElementById('card-'+job.id);if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('selected');setTimeout(()=>c.classList.remove('selected'),2500);}},200);}
+    if(!job)return;
+    if(job.workflow){
+      // basket job — navigate to job basket and scroll to card
+      goHub('work','job-basket');
+      setTimeout(()=>{
+        const c=document.getElementById('wf-card-'+job.id);
+        if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('selected');setTimeout(()=>c.classList.remove('selected'),2500);}
+      },400);
+    } else {
+      goTab('my-jobs');
+      setTimeout(()=>{const c=document.getElementById('card-'+job.id);if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('selected');setTimeout(()=>c.classList.remove('selected'),2500);}},200);
+    }
   }
 };
 window.markNotifRead=async function(id){

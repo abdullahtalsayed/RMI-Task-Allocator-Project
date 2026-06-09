@@ -811,8 +811,9 @@ window.wfCDResult = async function(result){
 window.wfTakeJob = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
   wfAsk('Pre-Assignment Check',[
-    {q:'Did you check the Steel IFC drawings?',     key:'steelIFC'},
-    {q:'Did you check the Architectural drawings?', key:'architectural'},
+    {q:'Did you check the Steel IFC drawings?',                       key:'steelIFC'},
+    {q:'Did you check the Architectural drawings?',                   key:'architectural'},
+    {q:'Has a Material Request (MR) been made for this job?',         key:'mrMade'},
   ],(ans)=>{
     _wfCtx = {jobId, checklist:ans};
     _wfShowAssignForm(j);
@@ -1000,6 +1001,10 @@ window.wfStart = async function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
   await updateJob(jobId, {status:'ongoing', started: j.started || Date.now()});
   await addEvent(jobId,'started',`${me.name} started the job`,'blue');
+  // basket: explicitly notify TL (standard notifyTeamLeaderOf relies on user-profile data)
+  if(j.workflow && j.teamLeaderId && me.id !== j.teamLeaderId)
+    pushNotif(j.teamLeaderId,'▶ Task Started',
+      `${me.name} started working on ${j.client} (#${j.jobNum}).`);
   renderJobBasket();
 };
 
@@ -2188,7 +2193,7 @@ function wfCard(j, showAction){
   const remarksBadge = j.remarks
     ? `<div style="font-size:0.74rem;color:var(--text3);margin-top:0.25rem;">💬 ${esc(j.remarks)}</div>` : '';
 
-  return `<div class="wf-card">
+  return `<div class="wf-card" id="wf-card-${j.id}">
     <div class="wf-card-top">
       <div class="wf-card-id">
         <strong>${esc(j.client)}</strong> <span class="tc-muted">#${esc(j.jobNum)}</span>
