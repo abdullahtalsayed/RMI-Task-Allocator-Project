@@ -1378,7 +1378,8 @@ window.clearAllNotifs=async function(){
 function showDeadlineBanner(){
   if(!me)return;
   const now=Date.now();
-  const due=jobs.filter(j=>j.owner===me.id&&j.deadline&&j.status!=='completed'&&!j.workflow&&(j.deadline-now)<86400000&&(j.deadline-now)>-86400000*7);
+  const allMine=[...visibleJobs(),...analyticsBasketJobs().map(normalizeJobForPool)];
+  const due=allMine.filter(j=>j.owner===me.id&&j.deadline&&j.status!=='completed'&&(j.deadline-now)<86400000&&(j.deadline-now)>-86400000*7);
   const banner=document.getElementById('dl-banner');
   if(!due.length){banner.style.display='none';return;}
   banner.style.display='block';
@@ -3925,7 +3926,7 @@ function checkDeadlineReminders(){
   if(!me)return;
   const now=Date.now();
   const reminded=JSON.parse(localStorage.getItem('rmi_dl_reminded')||'{}');
-  const myJobs=visibleJobs().filter(j=>j.deadline&&j.status!=='completed');
+  const myJobs=[...visibleJobs(),...analyticsBasketJobs().map(normalizeJobForPool)].filter(j=>j.deadline&&j.status!=='completed');
   for(const j of myJobs){
     const dl=toMillis(j.deadline);
     const diff=dl-now;
@@ -3950,7 +3951,7 @@ function checkOverdueEmails(){
   if(!me)return;
   const now=Date.now();
   const notified=JSON.parse(localStorage.getItem('rmi_overdue_emailed')||'{}');
-  const overdueJobs=visibleJobs().filter(j=>j.deadline&&j.status!=='completed'&&toMillis(j.deadline)<now);
+  const overdueJobs=[...visibleJobs(),...analyticsBasketJobs().map(normalizeJobForPool)].filter(j=>j.deadline&&j.status!=='completed'&&toMillis(j.deadline)<now);
   for(const j of overdueJobs){
     const key=j.id+'_overdue';
     if(notified[key]&&now-notified[key]<20*60*60*1000)continue;
