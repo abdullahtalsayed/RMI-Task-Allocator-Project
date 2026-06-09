@@ -1620,6 +1620,12 @@ function renderTimeline(jobId){
 }
 
 // ── RENDER JOBS ───────────────────────────────────────────────────────────────
+function normalizeJobForPool(j){
+  if(!j.workflow) return j;
+  const status = j.stage==='completed' ? 'completed'
+    : (j.status==='ongoing'||j.status==='paused') ? j.status : 'pending';
+  return {...j, status};
+}
 function applyJobsViewLayout(){}  // no-op, kept for compat
 
 function renderJobs(){
@@ -1631,7 +1637,7 @@ function renderJobs(){
     const q=(document.getElementById('srch')?.value||'').toLowerCase();
     // build pool based on type toggle
     const _taskBase=(window._jobsForDisplay||visibleJobs)().filter(j=>!j.workflow);
-    const _bkBase=analyticsBasketJobs().map(normalizeForAnalytics);
+    const _bkBase=analyticsBasketJobs().map(normalizeJobForPool);
     let mine = _myJobsPool==='basket' ? _bkBase
              : _myJobsPool==='all'    ? [..._taskBase,..._bkBase]
              : _taskBase;
