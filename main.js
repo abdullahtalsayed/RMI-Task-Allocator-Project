@@ -4037,8 +4037,12 @@ goHub=function(hub,sub){
 };
 
 // Patch loginAs
+let _bgIntervals=[];
 const _loginAs=loginAs;
 loginAs=function(u){
+  // Clear any intervals from a previous login (role-switch, re-auth, session restore)
+  _bgIntervals.forEach(id=>clearInterval(id));
+  _bgIntervals=[];
   _loginAs(u);
   const sw=document.getElementById('jobs-scope-wrap');
   if(sw)sw.style.display=isManager()?'inline-flex':'none';
@@ -4051,11 +4055,11 @@ loginAs=function(u){
   updateEmailMasterBadge();
   openJobFromUrl();
   checkScheduledWeeklyExport();
-  setInterval(checkScheduledWeeklyExport,60000);
+  _bgIntervals.push(setInterval(checkScheduledWeeklyExport,60000));
   checkDeadlineReminders();
-  setInterval(checkDeadlineReminders,30*60*1000);
+  _bgIntervals.push(setInterval(checkDeadlineReminders,30*60*1000));
   checkOverdueEmails();
-  setInterval(checkOverdueEmails,60*60*1000);
+  _bgIntervals.push(setInterval(checkOverdueEmails,60*60*1000));
   if(isManager()){
     const dash=document.getElementById('dashboard');
     if(dash&&!document.getElementById('archive-jobs-btn')){
