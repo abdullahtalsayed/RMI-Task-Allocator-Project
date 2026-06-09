@@ -1017,6 +1017,42 @@ window.wfConfirmAssign = async function(){
   }
 };
 
+// ── REASSIGN DRAFTER (TL-only, any active drafter stage) ─────────────────────
+window.wfReassignDrafter = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  if(me.id !== j.teamLeaderId) return;
+  const members = users.filter(u => u.teamId === me.teamId && (u.role === 'employee' || u.role === 'drafter'));
+  if(!members.length){ showToastMsg('No team members available.'); return; }
+  const currentDrafter = users.find(u => u.id === j.drafterId);
+  wfShowModal(`Reassign Drafter — ${esc(j.client)} #${esc(j.jobNum)}`,
+    `<p style="font-size:0.85rem;color:var(--text2);margin:0 0 0.75rem;">Current drafter: <strong>${esc(currentDrafter?.name||'—')}</strong></p>
+    <label class="wf-f">Reassign to
+      <select id="wf-reassign-member">
+        ${members.filter(m=>m.id!==j.drafterId).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}
+      </select>
+    </label>
+    <div class="wf-q-actions">
+      <button class="wf-btn-no" onclick="wfCloseModal()">Cancel</button>
+      <button class="wf-btn-yes" onclick="wfConfirmReassignDrafter('${jobId}')">Reassign</button>
+    </div>`);
+};
+window.wfConfirmReassignDrafter = async function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const newId = document.getElementById('wf-reassign-member')?.value; if(!newId) return;
+  const newDrafter = users.find(u => u.id === newId);
+  const oldDrafter = users.find(u => u.id === j.drafterId);
+  await updateJob(jobId, {drafterId: newId, owner: newId, status:'pending', started:null});
+  await addEvent(jobId,'wf_assigned',
+    `🔄 ${me.name} reassigned drafter from ${oldDrafter?.name||'—'} to ${newDrafter?.name||'—'}`,'yellow');
+  if(oldDrafter) pushNotif(oldDrafter.id,'🔄 Reassigned',
+    `You have been removed from ${j.client} (#${j.jobNum}). ${me.name} reassigned it.`);
+  pushNotif(newId,'🧺 New Workflow Job',
+    `${j.client} (#${j.jobNum}) — ${j.type||''} reassigned to you by ${me.name}.`);
+  wfCloseModal();
+  showToastMsg(`✅ Reassigned to ${newDrafter?.name}.`);
+  renderJobBasket();
+};
+
 // ── SD · DRAFTER: START JOB ───────────────────────────────────────────────────
 window.wfStart = async function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
@@ -2249,6 +2285,7 @@ function wfCard(j, showAction){
     <div class="wf-card-actions">
       ${act?`<button class="wf-act ${act.cls}" onclick="${act.fn}">${act.label}</button>`:''}
       ${act?.secondAction?`<button class="wf-act ${act.secondAction.cls}" onclick="${act.secondAction.fn}">${act.secondAction.label}</button>`:''}
+      ${(me.id===j.teamLeaderId&&j.stage!=='intake'&&j.stage!=='completed'&&j.stage!=='release'&&j.drafterId)?`<button class="wf-act sec" onclick="wfReassignDrafter('${j.id}')">🔄 Reassign Drafter</button>`:''}
       <button class="wf-act sec" onclick="wfToggleTimeline('${j.id}')">🕐 Timeline</button>
       <button class="wf-act sec" onclick="wfToggleJobGantt('${j.id}')">📊 Gantt</button>
       <button class="wf-act sec" onclick="wfToggleJobFlow('${j.id}')">🔀 Flow</button>
@@ -2431,7 +2468,13 @@ export function renderJobBasket(){
     const tab = _pickTab(tabs, _wfTab); _wfTab = tab;
     let content = '';
     if(tab === 'overview'){
-      content = active.length ? active.map(j=>wfCard(j,false)).join('') : '<div class="empty" style="padding:1.25rem;">No active workflow jobs.</div>';
+      // Stuck intake alert — jobs sitting at intake past the configured pickup window
+      const intakeThresholdMs = (window._jobSettings?.deadlineSalesOpBasketHours??24) * 3600000;
+      const stuckIntake = active.filter(j => j.stage === 'intake' && j.created && (Date.now()-toMillis(j.created)) > intakeThresholdMs);
+      const stuckBanner = stuckIntake.length
+        ? `<div class="wf-stuck-banner">⚠️ <strong>${stuckIntake.length} job${stuckIntake.length>1?'s':''} stuck at intake</strong> — no TL has picked ${stuckIntake.length>1?'them':'it'} up yet.<div class="wf-stuck-list">${stuckIntake.map(j=>`<span>${esc(j.client)} #${esc(j.jobNum)} · ${esc(users.find(u=>u.id===j.teamLeaderId)?.name||'unassigned TL')}</span>`).join('')}</div></div>`
+        : '';
+      content = stuckBanner + (active.length ? active.map(j=>wfCard(j,false)).join('') : '<div class="empty" style="padding:1.25rem;">No active workflow jobs.</div>');
     } else {
       content = doneJobs.length ? doneJobs.map(j=>wfCard(j,false)).join('') : '<div class="empty" style="padding:1.25rem;">No completed jobs yet.</div>';
     }

@@ -3976,6 +3976,34 @@ function checkOverdueEmails(){
   }
   localStorage.setItem('rmi_overdue_emailed',JSON.stringify(notified));
 }
+function checkStuckIntakeJobs(){
+  if(!me)return;
+  const now=Date.now();
+  const thresholdMs=(_jobSettings?.deadlineSalesOpBasketHours??24)*3600000;
+  const alerted=JSON.parse(localStorage.getItem('rmi_stuck_intake_alerted')||'{}');
+  // TLs: notify about their own stuck intake jobs
+  if(isTeamLeader()){
+    const stuck=jobs.filter(j=>j.workflow&&j.stage==='intake'&&j.teamLeaderId===me.id&&j.created&&(now-toMillis(j.created))>thresholdMs);
+    for(const j of stuck){
+      const key=j.id+'_stuck';
+      if(alerted[key]&&now-alerted[key]<20*60*60*1000)continue;
+      pushNotif(me.id,'⏳ Intake Job Waiting',`${j.client} (#${j.jobNum}) has been waiting for pickup for over ${_jobSettings?.deadlineSalesOpBasketHours??24}h.`);
+      alerted[key]=now;
+    }
+  }
+  // Managers/supervisors: push notif for all stuck intake jobs not yet notified
+  if(canSeeAllJobs()){
+    const stuck=jobs.filter(j=>j.workflow&&j.stage==='intake'&&j.created&&(now-toMillis(j.created))>thresholdMs);
+    for(const j of stuck){
+      const key=j.id+'_stuck_mgr';
+      if(alerted[key]&&now-alerted[key]<20*60*60*1000)continue;
+      const tlName=users.find(u=>u.id===j.teamLeaderId)?.name||'Unknown TL';
+      pushNotif(me.id,'⚠️ Stuck Intake Job',`${j.client} (#${j.jobNum}) unassigned for ${_jobSettings?.deadlineSalesOpBasketHours??24}h+ — TL: ${tlName}`);
+      alerted[key]=now;
+    }
+  }
+  localStorage.setItem('rmi_stuck_intake_alerted',JSON.stringify(alerted));
+}
 function checkScheduledWeeklyExport(){
   if(!isManager())return;
   const now=new Date();
@@ -4077,6 +4105,8 @@ loginAs=function(u){
   _bgIntervals.push(setInterval(checkDeadlineReminders,30*60*1000));
   checkOverdueEmails();
   _bgIntervals.push(setInterval(checkOverdueEmails,60*60*1000));
+  checkStuckIntakeJobs();
+  _bgIntervals.push(setInterval(checkStuckIntakeJobs,30*60*1000));
   if(isManager()){
     const dash=document.getElementById('dashboard');
     if(dash&&!document.getElementById('archive-jobs-btn')){
