@@ -95,7 +95,7 @@ function listenJobSettings(){
   jobSettingsUnsub=onSnapshot(doc(cfgCol,'jobSettings'),snap=>{
     _jobSettings=snap.exists()?mergeJobSettings(snap.data()):{...DEFAULT_JOB_SETTINGS};
     window._jobSettings=_jobSettings;
-    if(document.getElementById('job-settings-pane'))renderJobSettingsPane();
+    if(document.getElementById('account-pane-jobsettings')?.style.display!=='none')renderJobSettingsPane();
   },()=>{});
 }
 async function saveJobSettings(patch){
@@ -109,7 +109,7 @@ async function saveJobSettings(patch){
   showToastMsg('✅ Job settings saved');
 }
 function renderJobSettingsPane(){
-  const el=document.getElementById('job-settings-pane');if(!el)return;
+  const el=document.getElementById('account-pane-jobsettings');if(!el)return;
   const s=_jobSettings;
   const row=(label,key,unit,hint)=>`
     <div class="pref-row" style="flex-direction:column;align-items:flex-start;gap:0.35rem;">
