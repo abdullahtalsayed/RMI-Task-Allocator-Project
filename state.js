@@ -22,7 +22,7 @@ export const ACTIVITY_TYPE_LABELS={
 export const FB_LIMITS={notifications:60,activityLog:200,broadcasts:40,extensions:30,jobEvents:40,dashActivity:25,jobsListen:500};
 export const JOBS_PAGE_SIZE=50;
 export const ARCHIVE_AFTER_MS=90*86400000;
-export const DEFAULT_SETTINGS={dashStatsView:'cards',notifSound:true,desktopNotif:true,muteLoginNotif:false,managerJobsScope:'all',jobsSort:'created',jobsPage:0,emailAssigned:true,emailStatus:true,emailDeadline:true,emailOverdue:true,emailExtension:true};
+export const DEFAULT_SETTINGS={dashStatsView:'cards',notifSound:true,desktopNotif:true,muteLoginNotif:false,managerJobsScope:'all',jobsSort:'created',jobsPage:0,emailAssigned:true,emailStatus:true,emailDeadline:true,emailOverdue:true,emailExtension:true,myJobsPool:'tasks',analyticsPool:'tasks'};
 export const NOTIF_BUBBLE_TTL=120000;
 export const NOTIF_TOAST_MAX=12;
 

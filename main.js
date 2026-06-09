@@ -22,9 +22,11 @@ let knownNotifIds=new Set(), notifSoundReady=false, notifSnapshotReady=false, no
 let fbUnsubs=[];
 let notifToastTimers=new Map();
 
-let _myJobsPool='tasks'; // 'tasks' | 'basket' | 'all'
+let _myJobsPool='tasks'; // 'tasks' | 'basket' | 'all' — restored from userSettings on login
 window.setMyJobsPool=function(p){
   _myJobsPool=p;
+  userSettings.myJobsPool=p;
+  saveUserSettings();
   userSettings.jobsPage=0;
   renderJobs();
 };
@@ -1578,7 +1580,9 @@ function renderActivityLog(){
 window.renderActivityLog=renderActivityLog;
 window.openJobByNum=function(num){
   const j=jobs.find(x=>String(x.jobNum)===String(num));
-  if(j&&window.openJobDetail)openJobDetail(j.id);
+  if(!j)return;
+  if(j.workflow){goHub('work','job-basket');showToastMsg(`Navigated to Job Basket — find #${j.jobNum} there.`);}
+  else if(window.openJobDetail)openJobDetail(j.id);
 };
 window.clearActivityLogFilters=function(){
   ['alf-q','alf-from','alf-to'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -4052,6 +4056,9 @@ loginAs=function(u){
   if(sortEl)sortEl.value=userSettings.jobsSort;
   const scopeEl=document.getElementById('jobs-scope');
   if(scopeEl)scopeEl.value=userSettings.managerJobsScope||'all';
+  // Restore pool selections from saved settings
+  _myJobsPool=userSettings.myJobsPool||'tasks';
+  analyticsPool=userSettings.analyticsPool||'tasks';
   auditManagersOnLogin();
   updateEmailMasterBadge();
   openJobFromUrl();
@@ -4148,6 +4155,8 @@ function analyticsScope(){
 }
 window.setAnalyticsPool=function(p){
   analyticsPool=p;
+  userSettings.analyticsPool=p;
+  saveUserSettings();
   document.querySelectorAll('#an-pool .an-range-btn').forEach(b=>b.classList.toggle('on',b.dataset.p===p));
   renderSbAnalyticsSubs();
   renderAnalyticsContent();
