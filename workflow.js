@@ -2,7 +2,7 @@
 // Type-aware staged pipeline. Sales Op creates stub → weighted TL assignment →
 // TL picks type + scope at intake → type-specific staged pipeline.
 // workflow:true on all basket jobs. job.owner = current ball-holder.
-// Only Shop Drawing pipeline is fully implemented. Other types = stubs (future).
+// All types implemented. BOM and Other are intentional stubs (skip to completed).
 //
 // Shop Drawing stages (scope-aware):
 //   intake
@@ -747,10 +747,11 @@ window.wfCDResult = async function(result){
       `${j.client} (#${j.jobNum}) — done.`);
     showToastMsg('🎉 Civil Defense approved — job completed.');
   } else {
+    const rejCount = (j.rejectionCount||0) + 1;
     await wfAdvance(j.id, 'cd_draft', {
       action:'cd_denied', owner:j.drafterId,
       note: note ? `Civil Defense denied — ${note}` : 'Civil Defense denied — fix & resubmit',
-      extra:{lastRejectNote:note},
+      extra:{rejectionCount:rejCount, lastRejectNote:note, lastRejectPhase:'Civil Defense'},
     });
     await addEvent(j.id, 'wf_cd_denied',
       `🔴 Civil Defense denied${note ? ' — ' + note : ''}`, 'red');
@@ -907,7 +908,14 @@ window.wfConfirmAssign = async function(){
     // typed workflow types (AC, PU, PF, PA, FA, PFA, FJ, SDI, SDR, BOM, Other)
     extra.sdScope = null; extra.sdGutter = null; extra.sdSkylight = null;
     const typedCfg = TYPED_WORKFLOW[type];
-    firstStage = typedCfg ? typedCfg.draftStage : 'completed';
+    if(typedCfg){
+      firstStage = typedCfg.draftStage;
+    } else {
+      // BOM / Other stubs — mark complete immediately
+      firstStage = 'completed';
+      extra.status = 'completed';
+      extra.completed = Date.now();
+    }
   }
 
   const _scopeLabels = {
@@ -982,8 +990,13 @@ window.wfDecideRoof = async function(approve){
       note:'Roof phase approved',
     });
     await addEvent(j.id,'wf_roof_approved',`🟢 ${me.name} approved roof phase`,'green');
-    if(s !== 'roof') pushNotif(j.drafterId,'🟢 Roof Approved',
-      `${j.client} (#${j.jobNum}) — continue with wall layout.`);
+    if(s !== 'roof'){
+      pushNotif(j.drafterId,'🟢 Roof Approved',
+        `${j.client} (#${j.jobNum}) — continue with wall layout.`);
+    } else {
+      pushNotif(j.drafterId,'🟢 Roof Approved',
+        `${j.client} (#${j.jobNum}) — roof phase approved, awaiting client.`);
+    }
     showToastMsg('✅ Roof phase approved.');
   } else {
     const rejCount = (j.rejectionCount||0) + 1;
@@ -1319,6 +1332,8 @@ window.wfSubmitRelease = function(jobId){
       `✅ ${me.name} completed ${j.reopenType||'release'}`,'green');
     pushNotif(j.teamLeaderId,'✅ Done',
       `${j.client} (#${j.jobNum}) — ${j.reopenType||'release'} completed by ${me.name}.`);
+    if(j.wfCreatedBy) pushNotif(j.wfCreatedBy,'✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — ${j.reopenType||'release'} done.`);
     showToastMsg('🎉 Completed.');
     renderJobBasket();
   },(q)=>{ showToastMsg('All QC checks must pass before submitting.'); });
