@@ -76,9 +76,17 @@ export function jobDateEntries(j){
   if(j.deadline)evs.push({kind:'deadline',ts:j.deadline,overdue:j.status!=='completed'&&isOverdue(j)});
   return evs;
 }
+function _visibleBasketJobs(){
+  if(!me) return [];
+  const pool = jobs.filter(j => j.workflow);
+  if(['manager','supervisor'].includes(me.role) || amDirector()) return pool;
+  if(me.role === 'team_leader') return pool.filter(j => j.teamLeaderId === me.id);
+  return pool.filter(j => j.drafterId === me.id || j.wfCreatedBy === me.id);
+}
 export function jobsForCalendarDay(ds){
   const out=[];
-  visibleJobs().forEach(j=>{
+  const allVisible = [...visibleJobs(), ..._visibleBasketJobs()];
+  allVisible.forEach(j=>{
     if(calFilterEmp&&j.owner!==calFilterEmp)return;
     jobDateEntries(j).forEach(ev=>{
       if(dateKey(ev.ts)!==ds)return;

@@ -78,6 +78,14 @@ export const WF_STAGES = {
   sd_tl_revision_review:   { actor:'tl',      label:'Revision Review',                   short:'Rev Review',  color:'purple' },
   sd_jobcard:              { actor:'drafter', label:'Job Card Preparation',              short:'Job Card',    color:'yellow' },
   sd_tl_jobcard_review:    { actor:'tl',      label:'Job Card Review',                   short:'Card Review', color:'purple' },
+  // SD post-job-card pipeline
+  sd_prod_submit:          { actor:'tl',      label:'Submit to Production',               short:'Prod Submit', color:'blue'   },
+  sd_bom:                  { actor:'drafter', label:'Bill of Materials Preparation',      short:'BOM Prep',    color:'yellow' },
+  sd_bom_review:           { actor:'tl',      label:'Bill of Materials Review',           short:'BOM Review',  color:'purple' },
+  sd_erection_draft:       { actor:'drafter', label:'Erection Drawing Preparation',       short:'Erect Draft', color:'yellow' },
+  sd_erection_review:      { actor:'tl',      label:'Erection Drawing Review',            short:'Erect Review',color:'purple' },
+  // send-to-client confirmation step
+  sd_send_to_client:       { actor:'tl',      label:'Send to Client',                     short:'Send Client', color:'orange' },
   // panels release
   pr_draft:                { actor:'drafter', label:'Panels Release Preparation',        short:'PR Draft',    color:'yellow' },
   pr_tl_review:            { actor:'tl',      label:'Panels Release Review',             short:'PR Review',   color:'purple' },
@@ -133,10 +141,10 @@ function _sdPipeline(j){
   const base = ['intake'];
   if(roof){ base.push('sd_roof_draft', 'sd_tl_roof_review'); }
   if(wall){ base.push('sd_wall_draft', 'sd_tl_wall_review'); }
-  base.push('sd_client_wait');
+  base.push('sd_send_to_client', 'sd_client_wait');
   const hasRevision = Array.isArray(j.wfHistory) && j.wfHistory.some(e => e.to === 'sd_revision_draft');
   if(hasRevision){ base.push('sd_revision_draft', 'sd_tl_revision_review'); }
-  base.push('sd_jobcard', 'sd_tl_jobcard_review', 'completed');
+  base.push('sd_jobcard', 'sd_tl_jobcard_review', 'sd_prod_submit', 'sd_bom', 'sd_bom_review', 'sd_erection_draft', 'sd_erection_review', 'completed');
   return base;
 }
 
@@ -214,7 +222,7 @@ window.wfSubmitToBasket = async function(){
     workflow:true, source:'sales', stage:'intake',
     owner:tl.id, teamLeaderId:tl.id, drafterId:null,
     wfCreatedBy:me.id, wfCreatedByName:me.name,
-    status:'pending', created:now, started:null, completed:null, deadline:null,
+    status:'pending', created:now, started:null, completed:null, deadline:now + 24*60*60*1000,
     sdScope:null, sdGutter:null, sdSkylight:null,
     rejectionCount:0,
     wfHistory:[{stage:'_new',to:'intake',action:'submitted',by:me.name,byId:me.id,at:now,
@@ -246,7 +254,8 @@ async function wfAdvance(jobId, toStage, opts={}){
     patch.status = 'completed'; patch.completed = Date.now();
     if(j.started) patch.durationTotalMs = Date.now() - toMillis(j.started);
   } else if(toStage !== 'completed'){
-    if(j.status === 'completed') patch.status = 'ongoing';
+    // auto-reset to pending on every stage transition; wfStart sets it to ongoing
+    if(patch.status === undefined) patch.status = 'pending';
   }
   await updateJob(jobId, patch);
 }
@@ -421,6 +430,7 @@ const PR_CHECKLIST = [
   {q:'Did you check the insulation density?',            key:'insulationDensity'},
   {q:'Did you check the top sheet color?',               key:'topSheetColor'},
   {q:'Did you check the bottom sheet color?',            key:'bottomSheetColor'},
+  {q:'Did you check the effective width? (1000 / 1050 / 1220 / 1090 mm)', key:'effectiveWidth'},
 ];
 
 // ── FLASHINGS RELEASE CHECKLIST ───────────────────────────────────────────────
@@ -863,7 +873,7 @@ function _wfShowAssignForm(j){
         </select>
       </label>
     </div>
-    <label class="wf-f">Deadline<input type="datetime-local" id="wf-dl"></label>
+    <label class="wf-f">Deadline<input type="datetime-local" id="wf-dl" oninput="this.dataset.userEdited=1"></label>
     <label class="wf-f">Assign to (freest first)
       <select id="wf-member">
         ${ms.map(m=>({m,l:memberLoad(m.id)})).sort((a,b)=>a.l-b.l)
@@ -874,6 +884,7 @@ function _wfShowAssignForm(j){
       <button class="wf-btn-no" onclick="wfCloseModal()">Cancel</button>
       <button class="wf-btn-yes" onclick="wfConfirmAssign()">Assign Job</button>
     </div>`);
+  window.wfTypeChange(); // init scope visibility + auto-fill deadline for default type
 }
 
 window.wfTypeChange = function(){
@@ -884,6 +895,12 @@ window.wfTypeChange = function(){
   if(sd) sd.style.display = (t === 'Shop Drawing' || t === 'Erection Drawing') ? 'block' : 'none';
   if(pr) pr.style.display = (t === 'Panels Release')    ? 'block' : 'none';
   if(fl) fl.style.display = (t === 'Flashings Release') ? 'block' : 'none';
+  // auto-fill deadline (SD=10 days, all others=5 days); skip if TL manually edited field
+  const dlEl = document.getElementById('wf-dl');
+  if(dlEl && !dlEl.dataset.userEdited){
+    const days = t === 'Shop Drawing' ? 10 : 5;
+    dlEl.value = new Date(Date.now() + days * 86400000).toISOString().slice(0,16);
+  }
 };
 
 window.wfScopeChange = function(){
@@ -1021,7 +1038,7 @@ window.wfDecideRoof = async function(approve){
   const s = j.sdScope || 'roof_wall';
   if(approve){
     // if wall in scope → wall draft; else → client wait (roof only scope)
-    const next = (s === 'wall' || s === 'roof_wall') ? 'sd_wall_draft' : 'sd_client_wait';
+    const next = (s === 'wall' || s === 'roof_wall') ? 'sd_wall_draft' : 'sd_send_to_client';
     const nextOwner = (s === 'roof') ? j.teamLeaderId : j.drafterId;
     await wfAdvance(j.id, next, {
       action:'roof_approved', checklist:_wfCtx.checklist, owner:nextOwner,
@@ -1087,13 +1104,13 @@ window.wfDecideWall = async function(approve){
   const note = document.getElementById('wf-reject-note')?.value.trim() || null;
   if(!approve && !note){ alert('A comment is required when rejecting.'); return; }
   if(approve){
-    await wfAdvance(j.id,'sd_client_wait',{
+    await wfAdvance(j.id,'sd_send_to_client',{
       action:'wall_approved', checklist:_wfCtx.checklist, owner:j.teamLeaderId,
-      note:'Wall phase approved — awaiting client',
+      note:'Wall phase approved — ready to send to client',
     });
     await addEvent(j.id,'wf_wall_approved',
-      `🟢 ${me.name} approved wall phase — awaiting client`,'green');
-    showToastMsg('✅ Wall phase approved. Awaiting client.');
+      `🟢 ${me.name} approved wall phase — ready to send to client`,'green');
+    showToastMsg('✅ Wall phase approved. Send to client when ready.');
   } else {
     const rejCount = (j.rejectionCount||0) + 1;
     await wfAdvance(j.id,'sd_wall_draft',{
@@ -1250,7 +1267,6 @@ async function _wfProceedAssignCard(jobId, drafterId, note){
   await wfAdvance(jobId,'sd_jobcard',{
     action:'jobcard_assigned', owner:drafterId, drafterId,
     note:`Job card assigned to ${who?.name}${note?' — '+note:''}`,
-    extra:{status:'ongoing'},
   });
   await addEvent(jobId,'wf_jobcard',`🗂 ${me.name} assigned job card prep to ${who?.name}`,'yellow');
   pushNotif(drafterId,'🗂 Job Card Preparation',
@@ -1280,22 +1296,15 @@ window.wfSubmitJobCard = function(jobId){
 window.wfCloseJobCard = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
   wfAsk('Close Job — Final QC', QC5, async(ans)=>{
-    await wfAdvance(jobId,'completed',{
-      action:'completed', checklist:ans,
-      note:'Job cards approved — job completed',
-      statusComplete:true, extra:{releaseEligible:true},
+    await wfAdvance(jobId,'sd_prod_submit',{
+      action:'jobcard_approved', checklist:ans, owner:j.teamLeaderId,
+      note:'Job cards approved — ready for production submission',
     });
-    await addEvent(jobId,'completed',`✅ ${me.name} passed final QC — job completed`,'green');
-    if(j.drafterId)   pushNotif(j.drafterId,'✅ Job Completed',
-      `${j.client} (#${j.jobNum}) — closed by ${me.name}.`);
-    if(j.wfCreatedBy) pushNotif(j.wfCreatedBy,'✅ Job Completed',
-      `${j.client} (#${j.jobNum}) — your basket job is done.`);
-    _wfMail('wf_completed', j, `✅ Basket Job Completed — ${j.client} (#${j.jobNum})`,
-      `Job cards approved and job closed by ${me.name}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}`);
-    showToastMsg('🎉 Job completed.');
+    await addEvent(jobId,'wf_prod_submit',`✅ ${me.name} approved job cards — submit to production`,'blue');
+    pushNotif(j.teamLeaderId,'📋 Job Cards Approved',
+      `${j.client} (#${j.jobNum}) — submit to production when ready.`);
+    showToastMsg('✅ Job cards approved. Submit to production next.');
     renderJobBasket();
-    // prompt for sample expectation after a short delay so card re-renders first
-    setTimeout(()=>_wfAskSampleExpectation(jobId), 400);
   },(q)=>{ showToastMsg('All QC checks must pass before closing.'); });
 };
 
@@ -1358,7 +1367,7 @@ window.wfConfirmReopen = async function(){
   await wfAdvance(j.id,'release',{
     action:'reopened', owner:memberId, drafterId:memberId,
     note:`Reopened for ${reopenType} — assigned to ${who?.name}`,
-    extra:{status:'ongoing', completed:null, reopenType},
+    extra:{completed:null, reopenType},
   });
   await addEvent(j.id,'wf_release',`♻️ ${me.name} reopened for ${reopenType} → ${who?.name}`,'blue');
   pushNotif(memberId,`♻️ ${reopenType}`,`${j.client} (#${j.jobNum}) — assigned for ${reopenType}.`);
@@ -1387,6 +1396,294 @@ window.wfSubmitRelease = function(jobId){
   },(q)=>{ showToastMsg('All QC checks must pass before submitting.'); });
 };
 
+// ── SD · TL: SEND TO CLIENT ───────────────────────────────────────────────────
+window.wfSendToClient = async function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  await wfAdvance(jobId,'sd_client_wait',{
+    action:'sent_to_client', owner:j.teamLeaderId,
+    note:'Shop drawing sent to client — awaiting approval',
+  });
+  await addEvent(jobId,'wf_sent_to_client',`📨 ${me.name} sent shop drawing to client`,'orange');
+  showToastMsg('📨 Sent to client. Awaiting approval.');
+  renderJobBasket();
+};
+
+// ── SD · TL: SUBMIT TO PRODUCTION ─────────────────────────────────────────────
+window.wfSubmitToProduction = async function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  await _wfAssignBOM(jobId, null);
+};
+
+async function _wfAssignBOM(jobId, note){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const drafter = users.find(u => u.id === j.drafterId);
+  const load = memberLoad(j.drafterId||'');
+  if(load >= 3){
+    const dls = jobs.filter(x=>x.owner===j.drafterId&&x.status!=='completed'&&x.deadline)
+      .map(x=>fmt(x.deadline)).slice(0,3);
+    _wfCtx = {jobId, pendingNote:note};
+    wfModalHtml(`
+      <div class="wf-q-title">BOM Assignment — Heads Up</div>
+      <div class="wf-q-text" style="font-size:0.86rem;">
+        <strong>${esc(drafter?.name||'Drafter')}</strong> has
+        <strong>${load}</strong> active task${load>1?'s':''}
+        ${dls.length?`with upcoming deadlines: ${dls.join(', ')}`:''}.
+      </div>
+      <div class="wf-q-actions">
+        <button class="wf-btn-no" onclick="wfReassignBOM()">↻ Reassign to freest</button>
+        <button class="wf-btn-yes" onclick="wfProceedBOM('${j.drafterId}')">
+          Proceed with ${esc((drafter?.name||'').split(' ')[0])}
+        </button>
+      </div>`);
+  } else {
+    await _wfProceedAssignBOM(jobId, j.drafterId, note);
+  }
+}
+window.wfReassignBOM = function(){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  const next = freestMember(j.teamLeaderId, j.drafterId);
+  if(!next){ showToastMsg('No other team member available.'); return; }
+  window.wfCloseModal();
+  _wfProceedAssignBOM(j.id, next.id, _wfCtx.pendingNote);
+};
+window.wfProceedBOM = function(drafterId){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  window.wfCloseModal();
+  _wfProceedAssignBOM(j.id, drafterId, _wfCtx.pendingNote);
+};
+async function _wfProceedAssignBOM(jobId, drafterId, note){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const who = users.find(u => u.id === drafterId);
+  await wfAdvance(jobId,'sd_bom',{
+    action:'bom_assigned', owner:drafterId, drafterId,
+    note:`BOM assigned to ${who?.name}${note?' — '+note:''}`,
+  });
+  await addEvent(jobId,'wf_bom',`📋 ${me.name} submitted to production & assigned BOM to ${who?.name}`,'blue');
+  pushNotif(drafterId,'📋 BOM Preparation',
+    `${j.client} (#${j.jobNum}) — job cards approved, prepare Bill of Materials.`);
+  showToastMsg(`✅ BOM assigned to ${who?.name}.`);
+  renderJobBasket();
+}
+
+// ── SD BOM / ERECTION CHECKLISTS ─────────────────────────────────────────────
+const BOM_DRAFTER_CHECKLIST = [
+  {q:'Did you prepare the Bill of Materials document?',     key:'bomDoc'},
+  {q:'Did you check all material quantities?',              key:'quantities'},
+  {q:'Did you check material specifications?',              key:'specs'},
+  {q:'Did you cross-check with the job card data?',         key:'jobCardCheck'},
+  {q:'Did you check the part marks?',                       key:'partMarks'},
+];
+const BOM_TL_CHECKLIST = [
+  {q:'Did you verify all material quantities?',             key:'quantities'},
+  {q:'Did you check material specifications?',              key:'specs'},
+  {q:'Did you check the part marks match the job card?',    key:'partMarks'},
+  {q:'Did you verify the BOM against the shop drawings?',   key:'sdCheck'},
+  {q:'Did you confirm no items are missing?',               key:'completeness'},
+];
+const SD_ERECTION_DRAFTER_CHECKLIST = [
+  {q:'Did you prepare the erection sequence drawings?',     key:'erectionSeq'},
+  {q:'Did you check panel placement and orientation?',      key:'panelOrientation'},
+  {q:'Did you check all dimensions?',                       key:'dimensions'},
+  {q:'Did you include all fixing details?',                 key:'fixingDetails'},
+  {q:'Did you verify against the approved shop drawing?',   key:'sdVerify'},
+];
+const SD_ERECTION_TL_CHECKLIST = [
+  {q:'Did you check the erection sequence?',                key:'erectionSeq'},
+  {q:'Did you check panel placement and orientation?',      key:'panelOrientation'},
+  {q:'Did you check all dimensions?',                       key:'dimensions'},
+  {q:'Did you check fixing details?',                       key:'fixingDetails'},
+  {q:'Did you verify against the approved shop drawing?',   key:'sdVerify'},
+];
+
+// ── SD · DRAFTER: SUBMIT BOM ──────────────────────────────────────────────────
+window.wfSubmitBOM = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  wfAsk('Submit BOM — Self Check', BOM_DRAFTER_CHECKLIST, async(ans)=>{
+    await wfAdvance(jobId,'sd_bom_review',{
+      action:'bom_submitted', checklist:ans, owner:j.teamLeaderId,
+      note:'BOM self-checked & submitted for TL review',
+    });
+    await addEvent(jobId,'wf_bom_review',`📋 ${me.name} submitted BOM for review`,'purple');
+    pushNotif(j.teamLeaderId,'📋 BOM Ready',
+      `${j.client} (#${j.jobNum}) — review Bill of Materials.`);
+    showToastMsg('✅ BOM sent to team leader.');
+    renderJobBasket();
+  },(q)=>{ showToastMsg('Complete every check before submitting BOM.'); });
+};
+
+// ── SD · TL: REVIEW BOM ───────────────────────────────────────────────────────
+window.wfReviewBOM = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  wfAsk('Review BOM', BOM_TL_CHECKLIST, (ans)=>{
+    _wfCtx = {jobId, checklist:ans};
+    wfShowDecision(j,
+      'Approve → auto-assign Erection Drawing. Reject (comment required) → drafter fixes & resubmits.',
+      'wfDecideBOM', true);
+  },(q)=>{ showToastMsg('Complete the checklist before reviewing.'); });
+};
+window.wfDecideBOM = async function(approve){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  const note = document.getElementById('wf-reject-note')?.value.trim() || null;
+  if(!approve && !note){ alert('A comment is required when rejecting.'); return; }
+  if(approve){
+    window.wfCloseModal();
+    await _wfAssignSDErection(j.id, 'BOM approved — auto-assigning Erection Drawing');
+  } else {
+    const rejCount = (j.rejectionCount||0) + 1;
+    await wfAdvance(j.id,'sd_bom',{
+      action:'bom_rejected', checklist:_wfCtx.checklist, owner:j.drafterId,
+      note:note, extra:{rejectionCount:rejCount, lastRejectNote:note, lastRejectPhase:'bom'},
+    });
+    await addEvent(j.id,'wf_bom_rejected',
+      `🔴 ${me.name} rejected BOM (rejection #${rejCount}) — ${note}`,'red');
+    pushNotif(j.drafterId,'🔴 BOM Rejected',
+      `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    _wfMail('wf_rejected', j, `🔴 Basket Rejection — ${j.client} (#${j.jobNum})`,
+      `${me.name} rejected BOM.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nNote: ${note||'—'}`);
+    showToastMsg('Sent back for fixes.');
+    window.wfCloseModal();
+    renderJobBasket();
+  }
+};
+
+async function _wfAssignSDErection(jobId, note){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const drafter = users.find(u => u.id === j.drafterId);
+  const load = memberLoad(j.drafterId||'');
+  if(load >= 3){
+    const dls = jobs.filter(x=>x.owner===j.drafterId&&x.status!=='completed'&&x.deadline)
+      .map(x=>fmt(x.deadline)).slice(0,3);
+    _wfCtx = {jobId, pendingNote:note};
+    wfModalHtml(`
+      <div class="wf-q-title">Erection Drawing Assignment — Heads Up</div>
+      <div class="wf-q-text" style="font-size:0.86rem;">
+        <strong>${esc(drafter?.name||'Drafter')}</strong> has
+        <strong>${load}</strong> active task${load>1?'s':''}
+        ${dls.length?`with upcoming deadlines: ${dls.join(', ')}`:''}.
+      </div>
+      <div class="wf-q-actions">
+        <button class="wf-btn-no" onclick="wfReassignSDErection()">↻ Reassign to freest</button>
+        <button class="wf-btn-yes" onclick="wfProceedSDErection('${j.drafterId}')">
+          Proceed with ${esc((drafter?.name||'').split(' ')[0])}
+        </button>
+      </div>`);
+  } else {
+    await _wfProceedAssignSDErection(jobId, j.drafterId, note);
+  }
+}
+window.wfReassignSDErection = function(){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  const next = freestMember(j.teamLeaderId, j.drafterId);
+  if(!next){ showToastMsg('No other team member available.'); return; }
+  window.wfCloseModal();
+  _wfProceedAssignSDErection(j.id, next.id, _wfCtx.pendingNote);
+};
+window.wfProceedSDErection = function(drafterId){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  window.wfCloseModal();
+  _wfProceedAssignSDErection(j.id, drafterId, _wfCtx.pendingNote);
+};
+async function _wfProceedAssignSDErection(jobId, drafterId, note){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  const who = users.find(u => u.id === drafterId);
+  await wfAdvance(jobId,'sd_erection_draft',{
+    action:'erection_assigned', owner:drafterId, drafterId,
+    note:`Erection drawing assigned to ${who?.name}${note?' — '+note:''}`,
+  });
+  await addEvent(jobId,'wf_erection_draft',`📐 ${me.name} assigned erection drawing to ${who?.name}`,'yellow');
+  pushNotif(drafterId,'📐 Erection Drawing',
+    `${j.client} (#${j.jobNum}) — BOM approved, prepare Erection Drawing.`);
+  showToastMsg(`✅ Erection drawing assigned to ${who?.name}.`);
+  renderJobBasket();
+}
+
+// ── SD · DRAFTER: SUBMIT ERECTION DRAWING ─────────────────────────────────────
+window.wfSubmitSDErection = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  wfAsk('Submit Erection Drawing — Self Check', SD_ERECTION_DRAFTER_CHECKLIST, async(ans)=>{
+    await wfAdvance(jobId,'sd_erection_review',{
+      action:'erection_submitted', checklist:ans, owner:j.teamLeaderId,
+      note:'Erection drawing self-checked & submitted for TL review',
+    });
+    await addEvent(jobId,'wf_erection_review',`📐 ${me.name} submitted erection drawing for review`,'purple');
+    pushNotif(j.teamLeaderId,'📐 Erection Drawing Ready',
+      `${j.client} (#${j.jobNum}) — review Erection Drawing.`);
+    showToastMsg('✅ Erection drawing sent to team leader.');
+    renderJobBasket();
+  },(q)=>{ showToastMsg('Complete every check before submitting erection drawing.'); });
+};
+
+// ── SD · TL: REVIEW ERECTION DRAWING ─────────────────────────────────────────
+window.wfReviewSDErection = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  wfAsk('Review Erection Drawing', SD_ERECTION_TL_CHECKLIST, (ans)=>{
+    _wfCtx = {jobId, checklist:ans};
+    wfShowDecision(j,
+      'Approve → job completed (eligible for continuation or permanent close). Reject (comment required) → drafter fixes & resubmits.',
+      'wfDecideSDErection', true);
+  },(q)=>{ showToastMsg('Complete the checklist before reviewing.'); });
+};
+window.wfDecideSDErection = async function(approve){
+  const j = jobs.find(x => x.id === _wfCtx.jobId); if(!j) return;
+  const note = document.getElementById('wf-reject-note')?.value.trim() || null;
+  if(!approve && !note){ alert('A comment is required when rejecting.'); return; }
+  if(approve){
+    await wfAdvance(j.id,'completed',{
+      action:'erection_approved', checklist:_wfCtx.checklist,
+      note:'Erection drawing approved — job completed',
+      statusComplete:true, extra:{releaseEligible:true},
+    });
+    await addEvent(j.id,'completed',`✅ ${me.name} approved erection drawing — job completed`,'green');
+    if(j.drafterId)   pushNotif(j.drafterId,'✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — erection drawing approved.`);
+    if(j.wfCreatedBy) pushNotif(j.wfCreatedBy,'✅ Job Completed',
+      `${j.client} (#${j.jobNum}) — your basket job is done.`);
+    _wfMail('wf_completed', j, `✅ Basket Job Completed — ${j.client} (#${j.jobNum})`,
+      `Erection drawing approved by ${me.name}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}`);
+    showToastMsg('🎉 Erection drawing approved — job completed.');
+    window.wfCloseModal();
+    renderJobBasket();
+    setTimeout(()=>_wfAskSampleExpectation(j.id), 400);
+  } else {
+    const rejCount = (j.rejectionCount||0) + 1;
+    await wfAdvance(j.id,'sd_erection_draft',{
+      action:'erection_rejected', checklist:_wfCtx.checklist, owner:j.drafterId,
+      note:note, extra:{rejectionCount:rejCount, lastRejectNote:note, lastRejectPhase:'erection'},
+    });
+    await addEvent(j.id,'wf_erection_rejected',
+      `🔴 ${me.name} rejected erection drawing (rejection #${rejCount}) — ${note}`,'red');
+    pushNotif(j.drafterId,'🔴 Erection Drawing Rejected',
+      `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    _wfMail('wf_rejected', j, `🔴 Basket Rejection — ${j.client} (#${j.jobNum})`,
+      `${me.name} rejected Erection Drawing.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nNote: ${note||'—'}`);
+    showToastMsg('Sent back for fixes.');
+    window.wfCloseModal();
+    renderJobBasket();
+  }
+};
+
+// ── COMPLETE & CLOSE (permanent — no further releases) ────────────────────────
+window.wfCloseJobFinal = function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  wfModalHtml(`
+    <div class="wf-q-title">Complete & Close — ${esc(j.client)} <span class="tc-muted">#${esc(j.jobNum)}</span></div>
+    <div class="wf-q-text" style="font-size:0.82rem;color:var(--text2);">
+      This permanently closes the job. No further releases or continuations will be possible.
+    </div>
+    <div class="wf-q-actions">
+      <button class="wf-btn-no" onclick="wfCloseModal()">Cancel</button>
+      <button class="wf-btn-yes" onclick="wfConfirmCloseFinal('${jobId}')">🔒 Complete & Close</button>
+    </div>`);
+};
+window.wfConfirmCloseFinal = async function(jobId){
+  const j = jobs.find(x => x.id === jobId); if(!j) return;
+  await updateJob(jobId, {sdClosed:true, releaseEligible:false});
+  await addEvent(jobId,'wf_closed_final',`🔒 ${me.name} permanently closed the job`,'green');
+  window.wfCloseModal();
+  showToastMsg('🔒 Job permanently closed.');
+  renderJobBasket();
+};
+
 // ── ACTION RESOLVER ───────────────────────────────────────────────────────────
 function wfActionFor(j){
   const amTL      = me.id === j.teamLeaderId;
@@ -1400,56 +1697,101 @@ function wfActionFor(j){
     if(j.status === 'pending') return {label:'▶ Start Job', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'📐 Submit Roof Layout & Sample', fn:`wfSubmitRoofPhase('${j.id}')`, cls:'primary'};
   }
-  if(j.stage === 'sd_tl_roof_review' && amTL)
+  if(j.stage === 'sd_tl_roof_review' && amTL){
+    if(j.status === 'pending') return {label:'▶ Start Review', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'🔍 Review Roof Phase', fn:`wfReviewRoof('${j.id}')`, cls:'primary'};
+  }
 
   // wall phase
   if(j.stage === 'sd_wall_draft' && amDrafter){
     if(j.status === 'pending') return {label:'▶ Start Job', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'🧱 Submit Wall Layout & Flashings', fn:`wfSubmitWallPhase('${j.id}')`, cls:'primary'};
   }
-  if(j.stage === 'sd_tl_wall_review' && amTL)
+  if(j.stage === 'sd_tl_wall_review' && amTL){
+    if(j.status === 'pending') return {label:'▶ Start Review', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'🔍 Review Wall Phase', fn:`wfReviewWall('${j.id}')`, cls:'primary'};
+  }
+
+  // send-to-client step
+  if(j.stage === 'sd_send_to_client' && amTL)
+    return {label:'📨 Send to Client', fn:`wfSendToClient('${j.id}')`, cls:'primary'};
 
   // client wait
   if(j.stage === 'sd_client_wait' && amTL)
     return {label:'📋 Record Client Decision', fn:`wfRecordClientDecision('${j.id}')`, cls:'primary'};
 
   // revision
-  if(j.stage === 'sd_revision_draft' && amDrafter)
+  if(j.stage === 'sd_revision_draft' && amDrafter){
+    if(j.status === 'pending') return {label:'▶ Start Revision', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'📝 Submit Revision', fn:`wfSubmitRevision('${j.id}')`, cls:'primary'};
-  if(j.stage === 'sd_tl_revision_review' && amTL)
+  }
+  if(j.stage === 'sd_tl_revision_review' && amTL){
+    if(j.status === 'pending') return {label:'▶ Start Review', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'🔍 Review Revision', fn:`wfReviewRevision('${j.id}')`, cls:'primary'};
+  }
 
   // job card
-  if(j.stage === 'sd_jobcard' && amDrafter)
+  if(j.stage === 'sd_jobcard' && amDrafter){
+    if(j.status === 'pending') return {label:'▶ Start Job Cards', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'🗂 Submit Job Cards', fn:`wfSubmitJobCard('${j.id}')`, cls:'primary'};
-  if(j.stage === 'sd_tl_jobcard_review' && amTL)
+  }
+  if(j.stage === 'sd_tl_jobcard_review' && amTL){
+    if(j.status === 'pending') return {label:'▶ Start Review', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'🏁 Review & Close', fn:`wfCloseJobCard('${j.id}')`, cls:'primary'};
+  }
+  // SD post-job-card pipeline
+  if(j.stage === 'sd_prod_submit' && amTL)
+    return {label:'🏭 Submit to Production', fn:`wfSubmitToProduction('${j.id}')`, cls:'primary'};
+  if(j.stage === 'sd_bom' && amDrafter){
+    if(j.status === 'pending') return {label:'▶ Start BOM', fn:`wfStart('${j.id}')`, cls:'primary'};
+    return {label:'📋 Submit BOM', fn:`wfSubmitBOM('${j.id}')`, cls:'primary'};
+  }
+  if(j.stage === 'sd_bom_review' && amTL){
+    if(j.status === 'pending') return {label:'▶ Start BOM Review', fn:`wfStart('${j.id}')`, cls:'primary'};
+    return {label:'🔍 Review BOM', fn:`wfReviewBOM('${j.id}')`, cls:'primary'};
+  }
+  if(j.stage === 'sd_erection_draft' && amDrafter){
+    if(j.status === 'pending') return {label:'▶ Start Erection Drawing', fn:`wfStart('${j.id}')`, cls:'primary'};
+    return {label:'📐 Submit Erection Drawing', fn:`wfSubmitSDErection('${j.id}')`, cls:'primary'};
+  }
+  if(j.stage === 'sd_erection_review' && amTL){
+    if(j.status === 'pending') return {label:'▶ Start Erection Review', fn:`wfStart('${j.id}')`, cls:'primary'};
+    return {label:'🔍 Review Erection Drawing', fn:`wfReviewSDErection('${j.id}')`, cls:'primary'};
+  }
 
   // completed
-  if(j.stage === 'completed' && amTL && j.releaseEligible)
-    return {label:'♻️ Reopen for Continuation', fn:`wfReopenJob('${j.id}')`, cls:'sec'};
+  if(j.stage === 'completed' && amTL && j.releaseEligible){
+    const reopen = {label:'♻️ Reopen for Continuation', fn:`wfReopenJob('${j.id}')`, cls:'sec'};
+    if(j.type === 'Shop Drawing' && !j.sdClosed)
+      return {...reopen, secondAction:{label:'🔒 Complete & Close', fn:`wfCloseJobFinal('${j.id}')`, cls:'sec'}};
+    return reopen;
+  }
 
   // panels release
   if(j.stage === 'pr_draft' && amDrafter){
     if(j.status === 'pending') return {label:'▶ Start Job', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'📦 Submit Panels Release', fn:`wfSubmitPR('${j.id}')`, cls:'primary'};
   }
-  if(j.stage === 'pr_tl_review' && amTL)
+  if(j.stage === 'pr_tl_review' && amTL){
+    if(j.status === 'pending') return {label:'▶ Start Review', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'🔍 Review Panels Release', fn:`wfReviewPR('${j.id}')`, cls:'primary'};
+  }
 
   // flashings release
   if(j.stage === 'fl_draft' && amDrafter){
     if(j.status === 'pending') return {label:'▶ Start Job', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'🔩 Submit Flashings Release', fn:`wfSubmitFL('${j.id}')`, cls:'primary'};
   }
-  if(j.stage === 'fl_tl_review' && amTL)
+  if(j.stage === 'fl_tl_review' && amTL){
+    if(j.status === 'pending') return {label:'▶ Start Review', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'🔍 Review Flashings Release', fn:`wfReviewFL('${j.id}')`, cls:'primary'};
+  }
 
   // release (reopen)
-  if(j.stage === 'release' && amDrafter)
+  if(j.stage === 'release' && amDrafter){
+    if(j.status === 'pending') return {label:'▶ Start Release', fn:`wfStart('${j.id}')`, cls:'primary'};
     return {label:'📦 Submit Release', fn:`wfSubmitRelease('${j.id}')`, cls:'primary'};
+  }
 
   // generic typed workflow
   const typedCfg = TYPED_WORKFLOW[j.type];
@@ -1458,8 +1800,10 @@ function wfActionFor(j){
       if(j.status === 'pending') return {label:'▶ Start Job', fn:`wfStart('${j.id}')`, cls:'primary'};
       return {label:`📤 Submit ${j.type}`, fn:`wfSubmitType('${j.id}')`, cls:'primary'};
     }
-    if(j.stage === typedCfg.reviewStage && amTL)
+    if(j.stage === typedCfg.reviewStage && amTL){
+      if(j.status === 'pending') return {label:'▶ Start Review', fn:`wfStart('${j.id}')`, cls:'primary'};
       return {label:`🔍 Review ${j.type}`, fn:`wfReviewType('${j.id}')`, cls:'primary'};
+    }
   }
 
   // civil defense
@@ -1588,6 +1932,10 @@ const _WF_STAGE_COLORS = {
   sdr_draft:'#ff453a',          sdr_tl_review:'#ff6961',
   ed_draft:'#0a84ff',           ed_tl_review:'#30d158',
   cd_draft:'#ffd60a',           cd_pending:'#ff9f0a',
+  sd_send_to_client:'#ff9f0a',
+  sd_prod_submit:'#5ac8fa',
+  sd_bom:'#0a84ff',             sd_bom_review:'#bf5af2',
+  sd_erection_draft:'#30d158',  sd_erection_review:'#ffd60a',
   completed:'#32d74b',          release:'#30d158',
 };
 
@@ -1820,6 +2168,7 @@ function wfCard(j, showAction){
     ? `<span class="wf-rej">⚠ ${j.rejectionCount} rejection${j.rejectionCount>1?'s':''}</span>` : '';
   const _rejectStages = new Set([
     'sd_roof_draft','sd_wall_draft','sd_revision_draft',
+    'sd_bom','sd_erection_draft',
     'pr_draft','fl_draft',
     'ac_draft','pu_draft','pf_draft','pa_draft','fa_draft','pfa_draft','fj_draft',
     'sdi_draft','sdr_draft','ed_draft','cd_draft',
@@ -1859,6 +2208,7 @@ function wfCard(j, showAction){
     ${remarksBadge}${lastRejectBanner}
     <div class="wf-card-actions">
       ${act?`<button class="wf-act ${act.cls}" onclick="${act.fn}">${act.label}</button>`:''}
+      ${act?.secondAction?`<button class="wf-act ${act.secondAction.cls}" onclick="${act.secondAction.fn}">${act.secondAction.label}</button>`:''}
       <button class="wf-act sec" onclick="wfToggleTimeline('${j.id}')">🕐 Timeline</button>
       <button class="wf-act sec" onclick="wfToggleJobGantt('${j.id}')">📊 Gantt</button>
       <button class="wf-act sec" onclick="wfToggleJobFlow('${j.id}')">🔀 Flow</button>
