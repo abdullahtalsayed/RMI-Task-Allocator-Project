@@ -1711,6 +1711,7 @@ function jobDetailHTML(j){
     j.status==='completed'?'<span class="st-chip st-done">Done</span>':
     '<span class="st-chip st-pending">Pending</span>';
   const srcBadge=j.managerAssigned?'<span class="bdg bdg-m">👔 Assigned</span>':'<span class="bdg bdg-s">✏️ Self-added</span>';
+  const typeBadge=j.workflow?'<span class="job-type-badge badge-basket">🧺 Basket Job</span>':'<span class="job-type-badge badge-task">📋 Individual Task</span>';
   let actions='';
   if(canEdit){
     if(j.status==='pending')actions+=`<button class="jd-btn bs" onclick="startJob('${j.id}')">▶ Start</button>`;
@@ -1737,6 +1738,7 @@ function jobDetailHTML(j){
       <div class="jd-field"><span class="jd-k">Status</span><span class="jd-v">${stChip}</span></div>
       <div class="jd-field"><span class="jd-k">Employee</span><span class="jd-v">${escapeHtml(own)}</span></div>
       <div class="jd-field"><span class="jd-k">Priority</span><span class="jd-v">${j.priority||'—'}</span></div>
+      <div class="jd-field"><span class="jd-k">Type</span><span class="jd-v">${typeBadge}</span></div>
       <div class="jd-field"><span class="jd-k">Source</span><span class="jd-v">${srcBadge}</span></div>
       <div class="jd-field"><span class="jd-k">Deadline</span><span class="jd-v">${dlInfo}</span></div>
       <div class="jd-field"><span class="jd-k">Created</span><span class="jd-v">${fmt(j.created)}</span></div>
@@ -1842,7 +1844,7 @@ function jobTableRow(j,showEmp){
   return`<tr id="card-${j.id}" class="job-row row-st-${stKey}${od?' row-overdue':''}${selectedJobs.has(j.id)?' row-selected':''}${j.pinned?' row-pinned':''}" onclick="if(!event.target.closest('button,input,.row-menu'))toggleJobDetail('${j.id}')">
     <td style="padding-left:0.65rem;" onclick="event.stopPropagation()"><input type="checkbox" class="sel-cb" ${selectedJobs.has(j.id)?'checked':''} onchange="toggleSelect('${j.id}',this)"/></td>
     <td><button class="tl-toggle-btn" onclick="event.stopPropagation();toggleJobDetail('${j.id}')" title="Details">›</button></td>
-    <td><span class="tc-client">${j.pinned?'📌 ':''}${escapeHtml(j.client)}</span>${notesPreview}</td>
+    <td><span class="tc-client">${j.pinned?'📌 ':''}${escapeHtml(j.client)}</span>${notesPreview}<div style="margin-top:2px;">${j.workflow?'<span class="job-type-badge badge-basket">🧺 Basket</span>':'<span class="job-type-badge badge-task">📋 Task</span>'}</div></td>
     <td class="tc-muted" style="white-space:nowrap;">#${escapeHtml(j.jobNum)}</td>
     <td class="col-type tc-muted">${escapeHtml(j.type)}</td>
     <td>${stChip}</td>
@@ -2160,7 +2162,7 @@ function empJobTable(ej,odJobs){
   const rows=Object.entries(groups).map(([type,tjobs])=>{
     const typeRow=`<tr class="type-group-row"><td colspan="6">📁 ${escapeHtml(type)} <span class="tc-muted">(${tjobs.length})</span></td></tr>`;
     const jobRows=tjobs.map(j=>`<tr class="${isOverdue(j)?'row-overdue':''}">
-      <td><span class="tc-client">${escapeHtml(j.client)}</span><br><span class="tc-muted">#${escapeHtml(j.jobNum)}</span></td>
+      <td><span class="tc-client">${escapeHtml(j.client)}</span><br><span class="tc-muted">#${escapeHtml(j.jobNum)}</span><br>${j.workflow?'<span class="job-type-badge badge-basket">🧺 Basket</span>':'<span class="job-type-badge badge-task">📋 Task</span>'}</td>
       <td>${stChip(j)}</td>
       <td>${priDot(j.priority)} ${j.priority||'—'}</td>
       ${dlCell(j)}
