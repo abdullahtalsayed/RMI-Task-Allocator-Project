@@ -70,6 +70,7 @@ service cloud.firestore {
         || resource.data.owner == profileId()
         || resource.data.wfCreatedBy == profileId()
         || resource.data.teamLeaderId == profileId()
+        || resource.data.drafterId == profileId()
       );
 
       // H-4: restrict job creation to roles that legitimately create jobs
@@ -110,15 +111,12 @@ service cloud.firestore {
       allow read, write: if signedIn() && isManager();
     }
 
-    // H-6: notifications can only be created targeting the sender themselves
-    // or by managers/supervisors (system notifications to others)
+    // H-6: any signed-in user may push a notification to any target userId.
+    // Read/update/delete restricted to the notification's target user only.
+    // Cross-user create is required for drafter→TL and salesOp→TL basket events.
     match /notifications/{id} {
       allow read: if signedIn() && resource.data.userId == profileId();
-      allow create: if signedIn() && (
-        isManagerOrSupervisor()
-        || isTeamLeader()
-        || request.resource.data.userId == profileId()
-      );
+      allow create: if signedIn();
       allow update, delete: if signedIn()
         && resource.data.userId == profileId();
     }

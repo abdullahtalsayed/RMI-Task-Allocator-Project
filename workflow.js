@@ -1689,6 +1689,20 @@ window.wfConfirmCloseFinal = async function(jobId){
   renderJobBasket();
 };
 
+// ── TAB RESOLVER (for notification navigation) ────────────────────────────────
+window.wfTabForJob = function(job){
+  if(!job || !me) return null;
+  if(job.stage === 'completed') return 'done';
+  const r = me.role;
+  if(r === 'team_leader'){
+    return wfActionFor(job) ? 'queue' : 'team';
+  }
+  if(r === 'sales_operation') return 'active';
+  if(r === 'manager' || r === 'supervisor' || amDirector()) return 'overview';
+  // drafter/employee
+  return wfActionFor(job) ? 'tasks' : 'submitted';
+};
+
 // ── ACTION RESOLVER ───────────────────────────────────────────────────────────
 function wfActionFor(j){
   const amTL      = me.id === j.teamLeaderId;

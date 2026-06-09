@@ -493,11 +493,12 @@ async function refreshJobEventsRemote(jobId){
   setEvents(events.filter(e=>e.jobId!==jobId));
   snap.docs.forEach(d=>events.push({id:d.id,...d.data()}));
 }
-let _primaryJobs=[], _wfTeamJobs=[];
+let _primaryJobs=[], _wfTeamJobs=[], _wfDrafterJobs=[];
 function applyMergedJobs(){
   const map=new Map();
   for(const j of _primaryJobs)map.set(j.id,j);
-  for(const j of _wfTeamJobs)if(!map.has(j.id))map.set(j.id,j); // team workflow jobs not already in primary
+  for(const j of _wfTeamJobs)if(!map.has(j.id))map.set(j.id,j);
+  for(const j of _wfDrafterJobs)if(!map.has(j.id))map.set(j.id,j); // basket jobs drafter submitted (owner=TL)
   setJobs([...map.values()].sort((a,b)=>(b.created||0)-(a.created||0)));
   renderAll();
   if(isLead())renderBoard();
@@ -507,7 +508,7 @@ function attachFirebaseListeners(){
   detachFirebaseListeners();
   if(!USE_FIREBASE||!me||!db)return;
   listenEmailConfig(); // now signed-in → config read allowed
-  _primaryJobs=[];_wfTeamJobs=[];
+  _primaryJobs=[];_wfTeamJobs=[];_wfDrafterJobs=[];
   const jq=jobsQueryForUser();
   fbUnsubs.push(onSnapshot(jq,snap=>{
     _primaryJobs=snap.docs.map(d=>({id:d.id,...d.data()}));
@@ -518,6 +519,15 @@ function attachFirebaseListeners(){
   if(me.role==='team_leader'&&!canSeeAllJobs()){
     fbUnsubs.push(onSnapshot(query(jCol,where('teamLeaderId','==',me.id)),snap=>{
       _wfTeamJobs=snap.docs.map(d=>({id:d.id,...d.data()}));
+      applyMergedJobs();
+    }));
+  }
+  // Drafter/employee: second listener for basket jobs where they are drafterId
+  // but current owner is TL (submitted, under review). Without this they lose
+  // sight of their own submitted jobs as soon as owner changes to TL.
+  if(me.role==='drafter'||me.role==='employee'){
+    fbUnsubs.push(onSnapshot(query(jCol,where('drafterId','==',me.id)),snap=>{
+      _wfDrafterJobs=snap.docs.map(d=>({id:d.id,...d.data()}));
       applyMergedJobs();
     }));
   }
@@ -1194,12 +1204,14 @@ window.handleNotifClick=async function(id,isBcast){
     const job=jobs.find(j=>String(j.jobNum)===m[1]);
     if(!job)return;
     if(job.workflow){
-      // basket job — navigate to job basket and scroll to card
+      // set correct tab first so card is rendered, then navigate + scroll
+      const targetTab = window.wfTabForJob?.(job);
+      if(targetTab) window.wfSetTab?.(targetTab);
       goHub('work','job-basket');
       setTimeout(()=>{
         const c=document.getElementById('wf-card-'+job.id);
         if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('selected');setTimeout(()=>c.classList.remove('selected'),2500);}
-      },400);
+      },500);
     } else {
       goTab('my-jobs');
       setTimeout(()=>{const c=document.getElementById('card-'+job.id);if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('selected');setTimeout(()=>c.classList.remove('selected'),2500);}},200);
