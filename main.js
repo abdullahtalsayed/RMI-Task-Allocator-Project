@@ -3979,7 +3979,7 @@ saveSettingsFromUI=function(){
 };
 
 // ── ANALYTICS — single-scroll report (replaces tab-based renderer) ───────────
-let analyticsRange='month',analyticsEmp='',analyticsType='',analyticsBranch='',analyticsPool='tasks';
+let analyticsRange='all',analyticsEmp='',analyticsType='',analyticsBranch='',analyticsPool='tasks';
 function branchOf(ownerId){return users.find(u=>u.id===ownerId)?.branch||'';}
 function analyticsRangeStart(range){
   const n=new Date();
