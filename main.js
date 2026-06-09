@@ -72,6 +72,83 @@ function mergeEmailConfig(raw){
   }
   return cfg;
 }
+// ── JOB SETTINGS (manager-only, org-wide, Firestore config/jobSettings) ───────
+const DEFAULT_JOB_SETTINGS={
+  deadlineShopDrawing:10,
+  deadlineRelease:5,
+  deadlineDefault:5,
+  deadlineSalesOpBasketHours:24,
+};
+let _jobSettings={...DEFAULT_JOB_SETTINGS};
+window._jobSettings=_jobSettings;
+function mergeJobSettings(raw){
+  const s={...DEFAULT_JOB_SETTINGS};
+  if(raw&&typeof raw==='object'){
+    for(const k of Object.keys(DEFAULT_JOB_SETTINGS))
+      if(typeof raw[k]==='number'&&raw[k]>0)s[k]=raw[k];
+  }
+  return s;
+}
+let jobSettingsUnsub=null;
+function listenJobSettings(){
+  if(!USE_FIREBASE||!cfgCol||jobSettingsUnsub)return;
+  jobSettingsUnsub=onSnapshot(doc(cfgCol,'jobSettings'),snap=>{
+    _jobSettings=snap.exists()?mergeJobSettings(snap.data()):{...DEFAULT_JOB_SETTINGS};
+    window._jobSettings=_jobSettings;
+    if(document.getElementById('job-settings-pane'))renderJobSettingsPane();
+  },()=>{});
+}
+async function saveJobSettings(patch){
+  if(!me||me.role!=='manager'){showToastMsg('Only managers can change job settings.');return;}
+  _jobSettings={..._jobSettings,...patch};
+  window._jobSettings=_jobSettings;
+  if(USE_FIREBASE&&cfgCol){
+    try{await setDoc(doc(cfgCol,'jobSettings'),_jobSettings);}
+    catch(e){showToastMsg('Could not save — check permissions.');return;}
+  }
+  showToastMsg('✅ Job settings saved');
+}
+function renderJobSettingsPane(){
+  const el=document.getElementById('job-settings-pane');if(!el)return;
+  const s=_jobSettings;
+  const row=(label,key,unit,hint)=>`
+    <div class="pref-row" style="flex-direction:column;align-items:flex-start;gap:0.35rem;">
+      <div style="font-weight:600;font-size:0.85rem;">${label}</div>
+      ${hint?`<div style="font-size:0.75rem;color:var(--text-muted);">${hint}</div>`:''}
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <input type="number" min="1" max="365" value="${s[key]}" id="jset-${key}"
+          style="width:5rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text);"
+          oninput="window._jsetDirty=true"/>
+        <span style="font-size:0.85rem;color:var(--text-muted);">${unit}</span>
+      </div>
+    </div>`;
+  el.innerHTML=`
+    <div style="max-width:520px;">
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem;">
+        Changes apply to new basket jobs only — ongoing jobs are not affected.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+        ${row('Shop Drawing deadline','deadlineShopDrawing','days','Auto-filled when TL selects "Shop Drawing" job type in the assignment form.')}
+        ${row('Release deadline','deadlineRelease','days','Auto-filled for Panels Release and Flashings Release job types.')}
+        ${row('Default deadline (all other types)','deadlineDefault','days','Auto-filled for all other job types.')}
+        ${row('Sales Op basket submit deadline','deadlineSalesOpBasketHours','hours','How long the TL has to pick up a newly submitted basket job before it goes overdue.')}
+      </div>
+      <div style="margin-top:1.25rem;">
+        <button class="bp" onclick="window.saveJobSettingsFromUI()">💾 Save job settings</button>
+      </div>
+    </div>`;
+}
+window.saveJobSettingsFromUI=async function(){
+  const get=k=>{const el=document.getElementById('jset-'+k);return el?parseFloat(el.value):null;};
+  const patch={};
+  for(const k of Object.keys(DEFAULT_JOB_SETTINGS)){
+    const v=get(k);
+    if(v!=null&&!isNaN(v)&&v>0)patch[k]=v;
+  }
+  await saveJobSettings(patch);
+  window._jsetDirty=false;
+};
+
 let emailCfgUnsub=null;
 function listenEmailConfig(){
   if(!USE_FIREBASE||!cfgCol||emailCfgUnsub)return;
@@ -388,7 +465,8 @@ function softLogoutUI(){
 function detachFirebaseListeners(){
   fbUnsubs.forEach(fn=>{try{fn();}catch(e){}});
   fbUnsubs=[];
-  if(emailCfgUnsub){try{emailCfgUnsub();}catch(e){}emailCfgUnsub=null;} // allow re-attach next login
+  if(emailCfgUnsub){try{emailCfgUnsub();}catch(e){}emailCfgUnsub=null;}
+  if(jobSettingsUnsub){try{jobSettingsUnsub();}catch(e){}jobSettingsUnsub=null;}
 }
 function canSeeAllJobs(){
   return me&&(me.role==='manager'||me.role==='supervisor'||amDirector()||me.viewAll==='yes');
@@ -507,7 +585,8 @@ function applyMergedJobs(){
 function attachFirebaseListeners(){
   detachFirebaseListeners();
   if(!USE_FIREBASE||!me||!db)return;
-  listenEmailConfig(); // now signed-in → config read allowed
+  listenEmailConfig();   // now signed-in → config read allowed
+  listenJobSettings();   // job deadline settings
   _primaryJobs=[];_wfTeamJobs=[];_wfDrafterJobs=[];
   const jq=jobsQueryForUser();
   fbUnsubs.push(onSnapshot(jq,snap=>{
@@ -3107,6 +3186,7 @@ function applyMainNav(){
     document.querySelectorAll('.sb-item').forEach(el=>{el.style.display=allow.has(el.dataset.sb)?'flex':'none';});
     const teamGrp=document.getElementById('sbg-team');if(teamGrp)teamGrp.style.display='none';
     document.querySelectorAll('.sb-admin').forEach(el=>el.style.display='none');
+    document.querySelectorAll('.acct-tab-admin').forEach(el=>el.style.display='none');
     const topbar=document.querySelector('.topbar');if(topbar)topbar.style.display='none';
     window.renderSbBasketSubs?.();
     return;
@@ -3133,6 +3213,7 @@ function applyMainNav(){
   document.querySelectorAll('.sb-lead').forEach(el=>el.style.display=isLeadNav?'flex':'none');
   document.querySelectorAll('.sb-manager').forEach(el=>el.style.display=isManager?'flex':'none');
   document.querySelectorAll('.sb-admin').forEach(el=>el.style.display=isManager?'flex':'none');
+  document.querySelectorAll('.acct-tab-admin').forEach(el=>el.style.display=isManager?'inline-flex':'none');
   document.querySelectorAll('.sb-work').forEach(el=>el.style.display='flex'); // Job Basket for all staff
   const topbar=document.querySelector('.topbar');
   if(topbar)topbar.style.display=currentHub==='jobs'?'flex':'none';
@@ -3172,14 +3253,21 @@ window.toggleSidebarCollapse=function(){
 function setAccountPane(pane){
   const p=document.getElementById('account-pane-profile');
   const pr=document.getElementById('account-pane-prefs');
+  const js=document.getElementById('account-pane-jobsettings');
   if(p)p.style.display=pane==='profile'?'block':'none';
   if(pr)pr.style.display=pane==='prefs'?'block':'none';
-  if(pane==='hide'){if(p)p.style.display='none';if(pr)pr.style.display='none';}
+  if(js)js.style.display=pane==='jobsettings'?'block':'none';
+  if(pane==='hide'){if(p)p.style.display='none';if(pr)pr.style.display='none';if(js)js.style.display='none';}
 }
 window.setAccountTab=function(sub){
-  document.querySelectorAll('.acct-tab').forEach(b=>b.classList.toggle('on',b.textContent.toLowerCase().startsWith(sub==='preferences'?'pref':'prof')));
+  document.querySelectorAll('.acct-tab').forEach(b=>{
+    b.classList.toggle('on',(b.dataset.tab||'')===sub);
+  });
+  const prefBtns=document.getElementById('account-save-btns');
+  if(prefBtns)prefBtns.style.display=sub==='jobsettings'?'none':'flex';
   if(sub==='profile'){setAccountPane('profile');renderAccountProfile();return;}
   if(sub==='preferences'){setAccountPane('prefs');renderAccountPreferences();return;}
+  if(sub==='jobsettings'){setAccountPane('jobsettings');renderJobSettingsPane();return;}
 };
 function runHubSideEffects(id){
   if(id==='my-jobs'||id==='add-job')renderJobs();

@@ -222,7 +222,8 @@ window.wfSubmitToBasket = async function(){
     workflow:true, source:'sales', stage:'intake',
     owner:tl.id, teamLeaderId:tl.id, drafterId:null,
     wfCreatedBy:me.id, wfCreatedByName:me.name,
-    status:'pending', created:now, started:null, completed:null, deadline:now + 24*60*60*1000,
+    status:'pending', created:now, started:null, completed:null,
+    deadline:now + ((window._jobSettings?.deadlineSalesOpBasketHours??24)*60*60*1000),
     sdScope:null, sdGutter:null, sdSkylight:null,
     rejectionCount:0,
     wfHistory:[{stage:'_new',to:'intake',action:'submitted',by:me.name,byId:me.id,at:now,
@@ -896,10 +897,14 @@ window.wfTypeChange = function(){
   if(sd) sd.style.display = (t === 'Shop Drawing' || t === 'Erection Drawing') ? 'block' : 'none';
   if(pr) pr.style.display = (t === 'Panels Release')    ? 'block' : 'none';
   if(fl) fl.style.display = (t === 'Flashings Release') ? 'block' : 'none';
-  // auto-fill deadline (SD=10 days, all others=5 days); skip if TL manually edited field
+  // auto-fill deadline from job settings; skip if TL manually edited field
   const dlEl = document.getElementById('wf-dl');
   if(dlEl && !dlEl.dataset.userEdited){
-    const days = t === 'Shop Drawing' ? 10 : 5;
+    const cfg = window._jobSettings || {};
+    let days;
+    if(t === 'Shop Drawing')                                  days = cfg.deadlineShopDrawing  ?? 10;
+    else if(t === 'Panels Release' || t === 'Flashings Release') days = cfg.deadlineRelease   ?? 5;
+    else                                                         days = cfg.deadlineDefault    ?? 5;
     dlEl.value = new Date(Date.now() + days * 86400000).toISOString().slice(0,16);
   }
 };
