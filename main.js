@@ -1689,11 +1689,14 @@ function jobsFilterBar(){
   const p=_myJobsPool||'tasks';
   const q=(document.getElementById('srch')?.value||'').trim();
   const hasWf=jobs.some(j=>j.workflow);
-  const poolBtns=hasWf?`<div class="jtab-pool">
-    <button class="jtab-pool-btn${p==='tasks'?' jtab-pool-on':''}" onclick="setMyJobsPool('tasks')">📋 Tasks</button>
-    <button class="jtab-pool-btn${p==='basket'?' jtab-pool-on':''}" onclick="setMyJobsPool('basket')">🧺 Basket</button>
-    <button class="jtab-pool-btn${p==='all'?' jtab-pool-on':''}" onclick="setMyJobsPool('all')">All</button>
-  </div>`:'';
+  // Pool as labelled dropdown — no pill collision with status filter
+  const poolSelect=hasWf?`<label class="jtab-pool-label">Show
+    <select class="jtab-pool-select" onchange="setMyJobsPool(this.value)">
+      <option value="tasks"${p==='tasks'?' selected':''}>📋 Tasks only</option>
+      <option value="basket"${p==='basket'?' selected':''}>🧺 Basket only</option>
+      <option value="all"${p==='all'?' selected':''}>📊 Tasks + Basket</option>
+    </select>
+  </label>`:'';
   const list=[
     {id:'all',label:'All'},
     {id:'pending',label:'🟡 Pending'},
@@ -1711,7 +1714,7 @@ function jobsFilterBar(){
     <button class="jtab-view-btn${v==='classic'?' jtab-view-on':''}" onclick="setMyJobsView('classic')" title="Classic table">☰ Classic</button>
   </div>`;
   return`<div class="jobs-integrated-bar">
-    <div class="jtab-left">${poolBtns}${tabs}${searchChip}</div>
+    <div class="jtab-left">${poolSelect}${tabs}${searchChip}</div>
     <div class="jtab-right">${viewToggle}<span id="jobs-pager"></span></div>
   </div>`;
 }
