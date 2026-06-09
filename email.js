@@ -69,3 +69,18 @@ export function emailEventOversight(evt,j,subject,message,exceptIds=[]){
   emailEventSupervisors(evt,subject,message,exceptIds);
   if(j?.owner)emailEventTeamLeader(evt,j.owner,subject,message,exceptIds);
 }
+
+// ── JOB BASKET GATED SENDERS ──────────────────────────────────────────────────
+// Basket events use different recipient keys: drafter, salesOp, manager, supervisor.
+export function emailWfDrafter(evt,j,subject,message){
+  if(!gRecip(evt,'drafter'))return;
+  if(j?.drafterId)emailUser(j.drafterId,subject,message);
+}
+export function emailWfSalesOp(evt,j,subject,message){
+  if(!gRecip(evt,'salesOp'))return;
+  if(j?.wfCreatedBy)emailUser(j.wfCreatedBy,subject,message);
+}
+export function emailWfOversight(evt,j,subject,message,exceptIds=[]){
+  if(gRecip(evt,'manager'))emailRole('manager',subject,message,exceptIds);
+  if(gRecip(evt,'supervisor'))emailRole('supervisor',subject,message,exceptIds);
+}

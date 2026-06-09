@@ -22,6 +22,24 @@ import { jobs, users, me, JOB_TYPES } from './state.js';
 import { escapeHtml, fmt, tdiff, toMillis } from './helpers.js';
 import { jAdd, updateJob } from './jobs.js';
 import { addEvent, showToastMsg, pushNotif, isOverdue, isTeamLeader, amDirector } from './main.js';
+import { emailWfDrafter, emailWfSalesOp, emailWfOversight } from './email.js';
+
+// ── BASKET EMAIL HELPER ───────────────────────────────────────────────────────
+// Dispatches gated basket emails. All send only if master is on + event.on + recip flag.
+// exceptIds=[me.id] avoids emailing the TL who just triggered the event.
+function _wfMail(evt, j, subject, msg){
+  if(evt==='wf_assigned'){
+    emailWfDrafter(evt,j,subject,msg);
+    emailWfSalesOp(evt,j,subject,msg);
+    emailWfOversight(evt,j,subject,msg);
+  } else if(evt==='wf_rejected'){
+    emailWfDrafter(evt,j,subject,msg);
+    emailWfOversight(evt,j,subject,msg,[me.id]);
+  } else if(evt==='wf_completed'){
+    emailWfSalesOp(evt,j,subject,msg);
+    emailWfOversight(evt,j,subject,msg,[me.id]);
+  }
+}
 
 const esc = escapeHtml;
 
@@ -545,6 +563,8 @@ window.wfDecidePR = async function(approve){
       `${j.client} (#${j.jobNum}) — panels release approved.`);
     if(j.wfCreatedBy) pushNotif(j.wfCreatedBy,'✅ Job Completed',
       `${j.client} (#${j.jobNum}) — done.`);
+    _wfMail('wf_completed', j, `✅ Basket Job Completed — ${j.client} (#${j.jobNum})`,
+      `Panels release approved by ${me.name}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}`);
     showToastMsg('🎉 Panels release approved — job completed.');
   } else {
     const rejCount = (j.rejectionCount||0) + 1;
@@ -556,6 +576,8 @@ window.wfDecidePR = async function(approve){
       `🔴 ${me.name} rejected panels release (rejection #${rejCount}) — ${note}`,'red');
     pushNotif(j.drafterId,'🔴 Panels Release Rejected',
       `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    _wfMail('wf_rejected', j, `🔴 Basket Rejection — ${j.client} (#${j.jobNum})`,
+      `${me.name} rejected Panels Release.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nNote: ${note||'—'}`);
     showToastMsg('Sent back for fixes.');
   }
   window.wfCloseModal();
@@ -609,6 +631,8 @@ window.wfDecideFL = async function(approve){
       `${j.client} (#${j.jobNum}) — flashings release approved.`);
     if(j.wfCreatedBy) pushNotif(j.wfCreatedBy,'✅ Job Completed',
       `${j.client} (#${j.jobNum}) — done.`);
+    _wfMail('wf_completed', j, `✅ Basket Job Completed — ${j.client} (#${j.jobNum})`,
+      `Flashings release approved by ${me.name}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}`);
     showToastMsg('🎉 Flashings release approved — job completed.');
   } else {
     const rejCount = (j.rejectionCount||0) + 1;
@@ -620,6 +644,8 @@ window.wfDecideFL = async function(approve){
       `🔴 ${me.name} rejected flashings release (rejection #${rejCount}) — ${note}`,'red');
     pushNotif(j.drafterId,'🔴 Flashings Release Rejected',
       `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    _wfMail('wf_rejected', j, `🔴 Basket Rejection — ${j.client} (#${j.jobNum})`,
+      `${me.name} rejected Flashings Release.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nNote: ${note||'—'}`);
     showToastMsg('Sent back for fixes.');
   }
   window.wfCloseModal();
@@ -686,6 +712,8 @@ window.wfDecideType = async function(approve){
       `${j.client} (#${j.jobNum}) — ${j.type} approved.`);
     if(j.wfCreatedBy) pushNotif(j.wfCreatedBy, '✅ Job Completed',
       `${j.client} (#${j.jobNum}) — done.`);
+    _wfMail('wf_completed', j, `✅ Basket Job Completed — ${j.client} (#${j.jobNum})`,
+      `${j.type} approved by ${me.name}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}`);
     showToastMsg(`🎉 ${j.type} approved — job completed.`);
   } else {
     const rejCount = (j.rejectionCount||0) + 1;
@@ -697,6 +725,8 @@ window.wfDecideType = async function(approve){
       `🔴 ${me.name} rejected ${j.type} (rejection #${rejCount}) — ${note}`, 'red');
     pushNotif(j.drafterId, `🔴 ${j.type} Rejected`,
       `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    _wfMail('wf_rejected', j, `🔴 Basket Rejection — ${j.client} (#${j.jobNum})`,
+      `${me.name} rejected ${j.type}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nNote: ${note||'—'}`);
     showToastMsg('Sent back for fixes.');
   }
   window.wfCloseModal();
@@ -745,6 +775,8 @@ window.wfCDResult = async function(result){
       `${j.client} (#${j.jobNum})`);
     if(j.wfCreatedBy) pushNotif(j.wfCreatedBy, '✅ Job Completed',
       `${j.client} (#${j.jobNum}) — done.`);
+    _wfMail('wf_completed', j, `✅ Basket Job Completed — ${j.client} (#${j.jobNum})`,
+      `Civil Defense approved by ${me.name}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}`);
     showToastMsg('🎉 Civil Defense approved — job completed.');
   } else {
     const rejCount = (j.rejectionCount||0) + 1;
@@ -757,6 +789,8 @@ window.wfCDResult = async function(result){
       `🔴 Civil Defense denied${note ? ' — ' + note : ''}`, 'red');
     pushNotif(j.drafterId, '🔴 Civil Defense Denied',
       `${j.client} (#${j.jobNum}) — fix & resubmit.${note ? ' ' + note : ''}`);
+    _wfMail('wf_rejected', j, `🔴 Basket Rejection — ${j.client} (#${j.jobNum})`,
+      `${me.name} denied Civil Defense submission.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nNote: ${note||'—'}`);
     showToastMsg('Sent back to drafter for fixes.');
   }
   window.wfCloseModal();
@@ -935,6 +969,10 @@ window.wfConfirmAssign = async function(){
     `🧭 ${me.name} assigned ${type}${scopeLabel?' ('+scopeLabel+')':''} to ${member?.name}`,'yellow');
   pushNotif(memberId,'🧺 New Workflow Job',
     `${j.client} (#${j.jobNum}) — ${type}${scopeLabel?' · '+scopeLabel:''}.`);
+  _wfMail('wf_assigned',
+    {drafterId:memberId, wfCreatedBy:j.wfCreatedBy},
+    `📥 Basket Job Assigned — ${j.client} (#${j.jobNum})`,
+    `${me.name} assigned "${type}" to ${member?.name}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nType: ${type}${scopeLabel?' · '+scopeLabel:''}`);
   window.wfCloseModal();
   showToastMsg(`✅ Assigned to ${member?.name}.`);
   renderJobBasket();
@@ -1008,6 +1046,8 @@ window.wfDecideRoof = async function(approve){
       `🔴 ${me.name} rejected roof phase (rejection #${rejCount}) — ${note}`,'red');
     pushNotif(j.drafterId,'🔴 Roof Rejected',
       `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    _wfMail('wf_rejected', j, `🔴 Basket Rejection — ${j.client} (#${j.jobNum})`,
+      `${me.name} rejected Roof Phase.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nNote: ${note||'—'}`);
     showToastMsg('Sent back for fixes.');
   }
   window.wfCloseModal();
@@ -1064,6 +1104,8 @@ window.wfDecideWall = async function(approve){
       `🔴 ${me.name} rejected wall phase (rejection #${rejCount}) — ${note}`,'red');
     pushNotif(j.drafterId,'🔴 Wall Rejected',
       `${j.client} (#${j.jobNum}) — fix & resubmit. Note: ${note}`);
+    _wfMail('wf_rejected', j, `🔴 Basket Rejection — ${j.client} (#${j.jobNum})`,
+      `${me.name} rejected Wall Phase.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nNote: ${note||'—'}`);
     showToastMsg('Sent back for fixes.');
   }
   window.wfCloseModal();
@@ -1154,6 +1196,8 @@ window.wfDecideRevision = async function(approve){
       `🔴 ${me.name} rejected revision (rejection #${rejCount}) — ${note}`,'red');
     pushNotif(j.drafterId,'🔴 Revision Rejected',
       `${j.client} (#${j.jobNum}) — fix & resubmit. ${note}`);
+    _wfMail('wf_rejected', j, `🔴 Basket Rejection — ${j.client} (#${j.jobNum})`,
+      `${me.name} rejected SD Revision.\n\nClient: ${j.client}\nJob #: ${j.jobNum}\nNote: ${note||'—'}`);
     showToastMsg('Sent back for fixes.');
     window.wfCloseModal();
     renderJobBasket();
@@ -1246,6 +1290,8 @@ window.wfCloseJobCard = function(jobId){
       `${j.client} (#${j.jobNum}) — closed by ${me.name}.`);
     if(j.wfCreatedBy) pushNotif(j.wfCreatedBy,'✅ Job Completed',
       `${j.client} (#${j.jobNum}) — your basket job is done.`);
+    _wfMail('wf_completed', j, `✅ Basket Job Completed — ${j.client} (#${j.jobNum})`,
+      `Job cards approved and job closed by ${me.name}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}`);
     showToastMsg('🎉 Job completed.');
     renderJobBasket();
     // prompt for sample expectation after a short delay so card re-renders first
@@ -1334,6 +1380,8 @@ window.wfSubmitRelease = function(jobId){
       `${j.client} (#${j.jobNum}) — ${j.reopenType||'release'} completed by ${me.name}.`);
     if(j.wfCreatedBy) pushNotif(j.wfCreatedBy,'✅ Job Completed',
       `${j.client} (#${j.jobNum}) — ${j.reopenType||'release'} done.`);
+    _wfMail('wf_completed', j, `✅ Basket Job Completed — ${j.client} (#${j.jobNum})`,
+      `${j.reopenType||'Release'} completed by ${me.name}.\n\nClient: ${j.client}\nJob #: ${j.jobNum}`);
     showToastMsg('🎉 Completed.');
     renderJobBasket();
   },(q)=>{ showToastMsg('All QC checks must pass before submitting.'); });

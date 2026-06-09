@@ -34,9 +34,16 @@ export const SPECIALIZATIONS=['Drafter','Releaser'];
 
 export const EMAIL_EVENTS=['assigned','status','deadline','overdue','extension'];
 export const EMAIL_RECIPS=['owner','teamLeader','supervisor','manager'];
+// Job Basket email events — different recipient keys from standard events
+export const WF_EMAIL_EVENTS=['wf_assigned','wf_rejected','wf_completed'];
+export const WF_EMAIL_RECIPS=['drafter','salesOp','manager','supervisor'];
 export function defaultEmailConfig(){
   const ev={};
   for(const e of EMAIL_EVENTS){ev[e]={on:true,owner:true,teamLeader:true,supervisor:true,manager:true};}
+  // Basket events — drafter=assigned drafter, salesOp=wfCreatedBy (sales op who submitted)
+  ev.wf_assigned  = {on:true, drafter:true,  salesOp:true,  manager:true, supervisor:false};
+  ev.wf_rejected  = {on:true, drafter:true,  salesOp:false, manager:false,supervisor:false};
+  ev.wf_completed = {on:true, drafter:false, salesOp:true,  manager:true, supervisor:false};
   return {master:true,events:ev};
 }
 export let emailConfig=defaultEmailConfig();

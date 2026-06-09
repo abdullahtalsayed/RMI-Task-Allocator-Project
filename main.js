@@ -6,7 +6,7 @@ import { JOB_TYPES, ACTIVITY_TYPE_LABELS, FB_LIMITS, JOBS_PAGE_SIZE, ARCHIVE_AFT
 import { lsub, toMillis, escapeHtml, fmt, fmtShort, tdiff, getJobPausedMs, getJobDurationBreakdown, formatJobDurationHtml, jobPauseDefaults, uid, timeAgo } from './helpers.js';
 import { sendEmail, emailPref, emailUser, emailJobOwner, emailManagersAndSupervisors, emailTeamLeaderOf, emailAllOversight, emailEventOwner, emailEventOwnerId, emailEventTeamLeader, emailEventManagers, emailEventSupervisors, emailEventOversight } from './email.js';
 import { tagStores } from './state.js';
-import { EMAIL_EVENTS, EMAIL_RECIPS, defaultEmailConfig, emailConfig, setEmailConfig, BRANCHES } from './state.js';
+import { EMAIL_EVENTS, EMAIL_RECIPS, WF_EMAIL_EVENTS, WF_EMAIL_RECIPS, defaultEmailConfig, emailConfig, setEmailConfig, BRANCHES } from './state.js';
 import { renderTags, setTags, showConfirm } from './modals.js';
 import { populateCalEmpDrop, populateCalEmpPills, jobsForCalendarDay, empOverdueJobs, renderCommentSection, uAdd, uUpdate, uDelete, jUpdate, jDelete, jRestore } from './jobs.js';
 import { renderUList, renderBroadcasts, updateBroadcastUI, roleMeta, markBroadcastsSeen } from './admin.js';
@@ -35,10 +35,25 @@ window.toggleTheme=function(){
 };
 
 // ── EMAIL CONTROL (manager-only, org-wide, Firestore config/email) ────────────
-const EMAIL_EVENT_LABELS={assigned:'Job Assigned / Reassigned',status:'Status Changes (start/pause/resume/complete)',deadline:'Deadline Soon (<24h)',overdue:'Job Overdue',extension:'Extension Requested'};
-const EMAIL_RECIP_LABELS={owner:'Employee (job owner)',teamLeader:'Team Leader',supervisor:'Supervisor',manager:'Manager'};
+const EMAIL_EVENT_LABELS={
+  assigned:'Job Assigned / Reassigned',status:'Status Changes (start/pause/resume/complete)',
+  deadline:'Deadline Soon (<24h)',overdue:'Job Overdue',extension:'Extension Requested',
+  wf_assigned:'Basket: Job Assigned to Drafter',
+  wf_rejected:'Basket: TL Rejected a Submission',
+  wf_completed:'Basket: Job Fully Completed',
+};
+const EMAIL_RECIP_LABELS={owner:'Employee (job owner)',teamLeader:'Team Leader',supervisor:'Supervisor',manager:'Manager',drafter:'Drafter',salesOp:'Sales Operation'};
 // extension has no owner recipient (it's the requester's own action)
-const EMAIL_EVENT_RECIPS={assigned:['owner','teamLeader','supervisor','manager'],status:['owner','teamLeader','supervisor','manager'],deadline:['owner','teamLeader','supervisor','manager'],overdue:['owner','teamLeader','supervisor','manager'],extension:['teamLeader','supervisor','manager']};
+const EMAIL_EVENT_RECIPS={
+  assigned:['owner','teamLeader','supervisor','manager'],
+  status:['owner','teamLeader','supervisor','manager'],
+  deadline:['owner','teamLeader','supervisor','manager'],
+  overdue:['owner','teamLeader','supervisor','manager'],
+  extension:['teamLeader','supervisor','manager'],
+  wf_assigned:['drafter','salesOp','manager','supervisor'],
+  wf_rejected:['drafter','manager','supervisor'],
+  wf_completed:['salesOp','manager','supervisor'],
+};
 
 function mergeEmailConfig(raw){
   const cfg=defaultEmailConfig();
@@ -48,6 +63,11 @@ function mergeEmailConfig(raw){
       const re=raw.events?.[e];if(!re)continue;
       if(re.on===false)cfg.events[e].on=false;
       for(const r of EMAIL_RECIPS)if(re[r]===false)cfg.events[e][r]=false;
+    }
+    for(const e of WF_EMAIL_EVENTS){
+      const re=raw.events?.[e];if(!re)continue;
+      if(re.on===false)cfg.events[e].on=false;
+      for(const r of WF_EMAIL_RECIPS)if(re[r]===false)cfg.events[e][r]=false;
     }
   }
   return cfg;
@@ -104,10 +124,9 @@ export function renderEmailControl(){
     </div>
     ${emailSwitch(masterOn,'toggleEmailMaster()',false)}
   </div>`;
-  html+=`<div class="em-events ${masterOn?'':'em-locked'}">`;
-  for(const evt of EMAIL_EVENTS){
+  function renderEvtBlock(evt){
     const eOn=masterOn&&emailConfig.events?.[evt]?.on!==false;
-    html+=`<div class="em-event">
+    return`<div class="em-event">
       <div class="em-event-hd">
         <div class="em-event-name">${EMAIL_EVENT_LABELS[evt]}</div>
         ${emailSwitch(eOn,`toggleEmailEvent('${evt}')`,!masterOn)}
@@ -120,6 +139,12 @@ export function renderEmailControl(){
       </div>
     </div>`;
   }
+  html+=`<div class="em-events ${masterOn?'':'em-locked'}">`;
+  html+=`<div class="em-section-head">📋 Standard Jobs</div>`;
+  for(const evt of EMAIL_EVENTS)html+=renderEvtBlock(evt);
+  html+=`<div class="em-section-head" style="margin-top:1.25rem;">🧺 Job Basket</div>`;
+  html+=`<p style="color:var(--text2);font-size:0.78rem;margin:0 0 0.5rem;">Controls emails for workflow basket jobs — assignments, TL rejections, and job completions.</p>`;
+  for(const evt of WF_EMAIL_EVENTS)html+=renderEvtBlock(evt);
   html+=`</div>`;
   // Report schedule card
   const rptOn=localStorage.getItem('rmi_report_email_enabled')==='1';
