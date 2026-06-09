@@ -852,7 +852,9 @@ hr.div{border:none;border-top:1px solid var(--border);margin:1.5rem 0;}
 .dash-health-sep{margin:0 0.5rem;color:var(--text3);}
 
 /* KPI cards */
-.dash-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:0.85rem;margin-bottom:1.25rem;}
+.dash-kpi-section{margin-bottom:0.25rem;}
+.dash-kpi-group-lbl{font-size:0.72rem;font-weight:700;color:#6eb9ff;letter-spacing:0.04em;margin-bottom:0.4rem;text-transform:uppercase;}
+.dash-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:0.85rem;margin-bottom:0.75rem;}
 .kpi-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);
   padding:1.1rem 1.2rem;transition:transform var(--t-fast),box-shadow var(--t-fast),border-color var(--t-fast);

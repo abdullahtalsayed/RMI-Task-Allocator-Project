@@ -3077,12 +3077,27 @@ function renderDashboard(){
 
   const slaStats=computeSlaStats(dj);
   const kpis=[
-    {icon:'📋',label:'Active Jobs',value:active.length,sub:`${pending} pending · ${ongoing} ongoing`,accent:'var(--blue)',filter:null},
+    {icon:'📋',label:'Active Tasks',value:active.length,sub:`${pending} pending · ${ongoing} ongoing`,accent:'var(--blue)',filter:null},
     {icon:'⚠️',label:'Overdue',value:overdueJobs.length,sub:overdueJobs.length?'needs attention':'all on track',accent:overdueJobs.length?'var(--red)':'var(--text3)',filter:'overdue'},
     {icon:'📅',label:'Due This Week',value:dueToday.length+dueWeek.length,sub:`${dueToday.length} today · ${dueWeek.length} upcoming`,accent:'var(--orange)',filter:null},
     {icon:'✅',label:'Done This Week',value:doneThisWeek.length,sub:trendStr,accent:'var(--green)',filter:null},
     {icon:'🎯',label:'On-Time Rate',value:slaStats.onTimePct+'%',sub:`${slaStats.doneWithDl} completed with deadlines`,accent:slaStats.onTimePct>=70?'var(--green)':slaStats.onTimePct>=40?'var(--yellow)':'var(--red)',filter:null},
   ];
+
+  // ── basket KPIs ──
+  const hasWf=jobs.some(j=>j.workflow);
+  const bj=analyticsBasketJobs();
+  const bjActive=bj.filter(j=>j.stage!=='completed');
+  const bjOverdue=bj.filter(j=>j.deadline&&toMillis(j.deadline)<now.getTime()&&j.stage!=='completed');
+  const bjDoneWk=bj.filter(j=>j.completed&&toMillis(j.completed)>=ws.getTime());
+  const bjDoneAll=bj.filter(j=>j.completed&&j.created);
+  const bjAvg=bjDoneAll.reduce((a,j)=>a+(toMillis(j.completed)-toMillis(j.created)),0)/(bjDoneAll.length||1);
+  const bkKpis=hasWf?[
+    {icon:'🧺',label:'Basket Pipeline',value:bjActive.length,sub:`${bj.filter(j=>j.stage==='completed').length} completed total`,accent:'#ffb84d',filter:null},
+    {icon:'⚠️',label:'Basket Overdue',value:bjOverdue.length,sub:bjOverdue.length?'needs attention':'all on track',accent:bjOverdue.length?'var(--red)':'var(--text3)',filter:null},
+    {icon:'✅',label:'Basket Done Wk',value:bjDoneWk.length,sub:`${bj.length} total jobs`,accent:'var(--green)',filter:null},
+    {icon:'⏱',label:'Avg Cycle Time',value:bjDoneAll.length?tdiff(0,bjAvg):'—',sub:`${bjDoneAll.length} completed tracked`,accent:'var(--text2)',filter:null},
+  ]:[];
 
   // status donut
   const donutData=[
@@ -3122,20 +3137,33 @@ function renderDashboard(){
     </div>
   </div>
 
-  <div class="dash-kpis">
-    ${kpis.map(k=>`<div class="kpi-card"${k.filter?` onclick="goHub('jobs','my-jobs');setF('${k.filter}')" style="cursor:pointer;"`:''}>
-      <div class="kpi-top"><span class="kpi-icon">${k.icon}</span><span class="kpi-label">${k.label}</span></div>
-      <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
-      <div class="kpi-sub">${k.sub}</div>
-    </div>`).join('')}
+  <div class="dash-kpi-section">
+    <div class="dash-kpi-group-lbl">📋 Individual Tasks</div>
+    <div class="dash-kpis">
+      ${kpis.map(k=>`<div class="kpi-card"${k.filter?` onclick="goHub('jobs','my-jobs');setF('${k.filter}')" style="cursor:pointer;"`:''}>
+        <div class="kpi-top"><span class="kpi-icon">${k.icon}</span><span class="kpi-label">${k.label}</span></div>
+        <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
+        <div class="kpi-sub">${k.sub}</div>
+      </div>`).join('')}
+    </div>
   </div>
+  ${bkKpis.length?`<div class="dash-kpi-section" style="margin-top:0.6rem;">
+    <div class="dash-kpi-group-lbl" style="color:#ffb84d;">🧺 Basket Jobs</div>
+    <div class="dash-kpis">
+      ${bkKpis.map(k=>`<div class="kpi-card"${k.filter?` onclick="goHub('work','job-basket')" style="cursor:pointer;"`:''}>
+        <div class="kpi-top"><span class="kpi-icon">${k.icon}</span><span class="kpi-label">${k.label}</span></div>
+        <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
+        <div class="kpi-sub">${k.sub}</div>
+      </div>`).join('')}
+    </div>
+  </div>`:''}
 
   <div class="dash-main">
     <div class="dash-col-left">
       <div class="dash-widget">
         <div class="dash-widget-hd">Status Breakdown</div>
         <div class="dash-donut-wrap">
-          <svg width="120" height="120" viewBox="0 0 120 120">${donutSvg}<circle cx="60" cy="60" r="28" fill="var(--card)"/><text x="60" y="56" text-anchor="middle" class="donut-center-num">${jobs.length}</text><text x="60" y="72" text-anchor="middle" class="donut-center-lbl">jobs</text></svg>
+          <svg width="120" height="120" viewBox="0 0 120 120">${donutSvg}<circle cx="60" cy="60" r="28" fill="var(--card)"/><text x="60" y="56" text-anchor="middle" class="donut-center-num">${dj.length}</text><text x="60" y="72" text-anchor="middle" class="donut-center-lbl">tasks</text></svg>
           <div class="dash-donut-legend">
             ${donutData.map(s=>`<div class="ddl-row"><span class="ddl-dot" style="background:${s.color}"></span>${s.label}<span class="ddl-val">${s.value}</span></div>`).join('')}
           </div>
