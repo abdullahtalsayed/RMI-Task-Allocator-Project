@@ -28,7 +28,7 @@ window.submitComment=async function(jobId){
 };
 export function renderCommentSection(jobId){
   const comms=getJobEvents(jobId).filter(e=>e.type==='comment');
-  return`<div class="comment-section"><h5>Comments & Activity</h5>${comms.map(c=>`<div class="comment"><div class="cmeta">${fmt(c.ts)}</div>${c.desc.replace('💬 ','')}</div>`).join('')}<div class="comment-input"><input id="ci-${jobId}" placeholder="Add a comment..." onkeydown="if(event.key==='Enter')submitComment('${jobId}')"/><button onclick="submitComment('${jobId}')">Send</button></div></div>`;
+  return`<div class="comment-section"><h5>Comments & Activity</h5>${comms.map(c=>`<div class="comment"><div class="cmeta">${fmt(c.ts)}</div>${escapeHtml(c.desc.replace('💬 ',''))}</div>`).join('')}<div class="comment-input"><input id="ci-${jobId}" placeholder="Add a comment..." onkeydown="if(event.key==='Enter')submitComment('${jobId}')"/><button onclick="submitComment('${jobId}')">Send</button></div></div>`;
 }
 
 // ── CRUD WRAPPERS ─────────────────────────────────────────────────────────────

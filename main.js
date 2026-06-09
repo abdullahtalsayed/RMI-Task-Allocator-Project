@@ -1479,7 +1479,7 @@ function renderTimeline(jobId){
   if(!evs.length)return'<div style="color:var(--text2);font-size:0.78rem;font-style:italic;">No activity yet.</div>';
   let h='<div class="timeline">';
   evs.forEach((e,i)=>{
-    h+=`<div class="tl-item"><div class="tl-dot ${e.color||'blue'}"></div><div class="tl-line"><div class="tl-what">${e.desc}</div><div class="tl-meta">${fmt(e.ts)}</div></div></div>`;
+    h+=`<div class="tl-item"><div class="tl-dot ${e.color||'blue'}"></div><div class="tl-line"><div class="tl-what">${escapeHtml(e.desc||'')}</div><div class="tl-meta">${fmt(e.ts)}</div></div></div>`;
     if(i<evs.length-1)h+=`<div class="tl-connector"></div>`;
   });
   h+='</div>';return h;
@@ -1864,10 +1864,11 @@ window.bulkReassign=async function(){
   showConfirm('Bulk Reassign',`Reassign ${selectedJobs.size} job(s) to ${toName}?`,async()=>{
     for(const id of selectedJobs){
       const j=jobs.find(x=>x.id===id);
-      const fromName=users.find(u=>u.id===j?.owner)?.name||'unknown';
+      const fromId=j?.owner;
+      const fromName=users.find(u=>u.id===fromId)?.name||'unknown';
       await jUpdate(id,{owner:toId});
       await addEvent(id,'reassigned',`${me.name} bulk-reassigned from ${fromName} to ${toName}`,'purple');
-      notifyReassign(j,j?.owner,toId,me.name);
+      notifyReassign(j,fromId,toId,me.name);
     }
     clearSelection();
   },'Reassign',false);
@@ -2301,7 +2302,14 @@ window.setAnSubTab=function(t){_anSubTab=t;renderAnalyticsContent();renderSbAnal
 
 function renderSbAnalyticsSubs(){
   const el=document.getElementById('sb-analytics-subs');
-  if(el){el.innerHTML='';el.style.display='none';}
+  if(!el||!me)return;
+  const mgr=isLead();
+  const hasWf=jobs.some(j=>j.workflow);
+  const tabs=[{k:'overview',label:'📊 Overview'},{k:'jobs',label:'📋 Jobs'}];
+  if(mgr)tabs.push({k:'team',label:'👥 Team'});
+  if(hasWf)tabs.push({k:'workflow',label:'🔄 Workflow'});
+  el.innerHTML=tabs.map(t=>`<button class="sb-sub-btn${t.k===_anSubTab?' active':''}" onclick="window.setAnSubTab('${t.k}')">${t.label}</button>`).join('');
+  el.style.display='';
 }
 window.renderSbAnalyticsSubs=renderSbAnalyticsSubs;
 
@@ -2379,6 +2387,7 @@ document.addEventListener('click',function(e){
 
 function renderAnalyticsContent(){
   const el=document.getElementById('analytics-content');if(!el||!me)return;
+  renderSbAnalyticsSubs();
   if(analyticsView==='teams'){renderTeamsAnalytics(el);bindChartInteractions(el);return;}
 
   const mgr=isLead();
@@ -2502,14 +2511,15 @@ function renderAnalyticsContent(){
 }
 
 function getDashStatItems(ws){
+  const dj=jobs.filter(j=>!j.workflow);
   return[
-    {label:'Total Jobs',value:jobs.length,color:'var(--blue)'},
-    {label:'Pending',value:jobs.filter(j=>j.status==='pending').length,color:'var(--yellow)'},
-    {label:'Ongoing',value:jobs.filter(j=>j.status==='ongoing').length,color:'var(--blue)'},
-    {label:'Paused',value:jobs.filter(j=>j.status==='paused').length,color:'var(--text2)'},
-    {label:'Completed',value:jobs.filter(j=>j.status==='completed').length,color:'var(--green)'},
-    {label:'Overdue',value:jobs.filter(j=>isOverdue(j)).length,color:'var(--red)'},
-    {label:'Done This Week',value:jobs.filter(j=>j.completed&&new Date(j.completed)>=ws).length,color:'var(--green)'},
+    {label:'Total Jobs',value:dj.length,color:'var(--blue)'},
+    {label:'Pending',value:dj.filter(j=>j.status==='pending').length,color:'var(--yellow)'},
+    {label:'Ongoing',value:dj.filter(j=>j.status==='ongoing').length,color:'var(--blue)'},
+    {label:'Paused',value:dj.filter(j=>j.status==='paused').length,color:'var(--text2)'},
+    {label:'Completed',value:dj.filter(j=>j.status==='completed').length,color:'var(--green)'},
+    {label:'Overdue',value:dj.filter(j=>isOverdue(j)).length,color:'var(--red)'},
+    {label:'Done This Week',value:dj.filter(j=>j.completed&&new Date(j.completed)>=ws).length,color:'var(--green)'},
     {label:'Employees',value:users.filter(u=>u.role==='employee').length,color:'var(--text)'},
     {label:'Ext. Requests',value:extRequests.filter(r=>r.status==='pending').length,color:'var(--orange)'}
   ];

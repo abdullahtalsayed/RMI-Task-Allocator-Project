@@ -242,7 +242,7 @@ window.onRoleChange=function(ctx){
   const spWrap=document.getElementById(isEdit?'edit-spec-wrap':'add-spec-wrap');
   if(!roleSel)return;
   const isEmp=roleSel.value==='employee'||roleSel.value==='drafter';
-  if(tlWrap)tlWrap.style.display=roleSel.value==='employee'?'block':'none';
+  if(tlWrap)tlWrap.style.display=(roleSel.value==='employee'||roleSel.value==='drafter')?'block':'none';
   if(spWrap)spWrap.style.display=isEmp?'block':'none';
 };
 window.openAddUserModal=function(){
