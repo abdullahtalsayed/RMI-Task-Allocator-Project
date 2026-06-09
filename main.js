@@ -1396,6 +1396,7 @@ function activityCategory(type){
   if(type==='created'||type==='assigned'||type==='started'||type==='completed'||type==='paused'||type==='resumed'||type==='edited'||
      type==='deleted'||type==='restored'||type==='pinned'||type==='reassigned'||type==='bulk_edit'||
      type==='extension_request'||type==='ext_approved'||type==='ext_rejected'||type==='comment')return'job';
+  if(type&&type.startsWith('wf_'))return'job'; // all basket workflow events belong to job category
   return'system';
 }
 export async function logActivity(entry){
@@ -1490,7 +1491,13 @@ function activityVisual(type){
     comment:['💬','blue'],broadcast:['📢','purple'],login:['🔓','gray'],logout:['🔒','gray'],
     user_added:['👤','green'],user_removed:['👤','red'],user_edited:['👤','gray'],
     report_export:['📥','gray'],jobs_archived:['📦','gray'],attachment_added:['📎','blue'],
-    broadcast_edited:['📢','gray'],settings_changed:['⚙️','gray'],audit:['🔍','gray']
+    broadcast_edited:['📢','gray'],settings_changed:['⚙️','gray'],audit:['🔍','gray'],
+    wf_intake:['📥','blue'],wf_assigned:['🧺','purple'],wf_roof_approved:['✅','green'],wf_roof_rejected:['❌','red'],
+    wf_wall_approved:['✅','green'],wf_wall_rejected:['❌','red'],wf_sent_to_client:['📨','orange'],
+    wf_revision:['🔁','red'],wf_revision_rejected:['❌','red'],wf_prod_submit:['🏭','blue'],
+    wf_pr_rejected:['❌','red'],wf_fl_rejected:['❌','red'],wf_type_rejected:['❌','red'],
+    wf_cd_denied:['❌','red'],wf_bom_rejected:['❌','red'],wf_erection_rejected:['❌','red'],
+    wf_release:['♻️','orange'],wf_closed_final:['🔒','green']
   };
   return m[type]||['•','gray'];
 }
@@ -3862,7 +3869,9 @@ window.printAnalytics=function(){
 // ── REPORT EMAIL SUMMARY ────────────────────────────────────────────────────────
 function buildReportEmailBody(){
   const now=new Date();
-  const allJ=visibleJobs();
+  const taskJ=visibleJobs();
+  const basketJ=analyticsBasketJobs().map(normalizeJobForPool);
+  const allJ=[...taskJ,...basketJ];
   const pending=allJ.filter(j=>j.status==='pending').length;
   const ongoing=allJ.filter(j=>j.status==='ongoing').length;
   const paused=allJ.filter(j=>j.status==='paused').length;
@@ -3878,9 +3887,9 @@ function buildReportEmailBody(){
   return `RMI Weekly Report — ${now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SUMMARY
+SUMMARY (Tasks + Basket)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Total Jobs:       ${allJ.length}
+Total Jobs:       ${allJ.length} (${taskJ.length} tasks · ${basketJ.length} basket)
 Pending:          ${pending}
 Ongoing:          ${ongoing}
 Paused:           ${paused}
@@ -4131,12 +4140,8 @@ function analyticsRangeStart(range){
   return 0;
 }
 // Normalize basket jobs so analytics status fields work uniformly
-function normalizeForAnalytics(j){
-  if(!j.workflow) return j;
-  const status = j.stage==='completed' ? 'completed'
-    : (j.status==='ongoing'||j.status==='paused') ? j.status : 'pending';
-  return {...j, status};
-}
+// normalizeForAnalytics — alias; single impl lives at normalizeJobForPool (defined before renderJobs)
+const normalizeForAnalytics=normalizeJobForPool;
 function analyticsScope(){
   if(!me)return[];
   // pool selection
@@ -4447,7 +4452,7 @@ function anBranchSection(){
   if(branches.length<1)return'';
   const start=analyticsRangeStart(analyticsRange);
   const inRange=j=>!start||toMillis(j.created)>=start;
-  const all=visibleJobs();
+  const all=[...visibleJobs(),...analyticsBasketJobs().map(normalizeJobForPool)];
   const colors=['var(--blue)','var(--green)','var(--orange)','var(--purple)','var(--yellow)'];
   const stat={};
   branches.forEach((b,i)=>{

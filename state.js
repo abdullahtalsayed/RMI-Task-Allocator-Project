@@ -16,7 +16,19 @@ export const ACTIVITY_TYPE_LABELS={
   extension_request:'Extension Request',ext_approved:'Extension Approved',ext_rejected:'Extension Rejected',
   comment:'Comment',broadcast:'Broadcast',user_added:'User Added',user_removed:'User Removed',
   report_export:'Report exported',jobs_archived:'Jobs archived',attachment_added:'Attachment added',
-  broadcast_edited:'Broadcast edited',settings_changed:'Settings changed',audit:'Audit',user_edited:'User Edited'
+  broadcast_edited:'Broadcast edited',settings_changed:'Settings changed',audit:'Audit',user_edited:'User Edited',
+  // Workflow / Job Basket events
+  wf_intake:'Basket: Job Submitted',wf_assigned:'Basket: Job Assigned',
+  wf_sd_tl_roof_review:'Basket: Roof Draft Submitted',wf_roof_approved:'Basket: Roof Approved',wf_roof_rejected:'Basket: Roof Rejected',
+  wf_sd_tl_wall_review:'Basket: Wall Draft Submitted',wf_wall_approved:'Basket: Wall Approved',wf_wall_rejected:'Basket: Wall Rejected',
+  wf_sent_to_client:'Basket: Sent to Client',wf_revision:'Basket: Revision Started',wf_revision_review:'Basket: Revision Submitted',wf_revision_rejected:'Basket: Revision Rejected',
+  wf_jobcard:'Basket: Job Card Assigned',wf_tl_jobcard_review:'Basket: Job Card Submitted',wf_prod_submit:'Basket: Submitted to Production',
+  wf_pr_tl_review:'Basket: Panels Release Submitted',wf_pr_rejected:'Basket: Panels Release Rejected',
+  wf_fl_tl_review:'Basket: Flashings Release Submitted',wf_fl_rejected:'Basket: Flashings Release Rejected',
+  wf_type_rejected:'Basket: Submission Rejected',wf_cd_pending:'Basket: Civil Defense Pending',wf_cd_denied:'Basket: Civil Defense Denied',
+  wf_bom:'Basket: BOM Submitted',wf_bom_review:'Basket: BOM Review',wf_bom_rejected:'Basket: BOM Rejected',
+  wf_erection_draft:'Basket: Erection Drawing Assigned',wf_erection_review:'Basket: Erection Drawing Submitted',wf_erection_rejected:'Basket: Erection Drawing Rejected',
+  wf_release:'Basket: Job Reopened for Release',wf_closed_final:'Basket: Job Closed',
 };
 
 export const FB_LIMITS={notifications:60,activityLog:200,broadcasts:40,extensions:30,jobEvents:40,dashActivity:25,jobsListen:500};
