@@ -5,7 +5,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RMI Task Allocator & Progress Tracker v2.15.75</title>
+<title>RMI Task Allocator & Progress Tracker v2.15.76</title>
 <link rel="icon" type="image/png" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_32,h_32,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <link rel="apple-touch-icon" href="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_180,h_180,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png"/>
 <meta name="theme-color" content="#07080c"/>
@@ -81,7 +81,7 @@
     <div class="hl">
       <button id="sb-toggle" class="sb-toggle-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
       <img src="https://static.wixstatic.com/media/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png/v1/crop/x_0,y_34,w_591,h_278/fill/w_213,h_100,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1fd987_2287b00fc2ae487ead69213eefd9aff6~mv2.png" alt="RMI"/>
-      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.15.75</div><div id="clock"></div></div>
+      <div><div class="hl-title">RMI Task Allocator & Progress Tracker v2.15.76</div><div id="clock"></div></div>
     </div>
     <div class="hr">
       <span id="synced"></span>
@@ -436,14 +436,8 @@
     <p id="broadcast-hint" style="color:var(--text2);font-size:0.82rem;margin-bottom:1rem;display:none;">Announcements from management appear here.</p>
     <div id="bcast-compose" class="msg-compose" style="display:none;">
       <div class="msg-compose-hd">New Announcement</div>
-      <div class="msg-audience">
-        <span class="msg-audience-lbl">Send to:</span>
-        <button class="msg-aud-pill on" data-to="all" onclick="setBcastAudience('all',this)">👥 Everyone</button>
-        <button class="msg-aud-pill" data-to="employees" onclick="setBcastAudience('employees',this)">👤 Employees</button>
-        <button class="msg-aud-pill" data-to="supervisors" onclick="setBcastAudience('supervisors',this)">🔰 Supervisors</button>
-        <button class="msg-aud-pill" data-to="team" onclick="setBcastAudience('team',this)" style="display:none;">🧭 My Team</button>
-      </div>
-      <select id="bcast-to" style="display:none;"><option value="all"></option><option value="employees"></option><option value="supervisors"></option><option value="team"></option></select>
+      <div id="bcast-audience-wrap"></div>
+      <input type="hidden" id="bcast-to" value="all"/>
       <textarea id="bcast-msg" class="msg-textarea" placeholder="Write an announcement to your team..."></textarea>
       <div class="msg-compose-foot">
         <span id="bcast-charcount" class="msg-charcount"></span>

@@ -9,51 +9,76 @@ import { showConfirm } from './modals.js';
 import { bcastCol, isTeamLeader, logActivity, refreshBroadcastsRemote, pushNotif, dashRelTime, showToastMsg, localSave, amDirector, isDirectorRole } from './main.js';
 
 // ── BROADCAST ─────────────────────────────────────────────────────────────────
+function _bcastToLabel(to){
+  if(!to||to==='all')return'👥 Everyone';
+  if(to==='employees')return'👤 Employees';
+  if(to==='supervisors')return'🔰 Supervisors';
+  if(to==='managers')return'👔 Managers';
+  if(to.startsWith('team:')){const tl=users.find(u=>u.id===to.slice(5));return'🧭 '+(tl?tl.name+"'s Team":'My Team');}
+  if(to.startsWith('branch:'))return'🌍 '+to.slice(7);
+  if(to.startsWith('role:')){
+    const r=to.slice(5);
+    const labels={drafter:'✏️ Drafters',releaser:'📦 Releasers',team_leader:'🧭 Team Leaders',sales_operation:'📤 Sales Ops',employee:'👤 All Employees'};
+    return labels[r]||('Role: '+r);
+  }
+  if(to.startsWith('user:')){const u=users.find(x=>x.id===to.slice(5));return'👤 '+(u?u.name:'Individual');}
+  return to;
+}
+function _bcastNotifTargets(to){
+  if(to==='all')return users;
+  if(to==='employees')return users.filter(u=>['employee','drafter','team_leader','sales_operation'].includes(u.role));
+  if(to==='supervisors')return users.filter(u=>u.role==='supervisor');
+  if(to==='managers')return users.filter(u=>u.role==='manager');
+  if(to.startsWith('team:')){const lid=to.slice(5);return users.filter(u=>u.teamLeaderId===lid||u.id===lid);}
+  if(to.startsWith('branch:')){const br=to.slice(7);return users.filter(u=>u.branch===br);}
+  if(to.startsWith('role:')){const r=to.slice(5);return users.filter(u=>u.role===r||(r==='releaser'&&u.specialization==='Releaser')||(r==='drafter'&&u.specialization==='Drafter'));}
+  if(to.startsWith('user:')){const u=users.find(x=>x.id===to.slice(5));return u?[u]:[];}
+  return users;
+}
 window.sendBroadcast=async function(){
   const msg=document.getElementById('bcast-msg').value.trim();
-  let to=document.getElementById('bcast-to').value;
+  let to=document.getElementById('bcast-to').value||'all';
   if(!msg){alert('Message cannot be empty.');return;}
-  // TL sends to their team — store as team:${leaderId}
   if(to==='team'&&isTeamLeader())to=`team:${me.id}`;
   const bcast={msg,to,by:me.name,byId:me.id,created:Date.now()};
   if(USE_FIREBASE){await addDoc(bcastCol,bcast);await refreshBroadcastsRemote();}
   else{bcast.id=uid();broadcasts.unshift(bcast);localSave();renderBroadcasts();}
-  const toLabel=to==='all'?'everyone':to==='employees'?'employees':to==='supervisors'?'supervisors':to.startsWith('team:')?'my team':to.startsWith('branch:')?to.slice(7):to;
+  const toLabel=_bcastToLabel(to);
   await logActivity({type:'broadcast',category:'broadcast',desc:`${me.name} sent message to ${toLabel}: ${msg.slice(0,120)}${msg.length>120?'…':''}`,userId:me.id,userName:me.name,role:me.role});
-  // Push notifications
-  let targets=users;
-  if(to==='employees')targets=users.filter(u=>u.role==='employee'||u.role==='team_leader'||u.role==='sales_operation');
-  else if(to==='supervisors')targets=users.filter(u=>u.role==='supervisor');
-  else if(to.startsWith('team:')){const lid=to.slice(5);targets=users.filter(u=>u.teamLeaderId===lid||u.id===lid);}
-  else if(to.startsWith('branch:')){const br=to.slice(7);targets=users.filter(u=>u.branch===br);}
-  targets.filter(u=>u.id!==me.id&&!isDirectorRole(u.role)).forEach(u=>pushNotif(u.id,'📢 Message from '+me.name,msg));
+  _bcastNotifTargets(to).filter(u=>u.id!==me.id&&!isDirectorRole(u.role)).forEach(u=>pushNotif(u.id,'📢 Message from '+me.name,msg));
   document.getElementById('bcast-msg').value='';
+  // reset to All after send
+  window.setBcastAudience('all');
   showToastMsg('Message sent!');
 };
 export function broadcastsForUser(u){
   if(!u)return[];
   if(u.role==='manager')return broadcasts;
   return broadcasts.filter(b=>{
-    if(b.to==='all')return true;
-    if(b.to==='employees'&&(u.role==='employee'||u.role==='team_leader'||u.role==='sales_operation'))return true;
-    if(b.to==='supervisors'&&u.role==='supervisor')return true;
-    // team-scoped: team:${leaderId}
-    if(b.to&&b.to.startsWith('team:')){
-      const leaderId=b.to.slice(5);
-      if(u.id===leaderId)return true;
-      if(u.teamLeaderId===leaderId)return true;
+    const to=b.to||'all';
+    if(to==='all')return true;
+    if(to==='employees'&&['employee','drafter','team_leader','sales_operation'].includes(u.role))return true;
+    if(to==='supervisors'&&u.role==='supervisor')return true;
+    if(to==='managers'&&u.role==='manager')return true;
+    if(to.startsWith('team:')){const lid=to.slice(5);return u.id===lid||u.teamLeaderId===lid;}
+    if(to.startsWith('branch:')){return u.branch===to.slice(7);}
+    if(to.startsWith('role:')){
+      const r=to.slice(5);
+      if(u.role===r)return true;
+      if(r==='drafter'&&u.specialization==='Drafter')return true;
+      if(r==='releaser'&&u.specialization==='Releaser')return true;
+      return false;
     }
-    // branch-scoped: branch:${branchName}
-    if(b.to&&b.to.startsWith('branch:')){
-      const br=b.to.slice(7);
-      if(u.branch===br)return true;
-    }
+    if(to.startsWith('user:'))return u.id===to.slice(5);
     return false;
   });
 }
-window.setBcastAudience=function(to,btn){
-  const sel=document.getElementById('bcast-to');if(sel)sel.value=to;
-  document.querySelectorAll('.msg-aud-pill').forEach(b=>b.classList.toggle('on',b.dataset.to===to));
+window.setBcastAudience=function(to){
+  const inp=document.getElementById('bcast-to');if(inp)inp.value=to||'all';
+  document.querySelectorAll('.msg-aud-pill').forEach(b=>b.classList.toggle('on',b.dataset.to===(to||'all')));
+  // sync individual select if switching away from user:
+  const indSel=document.getElementById('bcast-individual-sel');
+  if(indSel&&!(to||'').startsWith('user:'))indSel.value='';
 };
 export function bcastMsgLastSeen(){return parseInt(localStorage.getItem('rmi_bcast_seen_'+(me?.id||''))||'0',10);}
 export function markBroadcastsSeen(){
@@ -81,35 +106,47 @@ export function updateBroadcastUI(){
   const compose=document.getElementById('bcast-compose');
   if(compose){
     compose.style.display=canCompose?'block':'none';
-    // show team audience pill for TL, hide global audience pills
-    const allPill=document.querySelector('.msg-aud-pill[data-to="all"]');
-    const empPill=document.querySelector('.msg-aud-pill[data-to="employees"]');
-    const supPill=document.querySelector('.msg-aud-pill[data-to="supervisors"]');
-    const teamPill=document.querySelector('.msg-aud-pill[data-to="team"]');
-    if(isTL&&!isMgr){
-      if(allPill)allPill.style.display='none';
-      if(empPill)empPill.style.display='none';
-      if(supPill)supPill.style.display='none';
-      if(teamPill){teamPill.style.display='';teamPill.classList.add('on');const sel=document.getElementById('bcast-to');if(sel)sel.value='team';}
-    }else{
-      if(allPill)allPill.style.display='';
-      if(empPill)empPill.style.display='';
-      if(supPill)supPill.style.display='';
-      if(teamPill)teamPill.style.display=isMgr?'none':'';
-    }
-    // Branch pills — inject once for manager
-    const aud=compose.querySelector('.msg-audience');
-    if(aud&&isMgr&&!aud.querySelector('.msg-aud-pill[data-to^="branch:"]')){
-      const sel=document.getElementById('bcast-to');
-      BRANCHES.forEach(br=>{
-        const key=`branch:${br}`;
-        const btn=document.createElement('button');
-        btn.type='button';btn.className='msg-aud-pill';btn.dataset.to=key;
-        btn.textContent='🌍 '+br;
-        btn.onclick=()=>window.setBcastAudience(key,btn);
-        aud.appendChild(btn);
-        if(sel){const opt=document.createElement('option');opt.value=key;opt.textContent=br;sel.appendChild(opt);}
-      });
+    const wrap=document.getElementById('bcast-audience-wrap');
+    if(wrap){
+      if(isTL&&!isMgr){
+        // TL: just My Team
+        wrap.innerHTML=`<div class="msg-audience">
+          <span class="msg-audience-lbl">Send to:</span>
+          <button type="button" class="msg-aud-pill on" data-to="team" onclick="setBcastAudience('team')">🧭 My Team</button>
+        </div>`;
+        const inp=document.getElementById('bcast-to');if(inp)inp.value=`team:${me.id}`;
+      } else if(isMgr){
+        // Manager: full targeting panel
+        const indOpts=users.filter(u=>u.id!==me.id).sort((a,b)=>a.name.localeCompare(b.name))
+          .map(u=>`<option value="${escapeHtml(u.id)}">${escapeHtml(u.name)} · ${u.role.replace(/_/g,' ')}</option>`).join('');
+        wrap.innerHTML=`<div class="msg-audience-panel">
+          <div class="bcast-target-row">
+            <span class="bcast-target-lbl">Quick:</span>
+            <button type="button" class="msg-aud-pill on" data-to="all" onclick="setBcastAudience('all')">👥 Everyone</button>
+            <button type="button" class="msg-aud-pill" data-to="employees" onclick="setBcastAudience('employees')">👤 Employees</button>
+            <button type="button" class="msg-aud-pill" data-to="supervisors" onclick="setBcastAudience('supervisors')">🔰 Supervisors</button>
+            <button type="button" class="msg-aud-pill" data-to="managers" onclick="setBcastAudience('managers')">👔 Managers</button>
+          </div>
+          <div class="bcast-target-row">
+            <span class="bcast-target-lbl">By Role:</span>
+            <button type="button" class="msg-aud-pill" data-to="role:drafter" onclick="setBcastAudience('role:drafter')">✏️ Drafters</button>
+            <button type="button" class="msg-aud-pill" data-to="role:releaser" onclick="setBcastAudience('role:releaser')">📦 Releasers</button>
+            <button type="button" class="msg-aud-pill" data-to="role:team_leader" onclick="setBcastAudience('role:team_leader')">🧭 Team Leaders</button>
+            <button type="button" class="msg-aud-pill" data-to="role:sales_operation" onclick="setBcastAudience('role:sales_operation')">📤 Sales Ops</button>
+          </div>
+          <div class="bcast-target-row">
+            <span class="bcast-target-lbl">By Branch:</span>
+            ${BRANCHES.map(br=>`<button type="button" class="msg-aud-pill" data-to="branch:${escapeHtml(br)}" onclick="setBcastAudience('branch:${escapeHtml(br)}')">🌍 ${escapeHtml(br)}</button>`).join('')}
+          </div>
+          <div class="bcast-target-row">
+            <span class="bcast-target-lbl">Individual:</span>
+            <select id="bcast-individual-sel" class="bcast-ind-sel" onchange="if(this.value)setBcastAudience('user:'+this.value)">
+              <option value="">— Pick a person —</option>
+              ${indOpts}
+            </select>
+          </div>
+        </div>`;
+      }
     }
   }
   const hint=document.getElementById('broadcast-hint');
@@ -136,7 +173,7 @@ export function renderBroadcasts(){
   visible.forEach(b=>{
     const day=broadcastDayLabel(b.created);
     if(day!==lastDay){html+=`<div class="msg-day-hd">${day}</div>`;lastDay=day;}
-    const toLbl=b.to==='all'?'👥 Everyone':b.to==='employees'?'👤 Employees':b.to==='supervisors'?'🔰 Supervisors':(b.to&&b.to.startsWith('branch:'))?'🌍 '+escapeHtml(b.to.slice(7)):(b.to&&b.to.startsWith('team:'))?'🧭 Team':escapeHtml(b.to||'');
+    const toLbl=_bcastToLabel(b.to);
     const unread=toMillis(b.created)>seen&&b.byId!==me.id;
     const initial=(b.by||'?').trim().charAt(0).toUpperCase();
     const editBtn=isMgr&&b.id?`<button type="button" class="msg-act" onclick="editBroadcast('${b.id}')" title="Edit">✎</button>`:'';
