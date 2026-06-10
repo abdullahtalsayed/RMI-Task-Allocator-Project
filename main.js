@@ -10,7 +10,7 @@ import { EMAIL_EVENTS, EMAIL_RECIPS, WF_EMAIL_EVENTS, WF_EMAIL_RECIPS, defaultEm
 import { renderTags, setTags, showConfirm } from './modals.js';
 import { populateCalEmpDrop, populateCalEmpPills, jobsForCalendarDay, empOverdueJobs, renderCommentSection, uAdd, uUpdate, uDelete, jUpdate, jDelete, jRestore } from './jobs.js';
 import { renderUList, renderBroadcasts, updateBroadcastUI, roleMeta, markBroadcastsSeen } from './admin.js';
-import { renderJobBasket, wfAnalyticsSection } from './workflow.js';
+import { renderJobBasket, wfAnalyticsSection, WF_Q_DEFAULTS } from './workflow.js';
 
 // ── MAIN-LOCAL STATE (firebase handles + UI-only mutables) ────────────────────
 export let db, auth, storage, jCol, uCol, evCol, notifCol, extCol, bcastCol, logCol, authMapCol, archiveCol, cfgCol;
@@ -162,6 +162,119 @@ window.saveJobSettingsFromUI=async function(){
   }
   await saveJobSettings(patch);
   window._jsetDirty=false;
+};
+
+// ── WF QUESTIONS (manager-configurable review checklists) ─────────────────────
+const WF_Q_LABELS={
+  roofDrafter:'SD — Roof Draft (Drafter)',roofTL:'SD — Roof Review (TL)',
+  wallDrafter:'SD — Wall Draft (Drafter)',wallTL:'SD — Wall Review (TL)',
+  jobCardQC:'Job Card QC (Drafter + TL)',
+  panelsRelease:'Panels Release',flashingsRelease:'Flashings Release',purlinsRelease:'Purlins Release',
+  bomDrafter:'BOM — Drafter Self-Check',bomTL:'BOM — TL Review',
+  erectionDrafter:'Erection Drawing — Drafter',erectionTL:'Erection Drawing — TL Review',
+};
+let _wfQUnsub=null;
+let _wfQLive={};  // key → [{id,q,order}]
+function listenWfQuestions(){
+  if(!USE_FIREBASE||!cfgCol||_wfQUnsub)return;
+  _wfQUnsub=onSnapshot(doc(cfgCol,'wfQuestions'),snap=>{
+    _wfQLive=snap.exists()?snap.data():{};
+    window._wfQuestions=_wfQLive;
+    if(document.getElementById('account-pane-wfquestions')?.style.display!=='none')renderWfQuestionsPane();
+  },()=>{});
+}
+let _wfQActiveKey=Object.keys(WF_Q_LABELS)[0];
+function renderWfQuestionsPane(){
+  const el=document.getElementById('account-pane-wfquestions');if(!el)return;
+  if(!me||me.role!=='manager'){el.innerHTML='<div class="empty" style="padding:2rem;">Managers only.</div>';return;}
+  const key=_wfQActiveKey;
+  const raw=_wfQLive[key];
+  const qs=raw&&raw.length?raw:[...WF_Q_DEFAULTS[key]||[]].map((q,i)=>({id:q.key||('q'+i),q:q.q,order:i}));
+  const stageOpts=Object.entries(WF_Q_LABELS).map(([k,lbl])=>`<option value="${k}"${k===key?' selected':''}>${escapeHtml(lbl)}</option>`).join('');
+  const rows=qs.map((item,i)=>`
+    <div class="wfq-row" data-idx="${i}">
+      <span class="wfq-num">${i+1}</span>
+      <span class="wfq-text" id="wfq-text-${i}">${escapeHtml(item.q)}</span>
+      <span class="wfq-row-actions">
+        <button class="wfq-btn" title="Move up" onclick="wfQMove(${i},-1)" ${i===0?'disabled':''}>↑</button>
+        <button class="wfq-btn" title="Move down" onclick="wfQMove(${i},1)" ${i===qs.length-1?'disabled':''}>↓</button>
+        <button class="wfq-btn" title="Edit" onclick="wfQEdit(${i})">✏</button>
+        <button class="wfq-btn danger" title="Delete" onclick="wfQDelete(${i})">✕</button>
+      </span>
+    </div>`).join('');
+  el.innerHTML=`
+    <div style="max-width:580px;">
+      <p style="font-size:0.82rem;color:var(--text2);margin:0 0 1rem;">
+        Changes apply immediately to all TL reviews — no restart needed.
+      </p>
+      <div style="margin-bottom:1rem;">
+        <label style="font-size:0.83rem;font-weight:600;">Stage:</label>
+        <select class="wfq-stage-sel" onchange="wfQSelectStage(this.value)">${stageOpts}</select>
+      </div>
+      <div class="wfq-list" id="wfq-list">${rows||'<div class="empty" style="padding:0.5rem 0;font-size:0.82rem;">No questions yet.</div>'}</div>
+      <div class="wfq-add-row">
+        <input id="wfq-new-text" class="wfq-input" type="text" placeholder="New question text…" onkeydown="if(event.key==='Enter')wfQAdd()"/>
+        <button class="bp" onclick="wfQAdd()">+ Add</button>
+      </div>
+      <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button class="bp" onclick="wfQSave()">💾 Save</button>
+        <button class="bp sec" onclick="wfQReset()">↩ Reset to defaults</button>
+      </div>
+    </div>`;
+  // store current qs on window for mutation
+  window._wfQEditing={key,qs:qs.map(q=>({...q}))};
+}
+window.wfQSelectStage=function(k){_wfQActiveKey=k;renderWfQuestionsPane();};
+window.wfQMove=function(idx,dir){
+  const {qs}=window._wfQEditing;
+  const swap=idx+dir;
+  if(swap<0||swap>=qs.length)return;
+  [qs[idx],qs[swap]]=[qs[swap],qs[idx]];
+  qs.forEach((q,i)=>q.order=i);
+  renderWfQuestionsPane();
+};
+window.wfQEdit=function(idx){
+  const {qs}=window._wfQEditing;
+  const cur=qs[idx].q;
+  const newQ=prompt('Edit question:',cur);
+  if(newQ===null)return;
+  const trimmed=newQ.trim();if(!trimmed){alert('Question cannot be empty.');return;}
+  qs[idx].q=trimmed;
+  renderWfQuestionsPane();
+};
+window.wfQDelete=function(idx){
+  const {qs}=window._wfQEditing;
+  if(qs.length<=1){alert('Need at least one question.');return;}
+  qs.splice(idx,1);qs.forEach((q,i)=>q.order=i);
+  renderWfQuestionsPane();
+};
+window.wfQAdd=function(){
+  const inp=document.getElementById('wfq-new-text');if(!inp)return;
+  const text=inp.value.trim();if(!text){inp.focus();return;}
+  const {qs}=window._wfQEditing;
+  qs.push({id:'q_'+Date.now(),q:text,order:qs.length});
+  inp.value='';
+  renderWfQuestionsPane();
+};
+window.wfQSave=async function(){
+  if(!me||me.role!=='manager')return;
+  const {key,qs}=window._wfQEditing;
+  _wfQLive[key]=qs.map((q,i)=>({id:q.id||('q'+i),q:q.q,order:i}));
+  window._wfQuestions=_wfQLive;
+  if(USE_FIREBASE&&cfgCol){
+    try{await setDoc(doc(cfgCol,'wfQuestions'),_wfQLive);}
+    catch(e){showToastMsg('Could not save — check permissions.');return;}
+  }
+  showToastMsg('✅ Questions saved');
+  renderWfQuestionsPane();
+};
+window.wfQReset=function(){
+  const {key}=window._wfQEditing;
+  showConfirm('Reset Questions',`Reset "${WF_Q_LABELS[key]}" to default questions? Your changes will be lost.`,()=>{
+    delete _wfQLive[key];window._wfQuestions=_wfQLive;
+    renderWfQuestionsPane();
+    showToastMsg('Reset to defaults (not saved yet — click 💾 Save to confirm).');
+  },'Reset',true);
 };
 
 let emailCfgUnsub=null;
@@ -482,6 +595,7 @@ function detachFirebaseListeners(){
   fbUnsubs=[];
   if(emailCfgUnsub){try{emailCfgUnsub();}catch(e){}emailCfgUnsub=null;}
   if(jobSettingsUnsub){try{jobSettingsUnsub();}catch(e){}jobSettingsUnsub=null;}
+  if(_wfQUnsub){try{_wfQUnsub();}catch(e){}}
 }
 function canSeeAllJobs(){
   return me&&(me.role==='manager'||me.role==='supervisor'||amDirector()||me.viewAll==='yes');
@@ -602,6 +716,7 @@ function attachFirebaseListeners(){
   if(!USE_FIREBASE||!me||!db)return;
   listenEmailConfig();   // now signed-in → config read allowed
   listenJobSettings();   // job deadline settings
+  listenWfQuestions();   // manager-configurable TL review checklists
   _primaryJobs=[];_wfTeamJobs=[];_wfDrafterJobs=[];
   const jq=jobsQueryForUser();
   fbUnsubs.push(onSnapshot(jq,snap=>{
@@ -3549,20 +3664,23 @@ function setAccountPane(pane){
   const p=document.getElementById('account-pane-profile');
   const pr=document.getElementById('account-pane-prefs');
   const js=document.getElementById('account-pane-jobsettings');
+  const wq=document.getElementById('account-pane-wfquestions');
   if(p)p.style.display=pane==='profile'?'block':'none';
   if(pr)pr.style.display=pane==='prefs'?'block':'none';
   if(js)js.style.display=pane==='jobsettings'?'block':'none';
-  if(pane==='hide'){if(p)p.style.display='none';if(pr)pr.style.display='none';if(js)js.style.display='none';}
+  if(wq)wq.style.display=pane==='wfquestions'?'block':'none';
+  if(pane==='hide'){[p,pr,js,wq].forEach(el=>{if(el)el.style.display='none';});}
 }
 window.setAccountTab=function(sub){
   document.querySelectorAll('.acct-tab').forEach(b=>{
     b.classList.toggle('on',(b.dataset.tab||'')===sub);
   });
   const prefBtns=document.getElementById('account-save-btns');
-  if(prefBtns)prefBtns.style.display=sub==='jobsettings'?'none':'flex';
+  if(prefBtns)prefBtns.style.display=(sub==='jobsettings'||sub==='wfquestions')?'none':'flex';
   if(sub==='profile'){setAccountPane('profile');renderAccountProfile();return;}
   if(sub==='preferences'){setAccountPane('prefs');renderAccountPreferences();return;}
   if(sub==='jobsettings'){setAccountPane('jobsettings');renderJobSettingsPane();return;}
+  if(sub==='wfquestions'){setAccountPane('wfquestions');renderWfQuestionsPane();return;}
 };
 function runHubSideEffects(id){
   if(id==='my-jobs'||id==='add-job')renderJobs();

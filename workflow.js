@@ -349,12 +349,30 @@ function wfShowDecision(j, desc, fnName, rejectRequired=false){
     </div>`);
 }
 
+// ── LIVE QUESTION CACHE (populated by main.js listenWfQuestions) ─────────────
+// Manager can add/remove/reorder questions per checklist key via Account Settings.
+// Stored in Firestore config/wfQuestions. Falls back to hardcoded defaults when empty.
+window._wfQuestions = {};
+
+// Returns questions array for a checklist key. Uses live Firestore data if available,
+// else falls back to provided default array. Normalises to {q, key} shape.
+function getWfQ(key, fallback){
+  const live = window._wfQuestions?.[key];
+  if(live && live.length) return live.map(q=>({q:q.q, key:q.id||q.key||key+'_'+q.q.slice(0,8).replace(/\W/g,'')}));
+  return fallback;
+}
+
+// Exported defaults map — used by manager UI to populate initial values
+export const WF_Q_DEFAULTS = {};
+function _regDefault(key, qs){ WF_Q_DEFAULTS[key] = qs; return qs; }
+
 // ── DYNAMIC CHECKLISTS ────────────────────────────────────────────────────────
+const _ROOF_DRAFTER_BASE = _regDefault('roofDrafter', [
+  {q:'Did you prepare the roof layout plan?',    key:'roofLayout'},
+  {q:'Did you prepare the roof cross section?',  key:'crossSection'},
+]);
 function _roofDrafterChecklist(j){
-  const qs = [
-    {q:'Did you prepare the roof layout plan?',    key:'roofLayout'},
-    {q:'Did you prepare the roof cross section?',  key:'crossSection'},
-  ];
+  const qs = getWfQ('roofDrafter', _ROOF_DRAFTER_BASE).slice();
   if(j.sdGutter && j.sdGutter !== 'none'){
     const lbl = j.sdGutter === 'eave_gutter' ? 'eave gutter' : 'curve';
     qs.push({q:`Did you prepare the ${lbl} sample?`, key:'gutterSample'});
@@ -365,34 +383,31 @@ function _roofDrafterChecklist(j){
   return qs;
 }
 
-function _roofTLChecklist(){
-  return [
-    {q:'Did you check the panel lengths?',  key:'panelLengths'},
-    {q:'Did you check the dimensions?',     key:'dimensions'},
-    {q:'Did you check the cutback?',        key:'cutback'},
-    {q:'Did you check the quantity (qty)?', key:'qty'},
-  ];
-}
+const _ROOF_TL_BASE = _regDefault('roofTL', [
+  {q:'Did you check the panel lengths?',  key:'panelLengths'},
+  {q:'Did you check the dimensions?',     key:'dimensions'},
+  {q:'Did you check the cutback?',        key:'cutback'},
+  {q:'Did you check the quantity (qty)?', key:'qty'},
+]);
+function _roofTLChecklist(){ return getWfQ('roofTL', _ROOF_TL_BASE); }
 
-function _wallDrafterChecklist(){
-  return [
-    {q:'Did you prepare the wall layout?',              key:'wallLayout'},
-    {q:'Did you check the panel lengths?',              key:'panelLengths'},
-    {q:'Did you check for any openings?',               key:'openings'},
-    {q:'Did you check the specs (RW or PIR)?',          key:'specs'},
-    {q:'Did you check the required flashings?',         key:'flashings'},
-  ];
-}
+const _WALL_DRAFTER_BASE = _regDefault('wallDrafter', [
+  {q:'Did you prepare the wall layout?',              key:'wallLayout'},
+  {q:'Did you check the panel lengths?',              key:'panelLengths'},
+  {q:'Did you check for any openings?',               key:'openings'},
+  {q:'Did you check the specs (RW or PIR)?',          key:'specs'},
+  {q:'Did you check the required flashings?',         key:'flashings'},
+]);
+function _wallDrafterChecklist(){ return getWfQ('wallDrafter', _WALL_DRAFTER_BASE); }
 
-function _wallTLChecklist(){
-  return [
-    {q:'Did you check the wall layout?',               key:'wallLayout'},
-    {q:'Did you check the panel lengths?',             key:'panelLengths'},
-    {q:'Did you check all openings?',                  key:'openings'},
-    {q:'Did you check the material specs (RW/PIR)?',   key:'specs'},
-    {q:'Did you check the flashing details?',          key:'flashings'},
-  ];
-}
+const _WALL_TL_BASE = _regDefault('wallTL', [
+  {q:'Did you check the wall layout?',               key:'wallLayout'},
+  {q:'Did you check the panel lengths?',             key:'panelLengths'},
+  {q:'Did you check all openings?',                  key:'openings'},
+  {q:'Did you check the material specs (RW/PIR)?',   key:'specs'},
+  {q:'Did you check the flashing details?',          key:'flashings'},
+]);
+function _wallTLChecklist(){ return getWfQ('wallTL', _WALL_TL_BASE); }
 
 // Revision checklist = union of all phases in scope
 function _revisionDrafterChecklist(j){
@@ -411,16 +426,17 @@ function _revisionTLChecklist(j){
 }
 
 // 5-point job card QC (used for both drafter self-check and TL close)
-const QC5 = [
+const _QC5_BASE = _regDefault('jobCardQC', [
   {q:'Did you check the color?',                                  key:'color'},
   {q:'Did you check the material specs?',                         key:'material'},
   {q:'Did you check quantity availability in the quotation?',     key:'qtyQuote'},
   {q:'Did you check for any samples?',                            key:'samples'},
   {q:'Did you check the panel thickness specs / sketches?',       key:'thickness'},
-];
+]);
+const QC5 = ()=>getWfQ('jobCardQC', _QC5_BASE);
 
 // ── PANELS RELEASE CHECKLIST ─────────────────────────────────────────────────
-const PR_CHECKLIST = [
+const _PR_BASE = _regDefault('panelsRelease', [
   {q:'Did you check the panel orientation (LH or RH)?', key:'orientation'},
   {q:'Did you check the quantity?',                      key:'quantity'},
   {q:'Did you check the length?',                        key:'length'},
@@ -433,21 +449,24 @@ const PR_CHECKLIST = [
   {q:'Did you check the top sheet color?',               key:'topSheetColor'},
   {q:'Did you check the bottom sheet color?',            key:'bottomSheetColor'},
   {q:'Did you check the effective width? (1000 / 1050 / 1220 / 1090 mm)', key:'effectiveWidth'},
-];
+]);
+const PR_CHECKLIST = ()=>getWfQ('panelsRelease', _PR_BASE);
 
 // ── FLASHINGS RELEASE CHECKLIST ───────────────────────────────────────────────
-const FL_CHECKLIST = [
+const _FL_BASE = _regDefault('flashingsRelease', [
   {q:'Did you check the color?',                     key:'color'},
   {q:'Did you check the specs?',                     key:'specs'},
   {q:'Did you check the material?',                  key:'material'},
   {q:'Did you check the color side of flashing?',    key:'colorSide'},
-];
+]);
+const FL_CHECKLIST = ()=>getWfQ('flashingsRelease', _FL_BASE);
 
 // ── PURLINS RELEASE CHECKLIST ─────────────────────────────────────────────────
-const PU_CHECKLIST = [
+const _PU_BASE = _regDefault('purlinsRelease', [
   {q:'Did you check the flange thickness?',                    key:'flangeThickness'},
   {q:'Did you check that lengths match the purlin sketches?',  key:'lengthMatch'},
-];
+]);
+const PU_CHECKLIST = ()=>getWfQ('purlinsRelease', _PU_BASE);
 
 // ── ACCESSORIES SINGLE CHECK ──────────────────────────────────────────────────
 const AC_SINGLE = [
@@ -465,44 +484,44 @@ const TYPED_WORKFLOW = {
   },
   'Purlins Release': {
     draftStage:'pu_draft', reviewStage:'pu_tl_review',
-    phases:()=>[{phaseTitle:'Purlins Check', questions:PU_CHECKLIST}],
+    phases:()=>[{phaseTitle:'Purlins Check', questions:PU_CHECKLIST()}],
   },
   'Panels + Flashings Release': {
     draftStage:'pf_draft', reviewStage:'pf_tl_review',
     phases:()=>[
-      {phaseTitle:'Phase 1 of 2 — Panels',    questions:PR_CHECKLIST},
-      {phaseTitle:'Phase 2 of 2 — Flashings', questions:FL_CHECKLIST},
+      {phaseTitle:'Phase 1 of 2 — Panels',    questions:PR_CHECKLIST()},
+      {phaseTitle:'Phase 2 of 2 — Flashings', questions:FL_CHECKLIST()},
     ],
   },
   'Panels + Accessories Release': {
     draftStage:'pa_draft', reviewStage:'pa_tl_review',
     phases:()=>[
-      {phaseTitle:'Phase 1 of 2 — Panels',      questions:PR_CHECKLIST},
+      {phaseTitle:'Phase 1 of 2 — Panels',      questions:PR_CHECKLIST()},
       {phaseTitle:'Phase 2 of 2 — Accessories', questions:AC_SINGLE},
     ],
   },
   'Flashings + Accessories Release': {
     draftStage:'fa_draft', reviewStage:'fa_tl_review',
     phases:()=>[
-      {phaseTitle:'Phase 1 of 2 — Flashings',   questions:FL_CHECKLIST},
+      {phaseTitle:'Phase 1 of 2 — Flashings',   questions:FL_CHECKLIST()},
       {phaseTitle:'Phase 2 of 2 — Accessories', questions:AC_SINGLE},
     ],
   },
   'Panels + Flashings + Accessories Release': {
     draftStage:'pfa_draft', reviewStage:'pfa_tl_review',
     phases:()=>[
-      {phaseTitle:'Phase 1 of 3 — Panels',      questions:PR_CHECKLIST},
-      {phaseTitle:'Phase 2 of 3 — Flashings',   questions:FL_CHECKLIST},
+      {phaseTitle:'Phase 1 of 3 — Panels',      questions:PR_CHECKLIST()},
+      {phaseTitle:'Phase 2 of 3 — Flashings',   questions:FL_CHECKLIST()},
       {phaseTitle:'Phase 3 of 3 — Accessories', questions:AC_SINGLE},
     ],
   },
   'Full Job Release': {
     draftStage:'fj_draft', reviewStage:'fj_tl_review',
     phases:()=>[
-      {phaseTitle:'Phase 1 of 4 — Panels',      questions:PR_CHECKLIST},
-      {phaseTitle:'Phase 2 of 4 — Flashings',   questions:FL_CHECKLIST},
+      {phaseTitle:'Phase 1 of 4 — Panels',      questions:PR_CHECKLIST()},
+      {phaseTitle:'Phase 2 of 4 — Flashings',   questions:FL_CHECKLIST()},
       {phaseTitle:'Phase 3 of 4 — Accessories', questions:AC_SINGLE},
-      {phaseTitle:'Phase 4 of 4 — Purlins',     questions:PU_CHECKLIST},
+      {phaseTitle:'Phase 4 of 4 — Purlins',     questions:PU_CHECKLIST()},
     ],
   },
   'Shop Drawing Editing (Internal Audit)': {
@@ -533,7 +552,7 @@ window.wfSubmitPR = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
   const scopeMap = {roof:'Roof Panels', wall:'Wall Panels', both:'Roof + Wall Panels'};
   const scopeLabel = scopeMap[j.prScope] || 'Panels';
-  wfAsk(`Submit ${scopeLabel} Release`, PR_CHECKLIST, async(ans)=>{
+  wfAsk(`Submit ${scopeLabel} Release`, PR_CHECKLIST(), async(ans)=>{
     await wfAdvance(jobId,'pr_tl_review',{
       action:'pr_submitted', checklist:ans, owner:j.teamLeaderId,
       note:`${scopeLabel} release submitted for TL review`,
@@ -552,7 +571,7 @@ window.wfReviewPR = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
   const scopeMap = {roof:'Roof Panels', wall:'Wall Panels', both:'Roof + Wall Panels'};
   const scopeLabel = scopeMap[j.prScope] || 'Panels';
-  wfAsk(`Review ${scopeLabel} Release`, PR_CHECKLIST, (ans)=>{
+  wfAsk(`Review ${scopeLabel} Release`, PR_CHECKLIST(), (ans)=>{
     _wfCtx = {jobId, checklist:ans};
     wfShowDecision(j,
       'Approve → job completed. Reject (comment required) → drafter fixes & resubmits.',
@@ -601,7 +620,7 @@ window.wfSubmitFL = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
   const scopeMap = {roof:'Roof Flashings', wall:'Wall Flashings', both:'Roof + Wall Flashings'};
   const scopeLabel = scopeMap[j.flScope] || 'Flashings';
-  wfAsk(`Submit ${scopeLabel} Release`, FL_CHECKLIST, async(ans)=>{
+  wfAsk(`Submit ${scopeLabel} Release`, FL_CHECKLIST(), async(ans)=>{
     await wfAdvance(jobId,'fl_tl_review',{
       action:'fl_submitted', checklist:ans, owner:j.teamLeaderId,
       note:`${scopeLabel} release submitted for TL review`,
@@ -620,7 +639,7 @@ window.wfReviewFL = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
   const scopeMap = {roof:'Roof Flashings', wall:'Wall Flashings', both:'Roof + Wall Flashings'};
   const scopeLabel = scopeMap[j.flScope] || 'Flashings';
-  wfAsk(`Review ${scopeLabel} Release`, FL_CHECKLIST, (ans)=>{
+  wfAsk(`Review ${scopeLabel} Release`, FL_CHECKLIST(), (ans)=>{
     _wfCtx = {jobId, checklist:ans};
     wfShowDecision(j,
       'Approve → job completed. Reject (comment required) → drafter fixes & resubmits.',
@@ -1340,7 +1359,7 @@ async function _wfProceedAssignCard(jobId, drafterId, note){
 // ── SD · DRAFTER: SUBMIT JOB CARDS ───────────────────────────────────────────
 window.wfSubmitJobCard = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
-  wfAsk('Submit Job Cards — Self Check', QC5, async(ans)=>{
+  wfAsk('Submit Job Cards — Self Check', QC5(), async(ans)=>{
     await wfAdvance(jobId,'sd_tl_jobcard_review',{
       action:'jobcard_submitted', checklist:ans, owner:j.teamLeaderId,
       note:'Job cards self-checked & submitted for review',
@@ -1357,7 +1376,7 @@ window.wfSubmitJobCard = function(jobId){
 // ── SD · TL: CLOSE JOB ────────────────────────────────────────────────────────
 window.wfCloseJobCard = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
-  wfAsk('Close Job — Final QC', QC5, async(ans)=>{
+  wfAsk('Close Job — Final QC', QC5(), async(ans)=>{
     await wfAdvance(jobId,'sd_prod_submit',{
       action:'jobcard_approved', checklist:ans, owner:j.teamLeaderId,
       note:'Job cards approved — ready for production submission',
@@ -1440,7 +1459,7 @@ window.wfConfirmReopen = async function(){
 
 window.wfSubmitRelease = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
-  wfAsk('Submit — Final QC', QC5, async(ans)=>{
+  wfAsk('Submit — Final QC', QC5(), async(ans)=>{
     await wfAdvance(jobId,'completed',{
       action:'release_completed', checklist:ans, owner:j.teamLeaderId,
       note:`${j.reopenType||'Release'} completed`, statusComplete:true,
@@ -1528,39 +1547,43 @@ async function _wfProceedAssignBOM(jobId, drafterId, note){
 }
 
 // ── SD BOM / ERECTION CHECKLISTS ─────────────────────────────────────────────
-const BOM_DRAFTER_CHECKLIST = [
+const _BOM_DRAFTER_BASE = _regDefault('bomDrafter', [
   {q:'Did you prepare the Bill of Materials document?',     key:'bomDoc'},
   {q:'Did you check all material quantities?',              key:'quantities'},
   {q:'Did you check material specifications?',              key:'specs'},
   {q:'Did you cross-check with the job card data?',         key:'jobCardCheck'},
   {q:'Did you check the part marks?',                       key:'partMarks'},
-];
-const BOM_TL_CHECKLIST = [
+]);
+const BOM_DRAFTER_CHECKLIST = ()=>getWfQ('bomDrafter', _BOM_DRAFTER_BASE);
+const _BOM_TL_BASE = _regDefault('bomTL', [
   {q:'Did you verify all material quantities?',             key:'quantities'},
   {q:'Did you check material specifications?',              key:'specs'},
   {q:'Did you check the part marks match the job card?',    key:'partMarks'},
   {q:'Did you verify the BOM against the shop drawings?',   key:'sdCheck'},
   {q:'Did you confirm no items are missing?',               key:'completeness'},
-];
-const SD_ERECTION_DRAFTER_CHECKLIST = [
+]);
+const BOM_TL_CHECKLIST = ()=>getWfQ('bomTL', _BOM_TL_BASE);
+const _ERECTION_DRAFTER_BASE = _regDefault('erectionDrafter', [
   {q:'Did you prepare the erection sequence drawings?',     key:'erectionSeq'},
   {q:'Did you check panel placement and orientation?',      key:'panelOrientation'},
   {q:'Did you check all dimensions?',                       key:'dimensions'},
   {q:'Did you include all fixing details?',                 key:'fixingDetails'},
   {q:'Did you verify against the approved shop drawing?',   key:'sdVerify'},
-];
-const SD_ERECTION_TL_CHECKLIST = [
+]);
+const SD_ERECTION_DRAFTER_CHECKLIST = ()=>getWfQ('erectionDrafter', _ERECTION_DRAFTER_BASE);
+const _ERECTION_TL_BASE = _regDefault('erectionTL', [
   {q:'Did you check the erection sequence?',                key:'erectionSeq'},
   {q:'Did you check panel placement and orientation?',      key:'panelOrientation'},
   {q:'Did you check all dimensions?',                       key:'dimensions'},
   {q:'Did you check fixing details?',                       key:'fixingDetails'},
   {q:'Did you verify against the approved shop drawing?',   key:'sdVerify'},
-];
+]);
+const SD_ERECTION_TL_CHECKLIST = ()=>getWfQ('erectionTL', _ERECTION_TL_BASE);
 
 // ── SD · DRAFTER: SUBMIT BOM ──────────────────────────────────────────────────
 window.wfSubmitBOM = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
-  wfAsk('Submit BOM — Self Check', BOM_DRAFTER_CHECKLIST, async(ans)=>{
+  wfAsk('Submit BOM — Self Check', BOM_DRAFTER_CHECKLIST(), async(ans)=>{
     await wfAdvance(jobId,'sd_bom_review',{
       action:'bom_submitted', checklist:ans, owner:j.teamLeaderId,
       note:'BOM self-checked & submitted for TL review',
@@ -1576,7 +1599,7 @@ window.wfSubmitBOM = function(jobId){
 // ── SD · TL: REVIEW BOM ───────────────────────────────────────────────────────
 window.wfReviewBOM = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
-  wfAsk('Review BOM', BOM_TL_CHECKLIST, (ans)=>{
+  wfAsk('Review BOM', BOM_TL_CHECKLIST(), (ans)=>{
     _wfCtx = {jobId, checklist:ans};
     wfShowDecision(j,
       'Approve → auto-assign Erection Drawing. Reject (comment required) → drafter fixes & resubmits.',
@@ -1662,7 +1685,7 @@ async function _wfProceedAssignSDErection(jobId, drafterId, note){
 // ── SD · DRAFTER: SUBMIT ERECTION DRAWING ─────────────────────────────────────
 window.wfSubmitSDErection = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
-  wfAsk('Submit Erection Drawing — Self Check', SD_ERECTION_DRAFTER_CHECKLIST, async(ans)=>{
+  wfAsk('Submit Erection Drawing — Self Check', SD_ERECTION_DRAFTER_CHECKLIST(), async(ans)=>{
     await wfAdvance(jobId,'sd_erection_review',{
       action:'erection_submitted', checklist:ans, owner:j.teamLeaderId,
       note:'Erection drawing self-checked & submitted for TL review',
@@ -1678,7 +1701,7 @@ window.wfSubmitSDErection = function(jobId){
 // ── SD · TL: REVIEW ERECTION DRAWING ─────────────────────────────────────────
 window.wfReviewSDErection = function(jobId){
   const j = jobs.find(x => x.id === jobId); if(!j) return;
-  wfAsk('Review Erection Drawing', SD_ERECTION_TL_CHECKLIST, (ans)=>{
+  wfAsk('Review Erection Drawing', SD_ERECTION_TL_CHECKLIST(), (ans)=>{
     _wfCtx = {jobId, checklist:ans};
     wfShowDecision(j,
       'Approve → job completed (eligible for continuation or permanent close). Reject (comment required) → drafter fixes & resubmits.',
