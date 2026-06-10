@@ -1,5 +1,5 @@
 ﻿// bump this string on every deploy to force-refresh clients
-const CACHE='rmi-v2.15.79';
+const CACHE='rmi-v2.15.80';
 
 self.addEventListener('install',e=>{
   self.skipWaiting(); // activate new SW immediately

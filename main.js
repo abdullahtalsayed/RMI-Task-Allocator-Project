@@ -3683,7 +3683,8 @@ window.setAccountTab=function(sub){
   if(sub==='wfquestions'){setAccountPane('wfquestions');renderWfQuestionsPane();return;}
 };
 function runHubSideEffects(id){
-  if(id==='my-jobs'||id==='add-job')renderJobs();
+  if(id==='my-jobs'||id==='add-job'){renderJobs();markSectionSeen('myjobs');}
+  if(id==='job-basket')markSectionSeen('basket');
   if(id==='assign'){renderAssignEmpGrid();document.getElementById('assign-emp-preview').style.display='none';}
   if(id==='board')renderBoard();
   if(id==='cal'){calY=new Date().getFullYear();calM=new Date().getMonth();populateCalEmpDrop();renderCal();}
@@ -3759,6 +3760,27 @@ window.closeSidebar=function(){
   }
 };
 
+// ── SIDEBAR NEW-JOB BADGES ─────────────────────────────────────────────────────
+function _sbSeenKey(section){return`rmi_seen_${section}_${me?.id||'x'}`;}
+function markSectionSeen(section){
+  if(!me)return;
+  localStorage.setItem(_sbSeenKey(section),String(Date.now()));
+  updateSbJobBadges();
+}
+function updateSbJobBadges(){
+  if(!me)return;
+  const myJobsTs=parseInt(localStorage.getItem(_sbSeenKey('myjobs'))||'0',10);
+  const basketTs=parseInt(localStorage.getItem(_sbSeenKey('basket'))||'0',10);
+  // My Jobs badge — active jobs assigned to me created after last visit
+  const mjCount=visibleJobs().filter(j=>j.status!=='completed'&&(j.created||0)>myJobsTs).length;
+  const mjBadge=document.getElementById('sb-myjobs-badge');
+  if(mjBadge){mjBadge.style.display=mjCount>0?'':'none';mjBadge.textContent=mjCount>99?'99+':String(mjCount);}
+  // Basket badge — active basket jobs in my scope created after last visit
+  const bkCount=analyticsBasketJobs().filter(j=>j.stage!=='completed'&&(j.created||0)>basketTs).length;
+  const bkBadge=document.getElementById('sb-basket-badge');
+  if(bkBadge){bkBadge.style.display=bkCount>0?'':'none';bkBadge.textContent=bkCount>99?'99+':String(bkCount);}
+}
+
 // ── RENDER ALL ────────────────────────────────────────────────────────────────
 window.renderAll=function(){
   if(!me)return;
@@ -3770,6 +3792,7 @@ window.renderAll=function(){
   }
   renderSbAnalyticsSubs();
   window.renderSbBasketSubs?.();
+  updateSbJobBadges();
 };
 
 // Click outside to close notif panel
